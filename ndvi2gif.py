@@ -1,11 +1,7 @@
-import os
-import ee
-import geemap
-
 
 class ndvi_seasonality(object):
                                
-    def __init__(self, roi=None, start_year=2016, end_year=2020, sat='Sentinel', name='mygif.gif', crs='EPSG:4326'):
+    def __init__(self, roi=None, start_year=2016, end_year=2020, sat='Sentinel'):
         
         '''Start the instance with the parameters for start and end year. Also we set the fixed values for
         the seasons dates and generate the collection as ndvi 32 days merge of all landsats'''
@@ -35,10 +31,10 @@ class ndvi_seasonality(object):
         self.end_year = end_year
         sat_list = ['Sentinel', 'Landsat']
         self.sat = sat
-        self.name = name
-        self.crs = crs
+        #self.name = name
+        #self.crs = crs
         self.imagelist = []
-        self.out_gif = os.path.join(os.getcwd(), self.name)
+        #self.out_gif = os.path.join(os.getcwd(), self.name)
         # Here we define the periods, feel free to change in case your are looking for seasons
         self.winter = ['-01-01', '-03-31']
         self.spring = ['-04-01', '-06-30']
@@ -117,25 +113,26 @@ class ndvi_seasonality(object):
         
         return ndvi_comp_coll
     
-    def get_gif(self):
+    def get_gif(self, name='mygif.gif', bands=['winter', 'spring', 'summer']):
         
+        out_gif = os.path.join(os.getcwd(), name)
         self.imagelist = []
         video_args = {
-          'dimensions': 1024,
+          'dimensions': 768,
           'region': self.roi, 
-          'framesPerSecond': 1,
-          'bands': ['winter', 'spring', 'summer'], 
+          'framesPerSecond': 10,
+          'bands': bands, 
           'min': 0.1,
           'max': 0.8,
           'gamma': [1, 1, 1]
         }
         
-        geemap.download_ee_video(self.get_year_composite(), video_args, self.out_gif)
-        texted_gif = self.out_gif[:-4] + '_texted.gif'
-        geemap.add_text_to_gif(self.out_gif, texted_gif, xy=('5%', '90%'), text_sequence=self.start_year, font_size=30, font_color='#ffffff', add_progress_bar=False)
+        geemap.download_ee_video(self.get_year_composite(), video_args, out_gif)
+        texted_gif = out_gif[:-4] + '_texted.gif'
+        geemap.add_text_to_gif(out_gif, texted_gif, xy=('5%', '90%'), text_sequence=self.start_year, font_size=30, font_color='#ffffff', add_progress_bar=False)
         
         
-    def get_export(self):
+    def get_export(self, crs='EPSG:4326'):
         
         
         if len(self.imagelist) == 0:
@@ -152,5 +149,5 @@ class ndvi_seasonality(object):
             filename = os.path.join(os.getcwd(), name)
             print('Exporting {}'.format(filename), '\n')
             geemap.ee_export_image(image, filename=filename, scale=10,
-                            crs=self.crs, region=self.roi, file_per_band=False)
+                            crs=crs, region=self.roi, file_per_band=False)
         print('All the images in the ndvi collection have been exported')

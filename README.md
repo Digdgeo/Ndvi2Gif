@@ -1,14 +1,14 @@
 ## Multi Seasonal NDVI to GIF
 
 ndvi2gif is a python script for creating nice seasonal NDVI compositions Gifs. This is just a small scrip that uses [Google Earh Engine API](https://github.com/google/earthengine-api) and the amazing [Geemap library](https://github.com/giswqs/geemap), to create yearly compositions based on the maximun NDVI value reached in every seasons. We use the maximun to avoid clouds and cloud shadows.  
-So, we will have a raster with 4 bands (Winter, Spring, Summer and Autumn) for every year in the time period that you choose. Right now, you can choose between Sentinel 2-MSI and Landsat satellites (4&5-TM, 7-ETM+ and 8-OLI), so in first case you have data to play with from 2015 until the present, and in case you choose Landsat you could go from 1984 until present. In case of Landsat we use Surface Reflectance (SR) Datasets, in case of Sentinel 2 we use Top of Atmosphere Reflectance (TOA) data, because Surface Reflectance is only available since 2017. Anyway, as long as we are using an index, atmosferic correction is not so important. Besides, the main object of this script is just getting a fancy gif.
+So, we will have a raster with 4 bands (Winter, Spring, Summer and Autumn) for every year in the time period that you choose. Right now, you can choose between Sentinel 2-MSI and Landsat satellites (4&5-TM, 7-ETM+ and 8-OLI), so in first case you have data to play with from 2015 until the present, and in case you choose Landsat you could go from 1984 until present. In case of Landsat we use Surface Reflectance (SR) Datasets, in case of Sentinel 2 we use Top of Atmosphere Reflectance (TOA) data, because Surface Reflectance is only available since 2017. Anyway, as long as we are using an index, atmosferic correction is not so important. Besides, the main goal of this script is just to get a fancy gif.
 
 If everythigns runs well, you should get a GIF similar to those ones that you can find in the pics folder of this repo. Actually, you will get 2 gifs, one of them named  "mygif_texted.gif", which add year as text to the gif. 
 
 ![Image](https://github.com/Digdgeo/GEE_Playground/blob/master/pics/LosPalacios_Spain.gif "Los Palacios, Seville")
 
 
-More over the nice gif, you can get a lot of information about this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having color formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and how it changes thru the years.  White colors means high NDVI values for the three seasons that you chose in your gif, black color means low NDVI values, such as permanent water bodies, sand, impervous surfaces, etc...
+More over the nice gif, you can get a lot of information with this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having color formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and how it changes thru the years.  White colors means high NDVI values for the three seasons that you chose in your gif, black color means low NDVI values, such as permanent water bodies, sand, impervous surfaces, etc...
 
 <p align="center"> 
 <img src="https://i.stack.imgur.com/tKETN.png">

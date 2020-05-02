@@ -1,28 +1,28 @@
 ## Multi Seasonal NDVI to GIF
 
-ndvi2gif is a python script for creating nice seasonal NDVI compositions Gifs. This is just a small scrip that uses [Google Earh Engine API](https://github.com/google/earthengine-api) and the amazing [Geemap library](https://github.com/giswqs/geemap), to create yearly compositions based on the maximun NDVI value reached in every seasons. We use the maximun to avoid clouds and cloud shadows.  
-So, we will have a raster with 4 bands (Winter, Spring, Summer and Autumn) for every year in the time period that you choose. Right now, you can choose between Sentinel 2-MSI and Landsat satellites (4&5-TM, 7-ETM+ and 8-OLI), so in first case you have data to play with from 2015 until the present, and in case you choose Landsat you could go from 1984 until present. In case of Landsat we use Surface Reflectance (SR) Datasets, in case of Sentinel 2 we use Top of Atmosphere Reflectance (TOA) data, because Surface Reflectance is only available since 2017. Anyway, as long as we are using an index, atmosferic correction is not so important. Besides, the main goal of this script is just to get a fancy gif.
+ndvi2gif is a python script for creating seasonal NDVI compositions gifs. This is just a small python class that uses [Google Earh Engine API](https://github.com/google/earthengine-api) and the amazing [Geemap library](https://github.com/giswqs/geemap), to create yearly compositions based on the maximun [NDVI](https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index) value reached in every seasons. Maximun NDVI is used to avoid clouds and cloud shadows.  
+So, we will have a raster with 4 bands (Winter, Spring, Summer and Autumn) for every year in the choosen time period. Right now, satellite collections available are Sentinel (2-MSI) and Landsat (4-TM, 5-TM, 7-ETM+ and 8-OLI). In first case you have data to play with from 2015 until the present, and in the second case, from 1984 until present. Landsat collections datasets are Surface Reflectance (SR), while Sentinel 2 is Top of Atmosphere Reflectance (TOA) dataset. This is because Surface Reflectance for Sentinel 2 data, is only available since 2017.
 
-If everythigns runs well, you should get a GIF similar to those ones that you can find in the pics folder of this repo. Actually, you will get 2 gifs, one of them named  "mygif_texted.gif", which add year as text to the gif. 
+If everything runs well, you should get a GIF similar to those ones that you can find in the pics folder of this repo. Actually, you will get 2 gifs, one of them named "mygif_texted.gif", which add year as text to the gif. Here you can see an example close to Seville, where you can tell the blue colors (blue band is summer) showing paddy fields over a marsh area (summer crops). Outside the marshes, the colors green and yellow predominate,showing winter crops such as cereals.
 
 ![Image](https://github.com/Digdgeo/GEE_Playground/blob/master/pics/LosPalacios_Spain.gif "Los Palacios, Seville")
 
-
-More over the nice gif, you can get a lot of information with this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having color formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and how it changes thru the years.  White colors means high NDVI values for the three seasons that you chose in your gif, black color means low NDVI values, such as permanent water bodies, sand, impervous surfaces, etc...
+Beyond the nice gif, a lot of information can be obtained with this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having color formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and even how it changes through the years.  White colors means high NDVI values for the three choosen seasons (perennial vegetation), black color means low NDVI values, such as permanent water bodies, sand, impervous surfaces, etc...
 
 <p align="center"> 
 <img src="https://i.stack.imgur.com/tKETN.png">
 </p>
 
-Last, you have the choice to download the yearly ndvi composites to your computer, in case you want that data for further analysis.  
+Last, you have the choice to download the yearly ndvi composites ias tiff files into your computer, in case you want the data for further analysis.  
 
 ### Installation
 
-Use the package manager [pip](https://pip.pypa.io/en/stable/) to install ndvi2gif.
+This tiny and humble python class depends on geemap, so please go to [geemap install](https://github.com/giswqs/geemap#installation). Once you are done, install ndvi2gif in your geemap enviroment with [pip](https://pip.pypa.io/en/stable/):
 
 ```bash
 pip install ndvi2gif
 ```
+
 ### Usage
 
 See the [example notebook](https://github.com/Digdgeo/GEE_Playground/blob/master/ndvi2gif_notebook_example.ipynb) in this repo.
@@ -31,7 +31,7 @@ See the [example notebook](https://github.com/Digdgeo/GEE_Playground/blob/master
 #Imports libraries
 import ee
 import geemap
-from ndvi2gif import ndvi_seasonality
+from ndvi2gif import NdviSeasonality
 
 #You could need a first login to sart with python Earth Enginelogin 
 ee.Initialize()
@@ -45,7 +45,7 @@ Map
 roi = Map.draw_last_feature
 
 #Instance ndvi2gif
-myclassname = ndvi_seasonality(roi)
+myclass = NdviSeasonality(roi)
 
 #Maybe you feel like playing with the Map and see different colour/season combination efore generate the gif
 vizParams = {'bands': ['summer', 'autumn', 'winter'], 'min': 0, 'max': 0.7, 'gamma': [0.95, 1.1, 1]}
@@ -68,12 +68,8 @@ myclass.get_export()
 
 * Add masking capablities based on NDVI values to show real color composite in the background. Is it that possible?
 * Add MODIS dataset
-* Add more tools to this package
 * Add seasons dates as parameters that can be easily modified
 
-### Contributing
-
-Pull requests are welcome!
 
 ## License
 

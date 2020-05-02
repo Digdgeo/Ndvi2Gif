@@ -1,13 +1,34 @@
 
-class ndvi_seasonality(object):
-                               
+import os
+import ee
+import geemap
+
+
+class NdviSeasonality:
+    
+   
+    '''Class to generate NDVI seasonal compoositions gifs. Seasons are defined like fixed parameters and we use ee.
+    Reducer Max to get the maximun NDVI reached in every seasons. Then we combine then in a raster with 4 bands,
+    one band per season. Color combination will show phenology over the seasons and over the years.
+
+    Args:
+        roi (ee.Geometry): Geometry to cross with satellite collections. Can be taken from roi on map, geojson or shapefile.
+        start_year (int): First year to look for.
+        end_year (int): End year to look for.
+        sat (ee.ImageCollection): Available Sentinel 2 (default. 2015-present) and Landsat 4 TM, 5 TM, 7 ETM+, 8 OLI (1984-present).
+    Returns:
+        gif: Gif file with ndvi seasonal yearly composites.
+        images: GeoTIFF with ndvi seasonal yearly composites.
+    '''
+
+
+
     def __init__(self, roi=None, start_year=2016, end_year=2020, sat='Sentinel'):
-        
-        '''Start the instance with the parameters for start and end year. Also we set the fixed values for
-        the seasons dates and generate the collection as ndvi 32 days merge of all landsats'''
-        
+                
+        # Here we get the roi. Valid inputs are draws on the map, shapefiles or geojson
         self.roi = roi
         if self.roi is None:
+            # When no geometry is passed we use a default area over Donana Natural Space
             self.roi = ee.Geometry.Polygon(
                 [[[-6.766047, 36.776586], 
                   [-6.766047, 37.202186], 
@@ -15,6 +36,14 @@ class ndvi_seasonality(object):
                   [-5.867729, 36.776586], 
                   [-6.766047, 36.776586]]], None, False)
             
+        elif isinstance(self.roi, str):
+            if self.roi.endswith('.shp'):
+                self.roi = geemap.shp_to_ee(self.roi).geometry()
+            elif self.roi.endswith('.geojson'):
+                self.roi = geemap.geojson_to_ee(self.roi).geometry()
+            else:
+                print('It seems that your path is broken. Remember that await for shapefiles or geojson')
+
         else:
 
             if not isinstance(roi, ee.Geometry):
@@ -25,17 +54,13 @@ class ndvi_seasonality(object):
                     print('Could not convert the provided roi to ee.Geometry')
                     print(e)
                     return
-
                 
         self.start_year = start_year
         self.end_year = end_year
         sat_list = ['Sentinel', 'Landsat']
         self.sat = sat
-        #self.name = name
-        #self.crs = crs
         self.imagelist = []
-        #self.out_gif = os.path.join(os.getcwd(), self.name)
-        # Here we define the periods, feel free to change in case your are looking for seasons
+        # Here we define the periods, feel free to change the dates in case your are looking for different seasons
         self.winter = ['-01-01', '-03-31']
         self.spring = ['-04-01', '-06-30']
         self.summer = ['-07-01', '-09-30']
@@ -51,8 +76,8 @@ class ndvi_seasonality(object):
         LT05col = ee.ImageCollection("LANDSAT/LT05/C01/T1_SR").select(['B3', 'B4'], ['Red', 'Nir'])
         LT04col = ee.ImageCollection("LANDSAT/LT04/C01/T1_SR").select(['B3', 'B4'], ['Red', 'Nir'])
         
-        # Notice that S2 is not in Surface Reflectance but in TOA, this because otherwise only... 
-        # ...had data starting in 2017. Using BOA we have 2 extra years, starting at 2015
+        # Notice that S2 is not in Surface Reflectance but in TOA, this because otherwise only
+        # had data starting in 2017. Using BOA we have 2 extra years, starting at 2015
         # We use the wide 8 band instead of the 8A narrower badn, that is also more similar to landsat NIR
         # But this way we have NDVI at 10 m instead of 20. And we are using TOA instead of SR, so who cares?
         
@@ -68,52 +93,67 @@ class ndvi_seasonality(object):
             pass
     
     def get_ndvi(self, image):
+
         '''Here we apply the NDVI calculation'''   
+
         return image.normalizedDifference(['Nir', 'Red'])
         
     
     def get_winter(self, y):
         
-        '''Here comes the funny thing. We have to generate the winter image for each year'''
+        '''Here comes the funny thing. We generate the winter image for each year'''
+
         init, ends = str(y) + self.winter[0], str(y) + self.winter[1]
         return self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
         
     def get_spring(self, y):
         
-        '''Here comes the funny thing. We have to generate the spring image for each year'''
+        '''Here comes the funny thing. We generate the spring image for each year'''
+
         init, ends = str(y) + self.spring[0], str(y) + self.spring[1]
         return self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
         
     def get_summer(self, y):
         
-        '''Here comes the funny thing. We have to generate the summer image for each year'''
+        '''Here comes the funny thing. We generate the summer image for each year'''
+
         init, ends = str(y) + self.summer[0], str(y) + self.summer[1]
         return self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
         
     def get_autumn(self, y):
         
-        '''Here comes the funny thing. We have to generate the autumn image for each year'''
+        '''Here comes the funny thing. We generate the autumn image for each year'''
+
         init, ends = str(y) + self.autumn[0], str(y) + self.autumn[1]
         return self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
     
     def get_year_composite(self):
         
-        '''return the composite ndvi for each year'''
+        '''Return the composite ndvi for each year'''
+
+        # Maybe this should do with .map instead of a loop
         for y in range(self.start_year, self.end_year):
             
             composite = ee.Image.cat(self.get_winter(y), self.get_spring(y), self.get_summer(y), self.get_autumn(y)).clip(self.roi)
-
             compositer = composite.select(['nd', 'nd_1', 'nd_2', 'nd_3'], ['winter', 'spring', 'summer', 'autumn'])
-            #self.col = ee.ImageCollection(compositer)
             self.imagelist.append(compositer)
         
         
         ndvi_comp_coll = ee.ImageCollection.fromImages(self.imagelist)
-        #ndvi_comp_coll_masked = ndvi_comp_coll.gt(0.1) We could apply masks in case we need it
         
         return ndvi_comp_coll
     
     def get_gif(self, name='mygif.gif', bands=['winter', 'spring', 'summer']):
+
+        '''Export NDVI year compositions as .gif to your local folder. 
+        This method calls geemap.download_ee_video & geemap.add_text_to_gif.
+
+        Args:
+            name (string): Name of the output gif. It will be saved at your current working directory.
+            bands (list): List where you define the band combination for your gif.
+        Returns:
+            object(gif): myname.gif and myname_texted.gif downloaded at your current working directory
+        '''
         
         out_gif = os.path.join(os.getcwd(), name)
         self.imagelist = []
@@ -129,25 +169,36 @@ class ndvi_seasonality(object):
         
         geemap.download_ee_video(self.get_year_composite(), video_args, out_gif)
         texted_gif = out_gif[:-4] + '_texted.gif'
-        geemap.add_text_to_gif(out_gif, texted_gif, xy=('5%', '90%'), text_sequence=self.start_year, font_size=30, font_color='#ffffff', add_progress_bar=False)
+        geemap.add_text_to_gif(out_gif, texted_gif, xy=('5%', '90%'), text_sequence=self.start_year, font_size=30, font_color='#ffffff', add_progress_bar=False, duration=250)
         
         
-    def get_export(self, crs='EPSG:4326'):
+    def get_export(self, crs='EPSG:4326', scale=10):
         
+        '''Export NDVI year compositions as .tif to your local folder.
+        This method calls geemap.ee_export_image.
         
+        Args:
+            crs (string): Coordinate Reference System of the output tifs. Use EPSG style e.g. "EPSG:4326"; "EPSG:32629"
+            scale (int): Value for pixel size of your output tifs, default is 10 because default sat is Sentinel 2 NDVI,
+                with bands 8 and 4 (10 m pix/resolution). In case you choose Landsat yous should change scale to 30. 
+                You can also considerer use this parameter like resample in case you get a size limitation error
+                when try to download a big area. 
+        Returns:
+          object(tif): 4 bands ndvi_year.tif per year in your ndvi collection, downloaded at your current working directory 
+          '''
+  
+
         if len(self.imagelist) == 0:
             self.get_year_composite()
             
         count = (len(self.imagelist))
             
-        #return geemap.ee_export_image_collection(self.get_year_composite(), os.getcwd())
         for n in range(count):
             year = self.start_year + n
-            #print(self.imagelist[n])
             image = self.imagelist[n]
             name = 'ndvi_' + str(year) + '.tif'
             filename = os.path.join(os.getcwd(), name)
             print('Exporting {}'.format(filename), '\n')
-            geemap.ee_export_image(image, filename=filename, scale=10,
-                            crs=crs, region=self.roi, file_per_band=False)
+            geemap.ee_export_image(image, filename=filename, scale=scale, crs=crs, region=self.roi, , file_per_band=False) 
+
         print('All the images in the ndvi collection have been exported')

@@ -27,6 +27,17 @@ pip install ndvi2gif
 
 This is intend to be executed in a notebook and in tandem with a geemap Map object, so you could travel around the map and pick up your region of interest just by drawing a shape, and visualizing different dates and band combinations directly on the map. However, you could just run it in a command line and pass it a shapefile or a geojson as roi, and ask for the gif or for the geotiff rasters.
 
+Command Line:
+
+```python
+from ndvi2gif import NdviSeasonality
+MyClass = NdviSeasonality('path/to/geometry', 2016, 2019, 'Sentinel')
+MyClass.get_gif()
+MyClass.get_export()
+```
+
+Notebook:
+
 See the [example notebook](./ndvi2gif/ndvi2gif_notebook_example.ipynb) in this repo.
 
 ```python
@@ -69,15 +80,10 @@ myclass.get_export()
 ### ToDo list
 
 * Add masking capablities based on NDVI values to show real color composite in the background. Is it that possible?
-* Add MODIS dataset
+* Add MODIS to satellite list
 * Add seasons dates as parameters that can be easily modified
 
 
 ## Conrtibutions
 
 Yes, please! git pulls will be welcome, even those related to my english grammar... 
-
-
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)

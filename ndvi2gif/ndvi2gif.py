@@ -199,6 +199,6 @@ class NdviSeasonality:
             name = 'ndvi_' + str(year) + '.tif'
             filename = os.path.join(os.getcwd(), name)
             print('Exporting {}'.format(filename), '\n')
-            geemap.ee_export_image(image, filename=filename, scale=scale, crs=crs, region=self.roi, , file_per_band=False) 
+            geemap.ee_export_image(image, filename=filename, scale=scale, crs=crs, region=self.roi, file_per_band=False) 
 
         print('All the images in the ndvi collection have been exported')

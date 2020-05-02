@@ -5,7 +5,7 @@ So, we will have a raster with 4 bands (Winter, Spring, Summer and Autumn) for e
 
 If everything runs well, you should get a GIF similar to those ones that you can find in the pics folder of this repo. Actually, you will get 2 gifs, one of them named "mygif_texted.gif", which add year as text to the gif. Here you can see an example close to Seville, where you can tell the blue colors (blue band in this example is summer) showing paddy fields over a marsh area (summer crops). Outside the marshes, the colors green and yellow predominate,showing winter crops such as cereals. You can also realize the intermediate colors for different crops.
 
-![Image](./pics/LosPalacios_Spain.gif "Los Palacios, Seville")
+![Image](https://github.com/Digdgeo/Ndvi2Gif/tree/master/pics/LosPalacios_Spain.gif "Los Palacios, Seville")
 
 Beyond the nice gif, a lot of information can be obtained with this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having color formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and even how it changes through the years.  White colors means high NDVI values for the three choosen seasons (perennial vegetation), black color means low NDVI values, such as permanent water bodies, sand, impervous surfaces, etc...
 
@@ -38,7 +38,7 @@ MyClass.get_export()
 
 Notebook:
 
-See the [example notebook](./ndvi2gif/ndvi2gif_notebook_example.ipynb) in this repo.
+See the [example notebook](https://github.com/Digdgeo/Ndvi2Gif/blob/master/ndvi2gif/ndvi2gif_notebook_example.ipynb) in this repo.
 
 ```python
 #Imports libraries
@@ -86,4 +86,4 @@ myclass.get_export()
 
 ## Contributions
 
-Yes, please! git pulls will be welcome, even those related to my english grammar... 
+Yes, please! git pulls will be welcome.

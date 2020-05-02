@@ -1,9 +1,8 @@
+import os
 from setuptools import setup, find_packages
-from os import path
 
-this_directory = path.abspath(path.dirname(__file__))
-with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
+def read(fname):
+    return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 classifiers = [
 	'Intended Audience :: GIS & Remote Sensing Technicians',
@@ -20,7 +19,7 @@ setup(
 	name='ndvi2gif',
 	version='0.0.1',
 	description='Python package to create ndvi seasonal composites, and download them as gif and geotiff',
-	long_description=long_description,
+	long_description=read('README.rst'),
     long_description_content_type='text/markdown',
 	url='https://github.com/Digdgeo/GEE_Playground',
 	python_requires='>=3.5',

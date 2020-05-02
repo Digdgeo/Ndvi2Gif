@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages
 
-with open('README.md', 'r')
+with open('README.md', 'r') as fh:
+	long_description = fh.read()
 
 classifiers = [
 	'Intended Audience :: GIS & Remote Sensing Technicians',
@@ -17,6 +18,8 @@ setup(
 	name='ndvi2gif',
 	version='0.0.1',
 	description='Python package to create ndvi seasonal composites, and download them as gif and geotiff',
+	long_description=long_description,
+	long_description_content_type='text/markdown',
 	url='https://github.com/Digdgeo/GEE_Playground',
 	python_requires='>=3.5',
 	author='Diego Garcia Diaz',

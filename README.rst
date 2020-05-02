@@ -32,10 +32,10 @@ can also realize the intermediate colours for different crops.
 .. image:: https://doc-0g-8o-docs.googleusercontent.com/docs/securesc/ponfd9b4q2tfd8i2vbic0dfimhmj8aqr/735c2dlvs7o0ckhb749c3aquvp7sdaaq/1588451250000/06296508789086548892/06296508789086548892/1WhavAJZuh5TSvwuKlc0zqavOEbG85XUq?authuser=0&nonce=rq8rvj4j1hfrg&user=06296508789086548892&hash=bsdv2er7aouq3co0st9nfpi292nrra2t 
 
 
+
 Beyond the nice gif, a lot of information can be obtained with this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having colour formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and even how it changes through the years.  White colours means high NDVI values for the three chosen seasons (perennial vegetation), black colour means low NDVI values, such as permanent water bodies, sand, impervious surfaces, etc...
 
-.. image:: .. image:: https://doc-0g-8o-docs.googleusercontent.com/docs/securesc/ponfd9b4q2tfd8i2vbic0dfimhmj8aqr/735c2dlvs7o0ckhb749c3aquvp7sdaaq/1588451250000/06296508789086548892/06296508789086548892/1WhavAJZuh5TSvwuKlc0zqavOEbG85XUq?authuser=0&nonce=rq8rvj4j1hfrg&user=06296508789086548892&hash=bsdv2er7aouq3co0st9nfpi292nrra2t 
-  
+.. image:: https://doc-0c-8o-docs.googleusercontent.com/docs/securesc/ponfd9b4q2tfd8i2vbic0dfimhmj8aqr/595ir62d8691iuhf51ilbd1enpmlm33b/1588463025000/06296508789086548892/06296508789086548892/1QsMY8CAzKTvKeN_Lju75ri6AnEAPdBCJ?authuser=0&nonce=5tl22pbadamca&user=06296508789086548892&hash=2kv60lpg1vcu2f0sfer7scur1viii8ca 
 
 Last, you have the choice to download the yearly ndvi composites ias tiff files into your computer, in case you want the data for further analysis. 
 
@@ -45,7 +45,7 @@ Installation
 ============
 
 
-This tiny and humble python class depends on geemap, so geemap will be installed for you. Also it could be a good idea install first geemap in a python environment (you can see the process here: `geemap install) <https://github.com/giswqs/geemap#installation>`_ and later install ndvi2gif in that environment via pip:
+This tiny and humble python class depends on geemap, so geemap will be installed for you. Also it could be a good idea install first geemap in a python environment (you can see the details here: `geemap install) <https://github.com/giswqs/geemap#installation>`_ and later install ndvi2gif in that environment via pip:
 
 .. code:: python
 

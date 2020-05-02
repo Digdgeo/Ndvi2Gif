@@ -84,6 +84,6 @@ myclass.get_export()
 * Add seasons dates as parameters that can be easily modified
 
 
-## Conrtibutions
+## Contributions
 
 Yes, please! git pulls will be welcome, even those related to my english grammar... 

@@ -29,12 +29,12 @@ fields over a marsh area (summer crops). Outside the marshes, the colours
 green and yellow predominate,showing winter crops such as cereals. You
 can also realize the intermediate colours for different crops.
 
-.. image:: https://i.imgur.com/UZDptan.gif 
+.. image:: https://i.imgur.com/UZDptan.gif
 
 
 Beyond the nice gif, a lot of information can be obtained with this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having colour formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and even how it changes through the years.  White colours means high NDVI values for the three chosen seasons (perennial vegetation), black colour means low NDVI values, such as permanent water bodies, sand, impervious surfaces, etc...
 
-.. image:: https://i.imgur.com/tq4aMBv.jpg 
+.. image:: https://i.imgur.com/tq4aMBv.jpg
 
 Last, you have the choice to download the yearly ndvi composites ias tiff files into your computer, in case you want the data for further analysis. 
 

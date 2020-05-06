@@ -112,8 +112,8 @@ ToDo list
 
 
 * Add masking capablities based on NDVI values to show real color composite in the background. Is it that possible?
-* Add MODIS to satellite list
 * Add seasons dates as parameters that can be easily modified
+* Add a method to easily export multi-yearly composites
 
 
 

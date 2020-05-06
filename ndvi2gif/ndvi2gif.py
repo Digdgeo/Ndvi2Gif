@@ -23,7 +23,7 @@ class NdviSeasonality:
 
 
 
-    def __init__(self, roi=None, start_year=2016, end_year=2020, sat='Sentinel'):
+    def __init__(self, roi=None, start_year=2016, end_year=2020, sat='Sentinel', key='max'):
                 
         # Here we get the roi. Valid inputs are draws on the map, shapefiles or geojson
         self.roi = roi
@@ -59,12 +59,21 @@ class NdviSeasonality:
         self.end_year = end_year
         sat_list = ['Sentinel', 'Landsat']
         self.sat = sat
+        if key not in ['max', 'median']:
+            print('Please choose between max and median as available stats')
+        else:
+            self.key=key
         self.imagelist = []
         # Here we define the periods, feel free to change the dates in case your are looking for different seasons
         self.winter = ['-01-01', '-03-31']
         self.spring = ['-04-01', '-06-30']
         self.summer = ['-07-01', '-09-30']
         self.autumn = ['-10-01', '-12-31']
+        # Here we define one dict for each season, in order to have the choice to choose the stat (max and median for the moment, it could be whatever supported for GEE)
+        self.dwinter = {}
+        self.dspring = {}
+        self.dsummer = {}
+        self.dautumn = {}
 
         # Here we defined the collections to generate the ndvi
         # Just need Red and NIR bandas, so avoid and rename them to apply the ndvi formula... 
@@ -83,13 +92,21 @@ class NdviSeasonality:
         
         S2col = ee.ImageCollection("COPERNICUS/S2").select(['B4', 'B8'], ['Red', 'Nir'])
         
+        # Get MODIS MOD09Q1.006 Terra Surface Reflectance 8-Day Global 250m
+        # This is going to be the coarse resolution we will add (250 m) but it cold be a good choice
+        # for large areas. And we good pretty good data from 2000 until present
+        MOD09Q1 = ee.ImageCollection("MODIS/006/MOD09Q1").select(['sur_refl_b01', 'sur_refl_b02'], ['Red', 'Nir'])
+
+        
         # Set the collection that will be used
         if self.sat == 'Sentinel':
             self.ndvi_col = S2col
         elif self.sat == 'Landsat':
             self.ndvi_col = LC08col.merge(LE07col).merge(LT05col).merge(LT04col)
+        elif self.sat == 'MODIS':
+            self.ndvi_col = MOD09Q1
         else: 
-            print('You should choose between Sentinel and Landsat data')
+            print('You should choose one from Sentinel, Landsat or MODIS')
             pass
     
     def get_ndvi(self, image):
@@ -104,34 +121,43 @@ class NdviSeasonality:
         '''Here comes the funny thing. We generate the winter image for each year'''
 
         init, ends = str(y) + self.winter[0], str(y) + self.winter[1]
-        return self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+        self.dwinter['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+        self.dwinter['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+        return self.dwinter[self.key]
         
     def get_spring(self, y):
         
         '''Here comes the funny thing. We generate the spring image for each year'''
 
         init, ends = str(y) + self.spring[0], str(y) + self.spring[1]
-        return self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
-        
+        self.dspring['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+        self.dspring['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+        return self.dspring[self.key]
+
+
     def get_summer(self, y):
         
         '''Here comes the funny thing. We generate the summer image for each year'''
 
         init, ends = str(y) + self.summer[0], str(y) + self.summer[1]
-        return self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+        self.dsummer['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+        self.dsummer['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+        return self.dsummer[self.key]
         
     def get_autumn(self, y):
         
         '''Here comes the funny thing. We generate the autumn image for each year'''
 
         init, ends = str(y) + self.autumn[0], str(y) + self.autumn[1]
-        return self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+        self.dautumn['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+        self.dautumn['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+        return self.dsummer[self.key]
     
     def get_year_composite(self):
         
         '''Return the composite ndvi for each year'''
 
-        # Maybe this should do with .map instead of a loop
+        # Maybe this should do with .map instead of a loop        
         for y in range(self.start_year, self.end_year):
             
             composite = ee.Image.cat(self.get_winter(y), self.get_spring(y), self.get_summer(y), self.get_autumn(y)).clip(self.roi)
@@ -140,7 +166,7 @@ class NdviSeasonality:
         
         
         ndvi_comp_coll = ee.ImageCollection.fromImages(self.imagelist)
-        
+    
         return ndvi_comp_coll
     
     def get_gif(self, name='mygif.gif', bands=['winter', 'spring', 'summer']):
@@ -162,14 +188,14 @@ class NdviSeasonality:
           'region': self.roi, 
           'framesPerSecond': 10,
           'bands': bands, 
-          'min': 0.1,
+          'min': 0.15,
           'max': 0.8,
           'gamma': [1, 1, 1]
         }
         
         geemap.download_ee_video(self.get_year_composite(), video_args, out_gif)
         texted_gif = out_gif[:-4] + '_texted.gif'
-        geemap.add_text_to_gif(out_gif, texted_gif, xy=('5%', '90%'), text_sequence=self.start_year, font_size=30, font_color='#ffffff', add_progress_bar=False, duration=250)
+        geemap.add_text_to_gif(out_gif, texted_gif, xy=('5%', '90%'), text_sequence=self.start_year, font_size=30, font_color='#ffffff', add_progress_bar=False, duration=300)
         
         
     def get_export(self, crs='EPSG:4326', scale=10):

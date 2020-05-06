@@ -9,16 +9,22 @@ API <https://github.com/google/earthengine-api>`_ and the amazing
 compositions based on the maximum
 `NDVI <https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index>`__
 value reached in every seasons. Maximum NDVI is used to avoid clouds and
-cloud shadows.
-So, we will have a raster with 4 bands (Winter, Spring, Summer and
+cloud shadows. However, we have added 'median' as another available statistic choice
+when instantiating the class. Max remains the default, but sometimes median gives a
+better visual result, specially with Landsat 4 and 5 that sometimes has band errors
+that can affect NDVI results.
+
+So, this process generates a raster with 4 bands (Winter, Spring, Summer and
 Autumn) for every year in the chosen time period. Right now, satellite
-collections available are Sentinel (2-MSI) and Landsat (4-TM, 5-TM,
-7-ETM+ and 8-OLI). In the first case, you have data to play with from 2015
+collections available are Sentinel (2-MSI; 10 m pixel NDVI), Landsat (4-TM, 5-TM,
+7-ETM+ and 8-OLI; 30 m pixel NDVI) and MODIS (MOD09Q1 v006; 250 m pixel NDVI).  
+In the first case, you have data to play with from 2015
 until the present, and in the second case, from 1984 until present.
 Landsat collections datasets are Surface Reflectance (SR), while
 Sentinel 2 is Top of Atmosphere Reflectance (TOA) dataset. This is
 because Surface Reflectance for Sentinel 2 data, is only available since
-2017.
+2017. Last, MODIS dataset is a 8 day composite Surface Reflectance, and it's available 
+since 2000-02-24 until present.
 
 If everything runs well, you should get a GIF similar to those ones that
 you can find in the pics folder of this repo. Actually, you will get 2
@@ -78,7 +84,10 @@ Please, see the `example notebook <https://github.com/Digdgeo/Ndvi2Gif/blob/mast
     roi = Map.draw_last_feature
     
     #Instance ndvi2gif
+    #Three different examples here to instantiate the class
     myclass = NdviSeasonality(roi)
+    myclass2 = NdviSeasonality(roi, 2014, 2020, 'Landsat')
+    myclass3 = NdviSeasonality(roi, 2010, 2015, 'MODIS', key='median')
     
     #Maybe you feel like playing with the Map and see different colour/season combination efore generate the gif
     vizParams = {'bands': ['summer', 'autumn', 'winter'], 'min': 0, 'max': 0.7, 'gamma': [0.95, 1.1, 1]}

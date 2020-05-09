@@ -8,14 +8,14 @@ API <https://github.com/google/earthengine-api>`_ and the amazing
 `Geemap package <https://github.com/giswqs/geemap>`_, to create yearly
 compositions based on the maximum
 `NDVI <https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index>`__
-value reached in every seasons. Maximum NDVI is used to avoid clouds and
-cloud shadows. However, we have added 'median' as another available statistic choice
+value reached in every seasons. Maximum NDVI is used as season reducer, in order to avoid clouds and
+cloud shadows. However, we have added 'perc_90' (percentile 90) and 'median' as others available statistic choice
 when instantiating the class. Max remains the default, but sometimes median gives a
 better visual result, specially with Landsat 4 and 5 that sometimes has band errors
-that can affect NDVI results.
+that can affect NDVI results. Percentile 90 is a good compromise between max and median. 
 
 So, this process generates a raster with 4 bands (Winter, Spring, Summer and
-Autumn) for every year in the chosen time period. You can choose between 'max' (default), 'perc_90' or 'median' like season reducer. 
+Autumn) for every year in the chosen time period.  
 
 Satellite collections available are:
 
@@ -43,9 +43,11 @@ can also realize the intermediate colours for different crops.
 
 Beyond the nice gif, a lot of information can be obtained with this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having colour formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and even how it changes through the years.  White colours means high NDVI values for the three chosen seasons (perennial vegetation), black colour means low NDVI values, such as permanent water bodies, sand, impervious surfaces, etc...
 
+Since we have added SAR data, maybe is no longer correct saying this is an NDVI tool, but with SAR the meaning s very similar to the NDVI approach, in this case we get higher return values when plants are bigger, and very low values for baresoil. So, at the end is another way to have a multi-temporal look at crop growth. 
+
 .. image:: https://i.imgur.com/tq4aMBv.jpg
 
-Last, you have the choice to download the yearly ndvi composites as tiff files into your computer, in case you want the data for further analysis. Also, it have been noticed that Google Earth Engine reducers are really nice to create gorgeous multi-year composties, even for very large areas with MODIS, e.g. median seasonal NDVI for whole Africa between 2001 and 2020. So, besides the export for each year, you also have the chance to export your favourite multi-year compostion as a single file. 
+Last, you have the choice to download the yearly ndvi composites as tiff files into your computer, in case you want the data for further analysis. Also, it have been noticed that Google Earth Engine reducers are really nice to create gorgeous multi-year composties, even for very large areas with MODIS, e.g. median seasonal NDVI for whole Africa between 2001 and 2020. So, besides the automatic export for each year, you also have the chance to export your favourite multi-year compostion in a single file. 
 
 
 

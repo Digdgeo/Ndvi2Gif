@@ -1,4 +1,3 @@
-
 import os
 import ee
 import geemap
@@ -20,8 +19,6 @@ class NdviSeasonality:
         gif: Gif file with ndvi seasonal yearly composites.
         images: GeoTIFF with ndvi seasonal yearly composites.
     '''
-
-
 
     def __init__(self, roi=None, start_year=2016, end_year=2020, sat='Sentinel', key='max'):
                 
@@ -57,10 +54,14 @@ class NdviSeasonality:
                 
         self.start_year = start_year
         self.end_year = end_year
-        sat_list = ['Sentinel', 'Landsat']
+        if sat not in ['Sentinel', 'Landsat', 'MODIS', 'sar']:
+            print('You should choose one from Sentinel, Landsat, MODIS or sar')
+        else:
+            self.sat = sat
+
         self.sat = sat
-        if key not in ['max', 'median']:
-            print('Please choose between max and median as available stats')
+        if key not in ['max', 'median', 'perc_90']:
+            print('Please choose between max, median or perc_90 as available stats')
         else:
             self.key=key
         self.imagelist = []
@@ -97,6 +98,12 @@ class NdviSeasonality:
         # for large areas. And we good pretty good data from 2000 until present
         MOD09Q1 = ee.ImageCollection("MODIS/006/MOD09Q1").select(['sur_refl_b01', 'sur_refl_b02'], ['Red', 'Nir'])
 
+        # Let's try to add Sentinel 1 to have some SAR data analysis capabilities
+        s1 = ee.ImageCollection('COPERNICUS/S1_GRD').filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH')).filter(ee.Filter.eq('instrumentMode', 'IW'))
+        s1Ascending = s1.filter(ee.Filter.eq('orbitProperties_pass', 'ASCENDING'))
+        s1Descending = s1.filter(ee.Filter.eq('orbitProperties_pass', 'DESCENDING'))
+        s1SAR = s1Ascending.select('VH').merge(s1Descending.select('VH'))
+
         
         # Set the collection that will be used
         if self.sat == 'Sentinel':
@@ -105,8 +112,10 @@ class NdviSeasonality:
             self.ndvi_col = LC08col.merge(LE07col).merge(LT05col).merge(LT04col)
         elif self.sat == 'MODIS':
             self.ndvi_col = MOD09Q1
+        elif self.sat == 'sar':
+            self.ndvi_col = s1SAR
         else: 
-            print('You should choose one from Sentinel, Landsat or MODIS')
+            print('Not a valid satellite')
             pass
     
     def get_ndvi(self, image):
@@ -121,8 +130,19 @@ class NdviSeasonality:
         '''Here comes the funny thing. We generate the winter image for each year'''
 
         init, ends = str(y) + self.winter[0], str(y) + self.winter[1]
-        self.dwinter['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
-        self.dwinter['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+
+        if self.sat != 'sar':
+
+            self.dwinter['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+            self.dwinter['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+            self.dwinter['perc_90'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).reduce(ee.Reducer.percentile([90]))
+
+        else:
+
+            self.dwinter['max'] = self.ndvi_col.filterDate(init, ends).max()
+            self.dwinter['median'] = self.ndvi_col.filterDate(init, ends).median()
+            self.dwinter['perc_90'] = self.ndvi_col.filterDate(init, ends).reduce(ee.Reducer.percentile([90]))
+
         return self.dwinter[self.key]
         
     def get_spring(self, y):
@@ -130,8 +150,19 @@ class NdviSeasonality:
         '''Here comes the funny thing. We generate the spring image for each year'''
 
         init, ends = str(y) + self.spring[0], str(y) + self.spring[1]
-        self.dspring['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
-        self.dspring['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+
+        if self.sat != 'sar':
+
+            self.dspring['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+            self.dspring['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+            self.dspring['perc_90'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).reduce(ee.Reducer.percentile([90]))
+
+        else:
+
+            self.dspring['max'] = self.ndvi_col.filterDate(init, ends).max()
+            self.dspring['median'] = self.ndvi_col.filterDate(init, ends).median()
+            self.dspring['perc_90'] = self.ndvi_col.filterDate(init, ends).reduce(ee.Reducer.percentile([90]))
+        
         return self.dspring[self.key]
 
 
@@ -140,8 +171,19 @@ class NdviSeasonality:
         '''Here comes the funny thing. We generate the summer image for each year'''
 
         init, ends = str(y) + self.summer[0], str(y) + self.summer[1]
-        self.dsummer['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
-        self.dsummer['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+
+        if self.sat != 'sar':
+
+            self.dsummer['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+            self.dsummer['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+            self.dsummer['perc_90'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).reduce(ee.Reducer.percentile([90]))
+
+        else:
+
+            self.dsummer['max'] = self.ndvi_col.filterDate(init, ends).max()
+            self.dsummer['median'] = self.ndvi_col.filterDate(init, ends).median()
+            self.dsummer['perc_90'] = self.ndvi_col.filterDate(init, ends).reduce(ee.Reducer.percentile([90]))
+        
         return self.dsummer[self.key]
         
     def get_autumn(self, y):
@@ -149,9 +191,20 @@ class NdviSeasonality:
         '''Here comes the funny thing. We generate the autumn image for each year'''
 
         init, ends = str(y) + self.autumn[0], str(y) + self.autumn[1]
-        self.dautumn['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
-        self.dautumn['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
-        return self.dsummer[self.key]
+
+        if self.sat != 'sar':
+
+            self.dautumn['max'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).max()
+            self.dautumn['median'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).median()
+            self.dautumn['perc_90'] = self.ndvi_col.filterDate(init, ends).map(self.get_ndvi).reduce(ee.Reducer.percentile([90]))
+
+        else:
+
+            self.dautumn['max'] = self.ndvi_col.filterDate(init, ends).max()
+            self.dautumn['median'] = self.ndvi_col.filterDate(init, ends).median()
+            self.dautumn['perc_90'] = self.ndvi_col.filterDate(init, ends).reduce(ee.Reducer.percentile([90]))
+        
+        return self.dautumn[self.key]
     
     def get_year_composite(self):
         
@@ -161,13 +214,46 @@ class NdviSeasonality:
         for y in range(self.start_year, self.end_year):
             
             composite = ee.Image.cat(self.get_winter(y), self.get_spring(y), self.get_summer(y), self.get_autumn(y)).clip(self.roi)
-            compositer = composite.select(['nd', 'nd_1', 'nd_2', 'nd_3'], ['winter', 'spring', 'summer', 'autumn'])
+            
+            if self.sat != 'sar':
+                
+                if self.key != 'perc_90':
+                    
+                    compositer = composite.select(['nd', 'nd_1', 'nd_2', 'nd_3'], ['winter', 'spring', 'summer', 'autumn'])
+            
+                else:
+
+                    compositer = composite.select(['nd_p90', 'nd_p90_1', 'nd_p90_2', 'nd_p90_3'], ['winter', 'spring', 'summer', 'autumn'])
+            
+            else:
+                
+                if self.key != 'perc_90':
+                    
+                    compositer = composite.select(['VH', 'VH_1', 'VH_2', 'VH_3'], ['winter', 'spring', 'summer', 'autumn'])
+            
+                else:
+
+                    compositer = composite.select(['VH_p90', 'VH_p90_1', 'VH_p90_2', 'VH_p90_3'], ['winter', 'spring', 'summer', 'autumn'])
+            
+            
+            
             self.imagelist.append(compositer)
         
         
         ndvi_comp_coll = ee.ImageCollection.fromImages(self.imagelist)
     
         return ndvi_comp_coll
+    
+    
+    def get_perc(self, image):
+        
+        '''Compute percentiles to use them as input in visualizatin parameters'''
+        
+        return [image.reduceRegions(self.roi, ee.Reducer.percentile([5]), 
+                    scale=10, crs='EPSG:4326').getInfo()['features'][0]['properties']['p5'], 
+                image.reduceRegions(self.roi, ee.Reducer.percentile([95]), 
+                    scale=10, crs='EPSG:4326').getInfo()['features'][0]['properties']['p95']]
+        
     
     def get_gif(self, name='mygif.gif', bands=['winter', 'spring', 'summer']):
 
@@ -181,21 +267,53 @@ class NdviSeasonality:
             object(gif): myname.gif and myname_texted.gif downloaded at your current working directory
         '''
         
+        self.imagelist = [0]
+        self.get_year_composite()
+        
+        # We can't define an minimun and maximun for sar data, since it depends a lot on the region
+        # Compute those values can take a lot of time, so we decided to keep a viz param standar for optical data
+        # and just compute them for sar data, so we split viz params in two depending on sar or opical data
+        # Of course, sar data it takes more time to be generated. This apply to get the gif not to export the images
         out_gif = os.path.join(os.getcwd(), name)
         self.imagelist = []
-        video_args = {
-          'dimensions': 768,
-          'region': self.roi, 
-          'framesPerSecond': 10,
-          'bands': bands, 
-          'min': 0.15,
-          'max': 0.8,
-          'gamma': [1, 1, 1]
-        }
+        
+        if self.sat == 'sar':
+        
+            d = {'winter':self.dwinter, 'spring': self.dspring, 'summer': self.dsummer, 'autumn': self.dautumn}
+
+            minimos = [self.get_perc(d[i][self.key])[0] for i in bands]
+            maximos = [self.get_perc(d[i][self.key])[1] for i in bands]
+
+            #min_ = self.get_perc(self.dwinter[self.key])[0]
+            #max_ = self.get_perc(self.dwinter[self.key])[1]
+
+            print(minimos, maximos)
+
+            video_args = {
+              'dimensions': 768,
+              'region': self.roi, 
+              'framesPerSecond': 10,
+              'bands': bands, 
+              'min': minimos,
+              'max': maximos,
+              'gamma': [1, 1, 1]}
+            
+        else:
+            
+            video_args = {
+              'dimensions': 768,
+              'region': self.roi, 
+              'framesPerSecond': 10,
+              'bands': bands, 
+              'min': 0.15,
+              'max': 0.85,
+              'gamma': [1, 1, 1]}
         
         geemap.download_ee_video(self.get_year_composite(), video_args, out_gif)
         texted_gif = out_gif[:-4] + '_texted.gif'
-        geemap.add_text_to_gif(out_gif, texted_gif, xy=('5%', '90%'), text_sequence=self.start_year, font_size=30, font_color='#ffffff', add_progress_bar=False, duration=300)
+        geemap.add_text_to_gif(out_gif, texted_gif, xy=('5%', '90%'), 
+                               text_sequence=self.start_year, font_size=30, font_color='#ffffff', 
+                               add_progress_bar=False, duration=300)
         
         
     def get_export(self, crs='EPSG:4326', scale=10):
@@ -212,12 +330,12 @@ class NdviSeasonality:
         Returns:
           object(tif): 4 bands ndvi_year.tif per year in your ndvi collection, downloaded at your current working directory 
           '''
-  
 
-        if len(self.imagelist) == 0:
-            self.get_year_composite()
+        self.imagelist = []
+        self.get_year_composite()
             
         count = (len(self.imagelist))
+        print(count)
             
         for n in range(count):
             year = self.start_year + n

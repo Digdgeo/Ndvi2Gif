@@ -316,6 +316,30 @@ class NdviSeasonality:
                                add_progress_bar=False, duration=300)
         
         
+    def get_export_single(self, image, name='mycomposition.tif', crs='EPSG:4326', scale=10):
+        
+        '''Export single composition as .tif to your local folder. So long as we can do really nice
+        multiseasonal composites, e.g. median seasonal NDVI for whole Africa between 2001 and 2020. 
+        I thought that would be interesting to have the chance to export this composites.
+        This method calls geemap.ee_export_image.
+        
+        Args:
+            crs (string): Coordinate Reference System of the output tifs. Use EPSG style e.g. "EPSG:4326"; "EPSG:32629"
+            scale (int): Value for pixel size of your output tifs, default is 10 because default sat is Sentinel 2 NDVI,
+                with bands 8 and 4 (10 m pix/resolution). In case you choose Landsat yous should change scale to 30. 
+                You can also considerer use this parameter like resample in case you get a size limitation error
+                when try to download a big area. 
+        Returns:
+          object(tif): 4 bands mycompositon.tif, with max, median or perc_90 for the period you chosen, 
+          downloaded at your current working directory 
+          '''
+        
+        filename = os.path.join(os.getcwd(), name)
+        geemap.ee_export_image(image, filename=filename, scale=scale, crs=crs, region=self.roi, file_per_band=False) 
+
+        print('Image have been exported')
+        
+        
     def get_export(self, crs='EPSG:4326', scale=10):
         
         '''Export NDVI year compositions as .tif to your local folder.

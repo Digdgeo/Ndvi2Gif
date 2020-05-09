@@ -15,20 +15,23 @@ better visual result, specially with Landsat 4 and 5 that sometimes has band err
 that can affect NDVI results.
 
 So, this process generates a raster with 4 bands (Winter, Spring, Summer and
-Autumn) for every year in the chosen time period. Right now, satellite
-collections available are Sentinel (2-MSI; 10 m pixel NDVI), Landsat (4-TM, 5-TM,
-7-ETM+ and 8-OLI; 30 m pixel NDVI) and MODIS (MOD09Q1 v006; 250 m pixel NDVI).  
-In the first case, you have data to play with from 2015
-until the present, and in the second case, from 1984 until present.
-Landsat collections datasets are Surface Reflectance (SR), while
+Autumn) for every year in the chosen time period. You can choose between 'max' (default), 'perc_90' or 'median' like season reducer. 
+
+Satellite collections available are:
+
+* Sentinel 1-C-band Synthetic Aperture Radar 10 m pixel VH cross-polarization ('sar') | 2014-10-03 - Present
+* Sentinel 2-MSI 10 m pixel NDVI ('Sentinel') | 2015-06-23 - Present
+* Landsat 4-TM, 5-TM, 7-ETM+ and 8-OLI 30 m pixel NDVI ('Landsat') | 1982 - Present 
+* MODIS MOD09Q1 v006 250 m pixel NDVI ('MODIS') | 2000-03-05 - Present
+
+Landsat collections datasets and MODIS, are Surface Reflectance (SR) data, while
 Sentinel 2 is Top of Atmosphere Reflectance (TOA) dataset. This is
 because Surface Reflectance for Sentinel 2 data, is only available since
-2017. Last, MODIS dataset is a 8 day composite Surface Reflectance, and it's available 
-since 2000-02-24 until present.
+2017. 
 
 If everything runs well, you should get a GIF similar to those ones that
 you can find in the pics folder of this repo. Actually, you will get 2
-gifs, one of them named "mygif\_texted.gif", which add year as text to
+gifs, one of them named "mygif_texted.gif", which add year as text to
 the gif. Here you can see an example close to Seville, where you can
 tell the blue colours (blue band in this example is summer) showing paddy
 fields over a marsh area (summer crops). Outside the marshes, the colours
@@ -42,7 +45,7 @@ Beyond the nice gif, a lot of information can be obtained with this kind of mult
 
 .. image:: https://i.imgur.com/tq4aMBv.jpg
 
-Last, you have the choice to download the yearly ndvi composites ias tiff files into your computer, in case you want the data for further analysis. 
+Last, you have the choice to download the yearly ndvi composites as tiff files into your computer, in case you want the data for further analysis. Also, it have been noticed that Google Earth Engine reducers are really nice to create gorgeous multi-year composties, even for very large areas with MODIS, e.g. median seasonal NDVI for whole Africa between 2001 and 2020. So, besides the export for each year, you also have the chance to export your favourite multi-year compostion as a single file. 
 
 
 

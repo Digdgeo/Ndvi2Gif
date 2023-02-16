@@ -25,7 +25,7 @@ setup(
 	author='Diego Garcia Diaz',
 	author_email='digd.geografo@gmail.com',
 	license='MIT',
-	#install_requires=['geemap >= 0.6.10'],
+	install_requires=['geemap >= 0.19.0'],
 	packages=find_packages(include=['ndvi2gif', 'ndvi2gif.*']),
 	zip_safe=False
 )

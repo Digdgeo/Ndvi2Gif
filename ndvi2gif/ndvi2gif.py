@@ -29,10 +29,7 @@ class NdviSeasonality:
         gif: Gif file with ndvi seasonal yearly composites.
         images: GeoTIFF with ndvi seasonal yearly composites.
     '''
-                                                             
-
-    
-
+                                                            
     def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, sat='S2', key='max', index='ndvi'):
 
 
@@ -93,14 +90,16 @@ class NdviSeasonality:
                   'gndvi': self.get_gndvi, 'avi': self.get_avi, 'nbri': self.get_nbri, 'ndsi': self.get_ndsi,
                   'aweinsh': self.get_aweinsh, 'awei': self.get_awei}
 
-        #Periods!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # Here we define the periods, feel free to change the dates in case your are looking for different seasons
+        #Periods!
+        # Here we define the periods splitting the year in 4, 12 or 24 equal parts. Feel free to change the dates in case your are looking for different seasons
         
+        #Seasons
         self.winter = ['-01-01', '-03-31']
         self.spring = ['-04-01', '-06-30']
         self.summer = ['-07-01', '-09-30']
         self.autumn = ['-10-01', '-12-31']
 
+        #Yearly
         self.january = ['-01-01', '-01-31']
         self.february = ['-02-01', '-02-28']
         self.march = ['-03-01', '-03-31']
@@ -114,6 +113,7 @@ class NdviSeasonality:
         self.november = ['-11-01', '-11-30']
         self.december = ['-12-01', '-12-31']
 
+        #15 days
         self.p1 = ['-01-01', '-01-15']
         self.p2 = ['-01-16', '-01-31']
         self.p3 = ['-02-01', '-02-15']
@@ -189,29 +189,25 @@ class NdviSeasonality:
         # ...to all sensors in the same way
         # Get Landsat surface reflectance collections for OLI, ETM+ and TM sensors.
         
-        LC09col = ee.ImageCollection("LANDSAT/LC09/C02/T1_L2").filterBounds(self.roi) #.map(scale_OLI)
+        LC09col = ee.ImageCollection("LANDSAT/LC09/C02/T1_L2").filterBounds(self.roi) 
+        LC08col = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterBounds(self.roi) 
+        LE07col = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2").filterBounds(self.roi) 
+        LT05col = ee.ImageCollection("LANDSAT/LT05/C02/T1_L2").filterBounds(self.roi) 
+        LT04col = ee.ImageCollection("LANDSAT/LT04/C02/T1_L2").filterBounds(self.roi) 
         
-        #.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7'], ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
-        LC08col = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterBounds(self.roi) #.map(scale_OLI)
-        
-        #.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7'], ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
-        LE07col = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2").filterBounds(self.roi) #.map(scale_ETM)
-        
-        #.select(['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'], ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
-        LT05col = ee.ImageCollection("LANDSAT/LT05/C02/T1_L2").filterBounds(self.roi) #.map(scale_ETM)
-        
-        #.select(['SR_B1','SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'], ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
-        LT04col = ee.ImageCollection("LANDSAT/LT04/C02/T1_L2").filterBounds(self.roi) #.map(scale_ETM)
-        
-        #.select(['SR_B1','SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'],  ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
+        OLI = LC09col.merge(LC08col)
+        ETM = LE07col.merge(LT05col).merge(LT04col)
+        OLI_ = OLI.map(scale_OLI) 
+        ETM_ = ETM.map(scale_ETM)
+        Landsat = OLI_.merge(ETM_)
         
         # Notice that S2 is not in Surface Reflectance but in TOA, this because otherwise only
         # had data starting in 2017. Using BOA we have 2 extra years, starting at 2015
         # We use the wide 8 band instead of the 8A narrower badn, that is also more similar to landsat NIR
-        # But this way we have NDVI at 10 m instead of 20. And we are using TOA instead of SR, so who cares?
+        # But this way we have NDVI at 10 m instead of 20. And we are using TOA instead of SR so, who cares?
         
         #"COPERNICUS/S2_SR_HARMONIZED"
-        S2col = ee.ImageCollection("COPERNICUS/S2_SR").select(['B2', 'B3', 'B4', 'B8', 'B11', 'B12'], 
+        S2col = ee.ImageCollection("COPERNICUS/S2_HARMONIZED").select(['B2', 'B3', 'B4', 'B8', 'B11', 'B12'], 
                                                                          ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
         
         # Get MODIS MOD09Q1.006 Terra Surface Reflectance 8-Day Global 250m
@@ -232,7 +228,7 @@ class NdviSeasonality:
         if self.sat == 'S2':
             self.ndvi_col = S2col
         elif self.sat == 'Landsat':
-            self.ndvi_col = LC09col.merge(LC08col).merge(LE07col).merge(LT05col).merge(LT04col).map(self.t1_l2_scale)
+            self.ndvi_col = Landsat
         elif self.sat == 'MODIS':
             self.ndvi_col = MOD09Q1
         elif self.sat == 'S1':
@@ -241,13 +237,6 @@ class NdviSeasonality:
             print('Not a valid satellite')
             pass
     
-
-    def t1_l2_scale(self, image):
-
-            return image.multiply(0.0000275).add(-0.2)
-
-
-
 
     #Indexes
     #Someday it would be good just use Awesome spectral indexes library

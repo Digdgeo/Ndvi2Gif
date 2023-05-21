@@ -1,12 +1,43 @@
-==========================
-Multi Seasonal NDVI to GIF
-==========================
+====================================================
+Multi Seasonal Indexes to GIF
+====================================================
 
-ndvi2gif is a python script for creating seasonal NDVI compositions
-gifs. This is just a small python class that uses `Google Earth Engine
+Ndvi2Gif is a python library to create Seasonal Composites based on several statistics of some Remote Sensings datastes. For the moment the available datasets are: 
+
+
+* **Sentinel**
+
+  -Sentinel 1 (Sentinel 1-C-band Synthetic Aperture Radar 10 m pixel VH cross-polarization ('sar') | 2014-10-03 - Present) 
+
+  -Sentinel 2 (Sentinel 2-MSI 10 m pixel NDVI ('Sentinel') | 2015-06-23 - Present)
+
+* **Landsat**
+
+  -Landsat 4 TM       
+                      
+  -Landsat 5 TM       
+                      
+  -Landsat 7 ETM+     
+                       
+  -Landsat 8 OLI       
+                      
+* **MODIS**           
+                      
+  -MOD09A1            
+
+
+This tool uses `Google Earth Engine
 API <https://github.com/google/earthengine-api>`_ and the amazing
 `Geemap package <https://github.com/giswqs/geemap>`_, to create yearly
-compositions based on the maximum
+compositions based on the selected statistics. The stats includes at this point are:
+
+* Maximun
+* Mean
+* Median 
+* Percentile 90
+* Percentile 95
+
+
 `NDVI <https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index>`__
 value reached in every seasons. Maximum NDVI is used as season reducer, in order to avoid clouds and
 cloud shadows. However, we have added 'perc_90' (percentile 90) and 'median' as others available statistic choice

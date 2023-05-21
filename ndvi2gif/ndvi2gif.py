@@ -3,6 +3,15 @@ import ee
 import geemap
 import deims
 
+def scale_OLI(image):
+        opticalBands = image.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
+        #thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
+        return image.addBands(opticalBands, None, True)#.addBands(thermalBands, None, True)
+    
+def scale_ETM(image):
+    opticalBands = image.select(['SR_B1','SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
+    #thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
+    return image.addBands(opticalBands, None, True)#.addBands(thermalBands, None, True)
 
 class NdviSeasonality:
     
@@ -20,6 +29,9 @@ class NdviSeasonality:
         gif: Gif file with ndvi seasonal yearly composites.
         images: GeoTIFF with ndvi seasonal yearly composites.
     '''
+                                                             
+
+    
 
     def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, sat='S2', key='max', index='ndvi'):
 
@@ -66,7 +78,7 @@ class NdviSeasonality:
         self.start_year = start_year
         self.end_year = end_year
         if sat not in ['S2', 'Landsat', 'MODIS', 'S1']:
-            print('You should choose one from Sentinel, Landsat, MODIS or S1')
+            print('You should choose one from Sentinel 2 (S2), Landsat, MODIS or Sentinel 1 (S1)')
         else:
             self.sat = sat
 
@@ -177,21 +189,29 @@ class NdviSeasonality:
         # ...to all sensors in the same way
         # Get Landsat surface reflectance collections for OLI, ETM+ and TM sensors.
         
-        LC08col = ee.ImageCollection("LANDSAT/LC08/C01/T1_SR").select(['B2', 'B3', 'B4', 'B5', 'B6', 'B7'], 
-                                                                      ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
-        LE07col = ee.ImageCollection("LANDSAT/LE07/C01/T1_SR").select(['B1', 'B2', 'B3', 'B4', 'B5', 'B7'], 
-                                                                      ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
-        LT05col = ee.ImageCollection("LANDSAT/LT05/C01/T1_SR").select(['B1','B2', 'B3', 'B4', 'B5', 'B7'], 
-                                                                      ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
-        LT04col = ee.ImageCollection("LANDSAT/LT04/C01/T1_SR").select(['B1','B2', 'B3', 'B4', 'B5', 'B7'], 
-                                                                      ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
+        LC09col = ee.ImageCollection("LANDSAT/LC09/C02/T1_L2").filterBounds(self.roi) #.map(scale_OLI)
+        
+        #.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7'], ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
+        LC08col = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterBounds(self.roi) #.map(scale_OLI)
+        
+        #.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7'], ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
+        LE07col = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2").filterBounds(self.roi) #.map(scale_ETM)
+        
+        #.select(['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'], ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
+        LT05col = ee.ImageCollection("LANDSAT/LT05/C02/T1_L2").filterBounds(self.roi) #.map(scale_ETM)
+        
+        #.select(['SR_B1','SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'], ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
+        LT04col = ee.ImageCollection("LANDSAT/LT04/C02/T1_L2").filterBounds(self.roi) #.map(scale_ETM)
+        
+        #.select(['SR_B1','SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'],  ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
         
         # Notice that S2 is not in Surface Reflectance but in TOA, this because otherwise only
         # had data starting in 2017. Using BOA we have 2 extra years, starting at 2015
         # We use the wide 8 band instead of the 8A narrower badn, that is also more similar to landsat NIR
         # But this way we have NDVI at 10 m instead of 20. And we are using TOA instead of SR, so who cares?
         
-        S2col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").select(['B2', 'B3', 'B4', 'B8', 'B11', 'B12'], 
+        #"COPERNICUS/S2_SR_HARMONIZED"
+        S2col = ee.ImageCollection("COPERNICUS/S2_SR").select(['B2', 'B3', 'B4', 'B8', 'B11', 'B12'], 
                                                                          ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']).filterBounds(self.roi)
         
         # Get MODIS MOD09Q1.006 Terra Surface Reflectance 8-Day Global 250m
@@ -207,11 +227,12 @@ class NdviSeasonality:
         s1S1 = s1Ascending.select('VH').merge(s1Descending.select('VH')).filterBounds(self.roi)
 
         
+        
         # Set the collection that will be used
         if self.sat == 'S2':
             self.ndvi_col = S2col
         elif self.sat == 'Landsat':
-            self.ndvi_col = LC08col.merge(LE07col).merge(LT05col).merge(LT04col)
+            self.ndvi_col = LC09col.merge(LC08col).merge(LE07col).merge(LT05col).merge(LT04col).map(self.t1_l2_scale)
         elif self.sat == 'MODIS':
             self.ndvi_col = MOD09Q1
         elif self.sat == 'S1':
@@ -220,6 +241,14 @@ class NdviSeasonality:
             print('Not a valid satellite')
             pass
     
+
+    def t1_l2_scale(self, image):
+
+            return image.multiply(0.0000275).add(-0.2)
+
+
+
+
     #Indexes
     #Someday it would be good just use Awesome spectral indexes library
     def get_ndvi(self, image):

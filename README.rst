@@ -21,46 +21,39 @@ And the available datasets are the following:
 
 * **Sentinel**
 
-  *Sentinel 1: https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S1_GRD
+  Sentinel 1: https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S1_GRD
 
-  *Sentinel 2 https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_HARMONIZED
+  Sentinel 2 https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_HARMONIZED
 
 * **Landsat**
 
-  *Landsat 4 TM: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LT04_C02_T1_L2   
+  Landsat 4 TM: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LT04_C02_T1_L2   
                       
-  *Landsat 5 TM: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LT05_C02_T1_L2    
+  Landsat 5 TM: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LT05_C02_T1_L2    
                       
-  *Landsat 7 ETM+: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LE07_C02_T1_L2   
+  Landsat 7 ETM+: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LE07_C02_T1_L2   
                        
-  *Landsat 8 OLI: https://developers.google.com/earth-engine/datasets/catalog/landsat-8
+  Landsat 8 OLI: https://developers.google.com/earth-engine/datasets/catalog/landsat-8
 
-  *Landsat 9 OLI: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LC09_C02_T1_L2
+  Landsat 9 OLI: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LC09_C02_T1_L2
                       
 * **MODIS**           
                       
-  *MOD09A1            
+  MOD09A1            
 
-Maximum `NDVI <https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index>`__ is used seasonal reducer, 
-in order to avoid clouds and cloud shadows. However, we have added 'perc_90' (percentile 90) and 'median' as others 
-available statistic choice when instantiating the class. Max remains the default, but sometimes median gives a
-better visual result, specially with Landsat 4 and 5 that sometimes has band errors 
+Maximum `NDVI <https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index>`__ is used by default as seasonal reducer 
+in order to avoid clouds and cloud shadows. However, we have added 'others statistic to choice when instantiating the class. 
+Max remains the default, but sometimes median gives a
+better visual result, specially with Landsat 4 and 5 that sometimes have band errors 
 that can affect NDVI results. Percentile 90 is a good compromise between max and median. 
 
+Landsat collections and MODIS datasets are Surface Reflectance (SR) data, while
+Sentinel 2 is Top of Atmosphere Reflectance (TOA) data. This is
+because Surface Reflectance for Sentinel 2, is only available since
+2017 but since 2015 for TOA. 
+
 So, this process generates a raster with 4 bands (Winter, Spring, Summer and
-Autumn) for every year in the chosen time period.  
-
-Satellite collections available are:
-
-* Sentinel 1-C-band Synthetic Aperture Radar 10 m pixel VH cross-polarization ('sar') | 2014-10-03 - Present
-* Sentinel 2-MSI 10 m pixel NDVI ('Sentinel') | 2015-06-23 - Present
-* Landsat 4-TM, 5-TM, 7-ETM+ and 8-OLI 30 m pixel NDVI ('Landsat') | 1982 - Present 
-* MODIS MOD09Q1 v006 250 m pixel NDVI ('MODIS') | 2000-03-05 - Present
-
-Landsat collections datasets and MODIS, are Surface Reflectance (SR) data, while
-Sentinel 2 is Top of Atmosphere Reflectance (TOA) dataset. This is
-because Surface Reflectance for Sentinel 2 data, is only available since
-2017. 
+Autumn) for every year in the chosen time period. 
 
 If everything runs well, you should get a GIF similar to those ones that
 you can find in the pics folder of this repo. Actually, you will get 2
@@ -70,9 +63,6 @@ tell the blue colours (blue band in this example is summer) showing paddy
 fields over a marsh area (summer crops). Outside the marshes, the colours
 green and yellow predominate,showing winter crops such as cereals. You
 can also realize the intermediate colours for different crops.
-
-
-
 
 Beyond the nice gif, a lot of information can be obtained with this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having colour formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and even how it changes through the years.  White colours means high NDVI values for the three chosen seasons (perennial vegetation), black colour means low NDVI values, such as permanent water bodies, sand, impervious surfaces, etc...
 

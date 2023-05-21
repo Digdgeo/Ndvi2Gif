@@ -1,33 +1,12 @@
 ====================================================
-Multi Seasonal Indexes to GIF
+Multi Seasonal Remote Sensing Indexes Composites
 ====================================================
 
-Ndvi2Gif is a python library to create Seasonal Composites based on several statistics of some Remote Sensings datastes. For the moment the available datasets are: 
+.. image:: https://i.imgur.com/UZDptan.gif
 
 
-* **Sentinel**
-
-  -Sentinel 1 (Sentinel 1-C-band Synthetic Aperture Radar 10 m pixel VH cross-polarization ('sar') | 2014-10-03 - Present) 
-
-  -Sentinel 2 (Sentinel 2-MSI 10 m pixel NDVI ('Sentinel') | 2015-06-23 - Present)
-
-* **Landsat**
-
-  -Landsat 4 TM       
-                      
-  -Landsat 5 TM       
-                      
-  -Landsat 7 ETM+     
-                       
-  -Landsat 8 OLI       
-                      
-* **MODIS**           
-                      
-  -MOD09A1            
-
-
-This tool uses `Google Earth Engine
-API <https://github.com/google/earthengine-api>`_ and the amazing
+Ndvi2Gif is a python library to create Seasonal Composites based on several statistics applied to some Remote Sensings datastes.
+This tool uses `Google Earth Engine API <https://github.com/google/earthengine-api>`_ and the amazing
 `Geemap package <https://github.com/giswqs/geemap>`_, to create yearly
 compositions based on the selected statistics. The stats includes at this point are:
 
@@ -35,14 +14,37 @@ compositions based on the selected statistics. The stats includes at this point 
 * Mean
 * Median 
 * Percentile 90
-* Percentile 95
+* Percentile 95 
 
 
-`NDVI <https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index>`__
-value reached in every seasons. Maximum NDVI is used as season reducer, in order to avoid clouds and
-cloud shadows. However, we have added 'perc_90' (percentile 90) and 'median' as others available statistic choice
-when instantiating the class. Max remains the default, but sometimes median gives a
-better visual result, specially with Landsat 4 and 5 that sometimes has band errors
+And the available datasets are the following: 
+
+* **Sentinel**
+
+  *Sentinel 1: https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S1_GRD
+
+  *Sentinel 2 https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_HARMONIZED
+
+* **Landsat**
+
+  *Landsat 4 TM: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LT04_C02_T1_L2   
+                      
+  *Landsat 5 TM: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LT05_C02_T1_L2    
+                      
+  *Landsat 7 ETM+: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LE07_C02_T1_L2   
+                       
+  *Landsat 8 OLI: https://developers.google.com/earth-engine/datasets/catalog/landsat-8
+
+  *Landsat 9 OLI: https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LC09_C02_T1_L2
+                      
+* **MODIS**           
+                      
+  *MOD09A1            
+
+Maximum `NDVI <https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index>`__ is used seasonal reducer, 
+in order to avoid clouds and cloud shadows. However, we have added 'perc_90' (percentile 90) and 'median' as others 
+available statistic choice when instantiating the class. Max remains the default, but sometimes median gives a
+better visual result, specially with Landsat 4 and 5 that sometimes has band errors 
 that can affect NDVI results. Percentile 90 is a good compromise between max and median. 
 
 So, this process generates a raster with 4 bands (Winter, Spring, Summer and
@@ -69,7 +71,7 @@ fields over a marsh area (summer crops). Outside the marshes, the colours
 green and yellow predominate,showing winter crops such as cereals. You
 can also realize the intermediate colours for different crops.
 
-.. image:: https://i.imgur.com/UZDptan.gif
+
 
 
 Beyond the nice gif, a lot of information can be obtained with this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having colour formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and even how it changes through the years.  White colours means high NDVI values for the three chosen seasons (perennial vegetation), black colour means low NDVI values, such as permanent water bodies, sand, impervious surfaces, etc...

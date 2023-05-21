@@ -11,6 +11,8 @@ classifiers = [
     'Programming Language :: Python :: 3.6',
     'Programming Language :: Python :: 3.7',
     'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
     'Operating System :: OS Independent'
 ]
 
@@ -25,7 +27,7 @@ setup(
 	author='Diego Garcia Diaz',
 	author_email='digd.geografo@gmail.com',
 	license='MIT',
-	install_requires=['geemap >= 0.19.0'],
+	install_requires=['geemap >= 0.19.0', 'deims >= 3.1'],
 	packages=find_packages(include=['ndvi2gif', 'ndvi2gif.*']),
 	zip_safe=False
 )

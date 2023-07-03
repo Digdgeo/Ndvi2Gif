@@ -2,13 +2,23 @@
 Multi Seasonal Remote Sensing Indexes Composites
 ====================================================
 
-.. image:: https://i.imgur.com/UZDptan.gif
+.. image:: https://i.imgur.com/Ikg9jwP.gif
 
 
 Ndvi2Gif is a python library to create Seasonal Composites based on several statistics applied to some Remote Sensings datastes.
 This tool uses `Google Earth Engine API <https://github.com/google/earthengine-api>`_ and the amazing
 `Geemap package <https://github.com/giswqs/geemap>`_, to create yearly
-compositions based on the selected statistics. The stats includes at this point are:
+compositions based on different statistics. 
+
+This tool have been updated in the framework of `eLTER H2020 <https://github.com/google/earthengine-api>`_ and 
+`SUMHAL <https://lifewatcheric-sumhal.csic.es/descripcion-del-proyecto/>`_ projects , as the main input to 
+`PhenoPy <https://github.com/JavierLopatin/PhenoPY/tree/master>`_ python package, 
+which is the library that we use to get the phenometrics derived from the seasonal composites.
+
+.. image:: https://camo.githubusercontent.com/5c734dbb4d997c26304b31db1426732e9497e4f9a49acbd0c8bbf0f9a99c462c/68747470733a2f2f692e696d6775722e636f6d2f5376394c66596a2e706e67
+
+
+The stats includes at this point are:
 
 * Maximun
 * Mean
@@ -42,7 +52,7 @@ And the available datasets are the following:
   MOD09A1            
 
 Maximum `NDVI <https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index>`__ is used by default as seasonal reducer 
-in order to avoid clouds and cloud shadows. However, we have added 'others statistic to choice when instantiating the class. 
+in order to avoid clouds and cloud shadows. However, we have added others statistic to choice when instantiating the class. 
 Max remains the default, but sometimes median gives a
 better visual result, specially with Landsat 4 and 5 that sometimes have band errors 
 that can affect NDVI results. Percentile 90 is a good compromise between max and median. 
@@ -52,25 +62,24 @@ Sentinel 2 is Top of Atmosphere Reflectance (TOA) data. This is
 because Surface Reflectance for Sentinel 2, is only available since
 2017 but since 2015 for TOA. 
 
-So, this process generates a raster with 4 bands (Winter, Spring, Summer and
-Autumn) for every year in the chosen time period. 
+So, this process generates a raster with 4 (Autumn, Winter, Spring, Summer), 12 (january, febreuary, march, ... ) or 24 (p1, p2, ..., p24) 
+bands for every year in the chosen time period. 
 
-If everything runs well, you should get a GIF similar to those ones that
-you can find in the pics folder of this repo. Actually, you will get 2
-gifs, one of them named "mygif_texted.gif", which add year as text to
-the gif. Here you can see an example close to Seville, where you can
-tell the blue colours (blue band in this example is summer) showing paddy
-fields over a marsh area (summer crops). Outside the marshes, the colours
-green and yellow predominate,showing winter crops such as cereals. You
-can also realize the intermediate colours for different crops.
-
-Beyond the nice gif, a lot of information can be obtained with this kind of multi seasonal NDVI approach. Knowing the pair NDVI season-Raster band that you chose for your gif, and having colour formation in mind (graphic below), you could tell which is the phenology, and therfore the crop or every parcel, and even how it changes through the years.  White colours means high NDVI values for the three chosen seasons (perennial vegetation), black colour means low NDVI values, such as permanent water bodies, sand, impervious surfaces, etc...
+Beyond a nice gif, a lot of information can be obtained with this kind of multi seasonal Vegetation Indexes approach. 
+Knowing the pair Seasonal Index-Raster band that you chose for your gif, and having colour formation in mind (graphic below), 
+you could tell which is the phenology, and therfore the crop or every parcel, and even how it changes through the years.  
+White colours means high NDVI values for the three periods chosen for the vizParams (perennial vegetation), black colour means low NDVI values, 
+such as permanent water bodies, sand, impervious surfaces, etc...
 
 Since we have added SAR data, maybe is no longer correct saying this is an NDVI tool, but with SAR the meaning s very similar to the NDVI approach, in this case we get higher return values when plants are bigger, and very low values for baresoil. So, at the end is another way to have a multi-temporal look at crop growth. 
 
 .. image:: https://i.imgur.com/tq4aMBv.jpg
 
-Last, you have the choice to download the yearly ndvi composites as tiff files into your computer, in case you want the data for further analysis. Also, it have been noticed that Google Earth Engine reducers are really nice to create gorgeous multi-year composties, even for very large areas with MODIS, e.g. median seasonal NDVI for whole Africa between 2001 and 2020. So, besides the automatic export for each year, you also have the chance to export your favourite multi-year compostion in a single file. 
+Last, you have the choice to download the yearly seasonal index composites as tiff files into your computer, 
+in case you want the data for further analysis. Also, it have been noticed that Google Earth Engine reducers are 
+really nice to create gorgeous multi-year composties, even for very large areas with MODIS, e.g. median seasonal NDVI 
+for whole Africa between 2001 and 2020. So, besides the automatic export for each year, you also have the chance to export 
+your favourite multi-year compostion in a single file. 
 
 
 
@@ -90,7 +99,10 @@ Usage
 =====
 
 
-This is intend to be executed in a notebook and in tandem with a geemap Map object, so you could travel around the map and pick up your region of interest just by drawing a shape, and visualizing different dates and band combinations directly on the map. However, you could just run it in a command line and pass it a shapefile or a geojson as roi, and ask for the gif or for the geotiff rasters.
+This is intend to be executed in a notebook and in tandem with a geemap Map object, so you could travel around the map 
+and pick up your region of interest just by drawing a shape, and visualizing different dates and band combinations directly on 
+the map. However, you could just run it in a command line and pass it a shapefile or a geojson as roi, and ask for the gif or 
+for the geotiff rasters.
 
 
 Please, see the `example notebook <https://github.com/Digdgeo/Ndvi2Gif/blob/master/ndvi2gif/ndvi2gif_notebook_example.ipynb>`_ 

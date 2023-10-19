@@ -8,12 +8,13 @@ Multi Seasonal Remote Sensing Indexes Composites
 Ndvi2Gif is a python library to create Seasonal Composites based on several statistics applied to some Remote Sensings datastes.
 This tool uses `Google Earth Engine API <https://github.com/google/earthengine-api>`_ and the amazing
 `Geemap package <https://github.com/giswqs/geemap>`_, to create yearly
-compositions based on different statistics. 
+compositions based on different statistics. We also have added `deimsPy <https://pypi.org/project/deims/>` to get the boundaries of all eLTER sites. So now, you can choose between a shapefile, a map draw or
+just use an eLTER DeimsID to get the boundaries for your seasonal composite index. 
 
 This tool have been updated in the framework of `eLTER H2020 <https://github.com/google/earthengine-api>`_ and 
-`SUMHAL <https://lifewatcheric-sumhal.csic.es/descripcion-del-proyecto/>`_ projects , as the main input to 
+`SUMHAL <https://lifewatcheric-sumhal.csic.es/descripcion-del-proyecto/>`_ projects, as the main input to 
 `PhenoPy <https://github.com/JavierLopatin/PhenoPY/tree/master>`_ python package, 
-which is the library that we use to get the phenometrics derived from the seasonal composites.
+which is the library that we use to get the phenometrics derived from the seasonal vegetation composites.
 
 .. image:: https://camo.githubusercontent.com/5c734dbb4d997c26304b31db1426732e9497e4f9a49acbd0c8bbf0f9a99c462c/68747470733a2f2f692e696d6775722e636f6d2f5376394c66596a2e706e67
 
@@ -26,8 +27,20 @@ The stats includes at this point are:
 * Percentile 90
 * Percentile 95 
 
+The indexes available at present are:
 
-And the available datasets are the following: 
+* NDVI
+* EVI
+* GNDVI 
+* SAVI 
+* NDWI 
+* AEWI
+* AEWINSH
+* NDSI
+* NBRI
+
+
+And last, the available datasets are the following: 
 
 * **Sentinel**
 
@@ -49,10 +62,10 @@ And the available datasets are the following:
                       
 * **MODIS**           
                       
-  MOD09A1            
+  MOD09A1: https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD09A1            
 
-Maximum `NDVI <https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index>`__ is used by default as seasonal reducer 
-in order to avoid clouds and cloud shadows. However, we have added others statistic to choice when instantiating the class. 
+It is possible to create a combination of any of these statistics, indices and datasets. By default, Maximum `NDVI <https://en.wikipedia.org/wiki/Normalized_difference_vegetation_index>`__ is used 
+as seasonal reducer in order to avoid clouds and cloud shadows. However, we have added others statistic to choice when instantiating the class. 
 Max remains the default, but sometimes median gives a
 better visual result, specially with Landsat 4 and 5 that sometimes have band errors 
 that can affect NDVI results. Percentile 90 is a good compromise between max and median. 
@@ -99,9 +112,9 @@ Usage
 =====
 
 
-This is intend to be executed in a notebook and in tandem with a geemap Map object, so you could travel around the map 
+This is intend to be executed in a notebook and in tandem with a geemap Map object, so you could navigate around the map 
 and pick up your region of interest just by drawing a shape, and visualizing different dates and band combinations directly on 
-the map. However, you could just run it in a command line and pass it a shapefile or a geojson as roi, and ask for the gif or 
+the map. However, you could just run it in a command line and pass it a DeimsID, a shapefile or a geojson as roi, and ask for the gif or 
 for the geotiff rasters.
 
 

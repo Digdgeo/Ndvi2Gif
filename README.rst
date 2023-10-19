@@ -100,7 +100,7 @@ Installation
 ============
 
 
-This tiny and humble python class depends on geemap, so geemap will be installed for you. Also it could be a good idea install first geemap in a python environment (you can see the details here: `geemap install) <https://github.com/giswqs/geemap#installation>`_ and later install ndvi2gif in that environment via pip:
+This tiny and humble python package depends on geemap, so geemap will be installed for you. Also it could be a good idea install first geemap in a python environment (you can see the details here: `geemap install) <https://github.com/giswqs/geemap#installation>`_ and later install ndvi2gif in that environment via pip:
 
 .. code:: python
 
@@ -160,19 +160,8 @@ Please, see the `example notebook <https://github.com/Digdgeo/Ndvi2Gif/blob/mast
 
 
 
-ToDo list
-=========
-
-
-* Add masking capablities based on NDVI values to show real color composite in the background. Is it that possible?
-* Add seasons dates as parameters that can be easily modified
-* Add a method to easily export multi-yearly composites
-
-
-
 Contributions
 =============
 
 
-Yes, please! git pulls will be welcome, even those related to my english grammar...
-
+Yes, please! Feel free to contribute to this project in any way you like.

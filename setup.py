@@ -19,7 +19,7 @@ classifiers = [
 
 setup(
 	name='ndvi2gif',
-	version='0.0.4',
+	version='0.0.5',
 	description='Python package to create seasonal composites of NDVI or several more vegetation, water, snow, etc. indexes, and download them as pretty gifs or geotiff rasters',
 	long_description=read('README.rst'),
 	url='https://github.com/Digdgeo/Ndvi2Gif',

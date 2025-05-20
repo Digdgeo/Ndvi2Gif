@@ -33,7 +33,7 @@ class NdviSeasonality:
     def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, sat='S2', key='max', index='ndvi'):
 
 
-        print('There we go again...')     
+        print('There we go again... testing the new ndvi2gif package')     
         # Here we get the roi. Valid inputs are draws on the map, shapefiles or geojson
         self.roi = roi
         if self.roi is None:
@@ -88,7 +88,7 @@ class NdviSeasonality:
         self.index = index
         self.d = {'ndvi': self.get_ndvi, 'ndwi': self.get_ndwi, 'evi': self.get_evi, 'savi': self.get_savi,
                   'gndvi': self.get_gndvi, 'avi': self.get_avi, 'nbri': self.get_nbri, 'ndsi': self.get_ndsi,
-                  'aweinsh': self.get_aweinsh, 'awei': self.get_awei}
+                  'aweinsh': self.get_aweinsh, 'awei': self.get_awei, 'ndmi': self.get_ndmi}
 
         #Periods!
         # Here we define the periods splitting the year in 4, 12 or 24 equal parts. Feel free to change the dates in case your are looking for different seasons
@@ -322,7 +322,7 @@ class NdviSeasonality:
         '''Here we apply the SAVI calculation'''   
 
         # Compute the EVI using an expression.
-        return image.normalizedDifference(['Nir', 'Swir1'])
+        return image.normalizedDifference(['Nir', 'Swir2'])
     
     def get_ndsi(self, image):
         
@@ -331,12 +331,15 @@ class NdviSeasonality:
         # Compute the EVI using an expression.
         return image.normalizedDifference(['Green', 'Swir1'])
 
+    def get_ndmi(self, image):
+        
+        '''Here we apply the NDMI calculation'''   
+
+        # Compute the EVI using an expression.
+        return image.normalizedDifference(['Nir', 'Swir1'])
+
     
-
-    #Let's do this ugly silly part that could be done in a more efficient pythonic way. But I have no my mind in zen mode to do so at these moments =:_(
-    #PERIODS
-
-    #if self.split == 4:
+    # Here we define the functions to get the seasonal periods of time
 
     def get_winter(self, y):
         
@@ -1600,6 +1603,67 @@ class NdviSeasonality:
             geemap.ee_export_image(image, filename=filename, scale=scale, crs=crs, region=self.roi, file_per_band=False) 
 
         print('All the images in the collection have been exported')
+
+
+    def get_gif(self, name='mygif.gif', bands=['winter', 'spring', 'summer']):
+
+        '''Export NDVI year compositions as .gif to your local folder. 
+        This method calls geemap.download_ee_video & geemap.add_text_to_gif.
+
+        Args:
+            name (string): Name of the output gif. It will be saved at your current working directory.
+            bands (list): List where you define the band combination for your gif.
+        Returns:
+            object(gif): myname.gif and myname_texted.gif downloaded at your current working directory
+        '''
+        
+        self.imagelist = [0]
+        self.get_year_composite()
+        
+        # We can't define an minimun and maximun for sar data, since it depends a lot on the region
+        # Compute those values can take a lot of time, so we decided to keep a viz param standar for optical data
+        # and just compute them for sar data, so we split viz params in two depending on sar or opical data
+        # Of course, sar data it takes more time to be generated. This apply to get the gif not to export the images
+        out_gif = os.path.join(os.getcwd(), name)
+        self.imagelist = []
+        
+        if self.sat == 'sar':
+        
+            d = {'winter':self.dwinter, 'spring': self.dspring, 'summer': self.dsummer, 'autumn': self.dautumn}
+
+            minimos = [self.get_perc(d[i][self.key])[0] for i in bands]
+            maximos = [self.get_perc(d[i][self.key])[1] for i in bands]
+
+            #min_ = self.get_perc(self.dwinter[self.key])[0]
+            #max_ = self.get_perc(self.dwinter[self.key])[1]
+
+            print(minimos, maximos)
+
+            video_args = {
+                'dimensions': 768,
+                'region': self.roi, 
+                'framesPerSecond': 10,
+                'bands': bands, 
+                'min': minimos,
+                'max': maximos,
+                'gamma': [1, 1, 1]}
+            
+        else:
+            
+            video_args = {
+                'dimensions': 768,
+                'region': self.roi, 
+                'framesPerSecond': 10,
+                'bands': bands, 
+                'min': 0.15,
+                'max': 0.85,
+                'gamma': [1, 1, 1]}
+        
+        geemap.download_ee_video(self.get_year_composite(), video_args, out_gif)
+        texted_gif = out_gif[:-4] + '_texted.gif'
+        geemap.add_text_to_gif(out_gif, texted_gif, xy=('5%', '90%'), 
+                                text_sequence=self.start_year, font_size=30, font_color='#ffffff', 
+                                add_progress_bar=False, duration=300)
 
 
 def get_stats(image, geom, name, stat='MEDIAN', scale=10):

@@ -58,3 +58,8 @@ target/
 
 # Notebooks
 **/*.ipynb_checkpoints/
+
+# Visual Studio Code
+# Ignore Visual Studio Code workspace settings
+.vscode/
+

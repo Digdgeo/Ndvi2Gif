@@ -1,16 +1,14 @@
 ====================================================
-Multi Seasonal Remote Sensing Indexes Composites
+Ndvi2Gif. Multi Seasonal Remote Sensing Indexes Composites
 ====================================================
 
-Ndvi2Gif
-=========
 
 .. image:: https://img.shields.io/pypi/v/ndvi2gif.svg
    :target: https://pypi.org/project/ndvi2gif/
 
 .. image:: https://github.com/Digdgeo/Ndvi2Gif/actions/workflows/python-publish.yml/badge.svg
    :target: https://github.com/Digdgeo/Ndvi2Gif/actions/workflows/python-publish.yml
-   
+
 
 .. image:: https://i.imgur.com/Ikg9jwP.gif
 

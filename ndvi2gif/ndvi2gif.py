@@ -33,7 +33,7 @@ class NdviSeasonality:
     def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, sat='S2', key='max', index='ndvi'):
 
 
-        print('There we go again... testing the new ndvi2gif package')     
+        print('There we go again...')     
         # Here we get the roi. Valid inputs are draws on the map, shapefiles or geojson
         self.roi = roi
         if self.roi is None:

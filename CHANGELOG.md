@@ -4,6 +4,11 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 
 ---
 
+## [0.0.9] - 2025-05-20
+### Changed
+- Version bump to align `setup.cfg`, PyPI and GitHub release.
+- No functional changes from version 0.0.7.
+
 ## [0.0.7] - 2025-05-20
 
 ### Added

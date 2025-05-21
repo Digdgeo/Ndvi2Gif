@@ -16,6 +16,7 @@ requirements:
   host:
     - python >=3.7
     - pip
+    - setuptools  # <<-- Esta línea es necesaria
   run:
     - python >=3.7
     - numpy <2.0
@@ -39,4 +40,3 @@ about:
 extra:
   recipe-maintainers:
     - Digdgeo
-

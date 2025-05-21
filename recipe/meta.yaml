@@ -25,9 +25,6 @@ requirements:
     - tqdm
     - geemap ==0.29.5
     - earthengine-api >=0.1.347
-    - pip
-    - pip:
-        - deims>=4.0
 
 about:
   home: https://github.com/Digdgeo/Ndvi2Gif
@@ -42,3 +39,4 @@ about:
 extra:
   recipe-maintainers:
     - Digdgeo
+

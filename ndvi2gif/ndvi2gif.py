@@ -64,7 +64,7 @@ class NdviSeasonality:
                     raise ImportError("To use a DEIMS ID, you must install the `deims` package via pip:\n\n    pip install deims\n")
                 id_ = self.roi.split('/')[-1]
                 gdf = deims.getSiteBoundaries(id_)
-                self.roi = geemap.geopandas_to_ee(gdf)
+                self.roi = geemap.geopandas_to_ee(gdf).geometry()
             elif self.roi.startswith('wrs:'):
                 print('Loading Landsat WRS-2 geometry from GitHub...')
                 path, row = map(int, self.roi.replace('wrs:', '').split(','))
@@ -77,7 +77,7 @@ class NdviSeasonality:
                     raise ValueError(f"No geometry found for Path {path}, Row {row}")
                 
                 print(f'Found Landsat tile for Path {path}, Row {row}')
-                self.roi = geemap.geopandas_to_ee(subset)
+                self.roi = geemap.geopandas_to_ee(subset).geometry()
 
             elif self.roi.startswith('s2:'):
                 print('Loading Sentinel-2 MGRS tile from GitHub...')
@@ -91,7 +91,7 @@ class NdviSeasonality:
                     raise ValueError(f"No geometry found for Sentinel-2 tile {tile_id}")
                 
                 print(f'Found Sentinel-2 tile for {tile_id}')
-                self.roi = geemap.geopandas_to_ee(subset)
+                self.roi = geemap.geopandas_to_ee(subset).geometry()
 
             else:
                 print('It seems that your ROI path is invalid.\n\nAccepted formats:\n'

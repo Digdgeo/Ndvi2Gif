@@ -1,5 +1,5 @@
 {% set name = "ndvi2gif" %}
-{% set version = "0.1.1" %}
+{% set version = "0.1.2" %}
 
 package:
   name: {{ name }}
@@ -26,6 +26,8 @@ requirements:
     - tqdm
     - geemap ==0.29.5
     - earthengine-api >=0.1.347
+    - geopandas
+    - fiona
 
 about:
   home: https://github.com/Digdgeo/Ndvi2Gif

@@ -4,6 +4,24 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 
 ---
 
+## [0.1.2] - 2025-05-25
+
+### Added
+
+- Complete rework and translation of the README into Markdown format.
+- Included new seasonal/statistical methods and updated docstrings in English.
+- Added support for region input via Sentinel-2 tiles and Landsat path/row.
+- Added rich ROI input documentation with tabular summary.
+- Added `deims` dependency as optional to avoid conda forge problems
+
+### Changed
+
+- Clarified the purpose of the library as a broader seasonal analysis tool, not just for GIF generation.
+- Cleaned and validated `setup.cfg` and `pyproject.toml`.
+- Added extra requirements group for `deims`.
+
+---
+
 ## [0.1.1] - 2025-05-21
 
 ### Fixed
@@ -30,11 +48,16 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 
 - This is a technical release — no changes to the core functionality.
 
+---
+
 ## [0.0.9] - 2025-05-20
+
 ### Changed
 
 - Version bump to align `setup.cfg`, PyPI and GitHub release.
 - No functional changes from version 0.0.7.
+
+---
 
 ## [0.0.7] - 2025-05-20
 
@@ -63,3 +86,4 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 - Initial public release of the `ndvi2gif` package.
 - Generate seasonal composites and extract statistical summaries from several remote sensing index using Google Earth Engine and geemap.
 - Export to animated GIF and GeoTIFF format.
+

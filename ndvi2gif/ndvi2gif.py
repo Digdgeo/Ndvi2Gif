@@ -1,7 +1,11 @@
 import os
 import ee
 import geemap
-import deims
+import requests
+import zipfile
+import geopandas as gpd
+import fiona
+from io import BytesIO
 
 def scale_OLI(image):
         opticalBands = image.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
@@ -52,13 +56,45 @@ class NdviSeasonality:
                 self.roi = geemap.geojson_to_ee(self.roi).geometry()
             # Let's do the DEIMS part
             elif self.roi.startswith('deimsid'):
-                # Spanish joke with Don Quijote de a mancha 
                 print('Con DEIMS hemos topado amigo Sancho...')
+                try:
+                    import deims
+                except ImportError:
+                    raise ImportError("To use a DEIMS ID, you must install the `deims` package via pip:\n\n    pip install deims\n")
                 id_ = self.roi.split('/')[-1]
                 gdf = deims.getSiteBoundaries(id_)
                 self.roi = geemap.geopandas_to_ee(gdf)
+            elif self.roi.startswith('wrs:'):
+                print('Loading WRS-2 geometry from USGS...')
+                pathrow = self.roi.replace('wrs:', '').split(',')
+                path = int(pathrow[0])
+                row = int(pathrow[1])
+
+                # Descargar ZIP en memoria
+                url = 'https://prd-tnm.s3.amazonaws.com/StagedProducts/WRS/WRS2_descending/WRS2_descending.zip'
+                response = requests.get(url)
+                with zipfile.ZipFile(BytesIO(response.content)) as z:
+                    # Buscar el archivo .shp
+                    shapefile_name = [f for f in z.namelist() if f.endswith('.shp')][0]
+                    with z.open(shapefile_name) as shp:
+                        with fiona.BytesCollection(z.read(shapefile_name)) as collection:
+                            wrs = gpd.GeoDataFrame.from_features(collection, crs=collection.crs)
+
+                # Filtrar Path/Row
+                subset = wrs[(wrs['PATH'] == path) & (wrs['ROW'] == row)]
+
+                if subset.empty:
+                    raise ValueError(f"No geometry found for path {path} and row {row}")
+                
+                print(f'Found WRS geometry for Path {path}, Row {row}')
+                self.roi = geemap.geopandas_to_ee(subset)
             else:
-                print('It seems that your path is broken. Remember that await for shapefiles or geojson')
+                print('It seems that your ROI path is invalid.\n\nAccepted formats:\n'
+                '- Shapefile path (e.g. "myfile.shp")\n'
+                '- GeoJSON path (e.g. "area.geojson")\n'
+                '- DEIMS site ID (e.g. "deimsid:bcbc866c-3f4f-47a8-bbbc-0a93df6de7b2")\n'
+                '- Landsat WRS2 tile (e.g. "wrs:202,34")\n'
+                '- Drawn geometry on map (if using geemap interactive tools)')
 
         else:
 

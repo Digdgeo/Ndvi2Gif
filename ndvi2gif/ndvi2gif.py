@@ -5,38 +5,200 @@ import requests
 import zipfile
 import geopandas as gpd
 import fiona
+from geemap import zonal_statistics
 from io import BytesIO
-from shapely import force_2d
+        
 
 def scale_OLI(image):
-        opticalBands = image.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
-        #thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
-        return image.addBands(opticalBands, None, True)#.addBands(thermalBands, None, True)
+
+    """
+    Scale Landsat 8 OLI surface reflectance bands to reflectance values.
+    
+    Applies scaling factors and offsets to convert Landsat 8 OLI digital numbers
+    to surface reflectance values and renames bands to standardized names.
+    
+    Parameters
+    ----------
+    image : ee.Image
+        Landsat 8 OLI image with surface reflectance bands (SR_B2 through SR_B7).
+        
+    Returns
+    -------
+    ee.Image
+        Image with scaled optical bands added, renamed to standard band names
+        (Blue, Green, Red, Nir, Swir1, Swir2).
+        
+    Notes
+    -----
+    The scaling formula applied is: reflectance = DN * 0.0000275 - 0.2
+    where DN is the digital number from the original band.
+    
+    Examples
+    --------
+    >>> # Scale a Landsat 8 OLI image
+    >>> oli_image = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044034_20140318')
+    >>> scaled_image = scale_OLI(oli_image)
+    """
+
+    opticalBands = image.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
+    #thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
+    return image.addBands(opticalBands, None, True)#.addBands(thermalBands, None, True)
     
 def scale_ETM(image):
+
+    """
+    Scale Landsat 7 ETM+ surface reflectance bands to reflectance values.
+    
+    Applies scaling factors and offsets to convert Landsat 7 ETM+ digital numbers
+    to surface reflectance values and renames bands to standardized names.
+    
+    Parameters
+    ----------
+    image : ee.Image
+        Landsat 7 ETM+ image with surface reflectance bands (SR_B1 through SR_B7,
+        excluding thermal band SR_B6).
+        
+    Returns
+    -------
+    ee.Image
+        Image with scaled optical bands added, renamed to standard band names
+        (Blue, Green, Red, Nir, Swir1, Swir2).
+        
+    Notes
+    -----
+    The scaling formula applied is: reflectance = DN * 0.0000275 - 0.2
+    where DN is the digital number from the original band.
+    
+    Examples
+    --------
+    >>> # Scale a Landsat 7 ETM+ image
+    >>> etm_image = ee.Image('LANDSAT/LE07/C02/T1_L2/LE07_044034_20030316')
+    >>> scaled_image = scale_ETM(etm_image)
+    """
+
     opticalBands = image.select(['SR_B1','SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
     #thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
     return image.addBands(opticalBands, None, True)#.addBands(thermalBands, None, True)
 
 class NdviSeasonality:
     
-   
-    '''Class to generate NDVI seasonal compoositions gifs. Seasons are defined like fixed parameters and we use ee.
-    Reducer Max to get the maximun NDVI reached in every seasons. Then we combine then in a raster with 4 bands,
-    one band per season. Color combination will show phenology over the seasons and over the years.
+    """
+    Generate remote sensing index seasonal composition GIFs and images.
+    
+    This class creates seasonal composites of vegetation indices using Google Earth Engine.
+    Seasons are defined as fixed parameters and statistical reducers (max, median, etc.)
+    are used to generate the seasonal value for each pixel. The resulting composites
+    show phenological patterns across seasons and years.
+    
+    Parameters
+    ----------
+    roi : ee.Geometry, str, or None, optional
+        Region of interest for analysis. Can be:
+        - ee.Geometry object
+        - Path to shapefile (.shp)
+        - Path to GeoJSON file (.geojson)
+        - DEIMS site ID (format: 'deimsid:site_id')
+        - Landsat WRS-2 tile (format: 'wrs:path,row')
+        - Sentinel-2 MGRS tile (format: 's2:tile_id')
+        If None, uses default area over Doñana Natural Space.
+    periods : int, optional
+        Number of seasonal periods to divide the year into. Default is 4.
+    start_year : int, optional
+        First year of the analysis period. Default is 2016.
+    end_year : int, optional
+        Last year of the analysis period. Default is 2020.
+    sat : {'S2', 'Landsat', 'MODIS', 'S1'}, optional
+        Satellite collection to use:
+        - 'S2': Sentinel-2 (2015-present)
+        - 'Landsat': Landsat 4 TM, 5 TM, 7 ETM+, 8 OLI (1984-present)
+        - 'MODIS': MODIS Terra/Aqua
+        - 'S1': Sentinel-1 SAR
+        Default is 'S2'.
+    key : {'max', 'median', 'perc_90', 'perc_95', 'mean'}, optional
+        Statistical reducer to apply for seasonal composites. Default is 'max'.
+    index : str, optional
+        Vegetation index to calculate. Default is 'ndvi'. Available indices
+        include: ndvi, ndwi, mndwi, evi, savi, gndvi, avi, nbri, ndsi, aweinsh,
+        awei, ndmi.
+        
+    Attributes
+    ----------
+    roi : ee.Geometry
+        Processed region of interest geometry.
+    periods : int
+        Number of seasonal divisions.
+    start_year : int
+        Start year of analysis.
+    end_year : int
+        End year of analysis.
+    sat : str
+        Selected satellite collection.
+    key : str
+        Selected statistical reducer.
+    imagelist : list
+        List to store processed images.
+    index : str
+        Selected vegetation index.
+    d : dict
+        Dictionary mapping index names to calculation methods.
+        
+    Examples
+    --------
+    >>> # Create NDVI seasonality analysis for default area
+    >>> ndvi_season = NdviSeasonality()
+    
+    >>> # Use custom ROI with shapefile
+    >>> ndvi_season = NdviSeasonality(roi='my_area.shp', start_year=2018, end_year=2021)
 
-    Args:
-        roi (ee.Geometry): Geometry to cross with satellite collections. Can be taken from roi on map, geojson or shapefile.
-        start_year (int): First year to look for.
-        end_year (int): End year to look for.
-        sat (ee.ImageCollection): Available Sentinel 2 (default. 2015-present) and Landsat 4 TM, 5 TM, 7 ETM+, 8 OLI (1984-present).
-    Returns:
-        gif: Gif file with ndvi seasonal yearly composites.
-        images: GeoTIFF with ndvi seasonal yearly composites.
-    '''
+    >>> # Use DEIMS ID with shapefile
+    >>> ndvi_season = NdviSeasonality(roi='deimsid:https://deims.org/bcbc866c-3f4f-47a8-bbbc-0a93df6de7b2', start_year=2018, end_year=2021)
+    
+    >>> # Use Landsat WRS-2 tile
+    >>> ndvi_season = NdviSeasonality(roi='wrs:202,34', sat='Landsat', key='median')
+    
+    >>> # Use Sentinel-2 MGRS tile
+    >>> ndvi_season = NdviSeasonality(roi='s2:29SQA', index='evi', periods=6)
+    
+    Notes
+    -----
+    The class combines seasonal composites into multi-band rasters where each band
+    represents one season. Color combinations in the resulting images reveal
+    phenological patterns over seasons and years.
+    
+    Seasonal periods are calculated as equal divisions of the year. For example,
+    with periods=4: Spring (Mar-May), Summer (Jun-Aug), Autumn (Sep-Nov), 
+    Winter (Dec-Feb).
+    """
                                                             
     def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, sat='S2', key='max', index='ndvi'):
 
+        """
+        Initialize NdviSeasonality instance.
+        
+        Parameters
+        ----------
+        roi : ee.Geometry, str, or None, optional
+            Region of interest for analysis. Can be:
+            - ee.Geometry object
+            - Path to shapefile (.shp)
+            - Path to GeoJSON file (.geojson)
+            - DEIMS site ID (format: 'deimsid:site_id')
+            - Landsat WRS-2 tile (format: 'wrs:path,row')
+            - Sentinel-2 MGRS tile (format: 's2:tile_id')
+            If None, uses default area over Doñana Natural Space.
+        periods : int, optional
+            Number of seasonal periods to divide the year into. Default is 4.
+        start_year : int, optional
+            First year of the analysis period. Default is 2016.
+        end_year : int, optional
+            Last year of the analysis period. Default is 2020.
+        sat : {'S2', 'Landsat', 'MODIS', 'S1'}, optional
+            Satellite collection to use. Default is 'S2'.
+        key : {'max', 'median', 'perc_90', 'perc_95', 'mean'}, optional
+            Statistical reducer to apply for seasonal composites. Default is 'max'.
+        index : str, optional
+            Vegetation index to calculate. Default is 'ndvi'.
+        """
 
         print('There we go again...')     
         # Here we get the roi. Valid inputs are draws on the map, shapefiles or geojson
@@ -127,9 +289,9 @@ class NdviSeasonality:
             self.key=key
         self.imagelist = []
         self.index = index
-        self.d = {'ndvi': self.get_ndvi, 'ndwi': self.get_ndwi, 'evi': self.get_evi, 'savi': self.get_savi,
-                  'gndvi': self.get_gndvi, 'avi': self.get_avi, 'nbri': self.get_nbri, 'ndsi': self.get_ndsi,
-                  'aweinsh': self.get_aweinsh, 'awei': self.get_awei, 'ndmi': self.get_ndmi}
+        self.d = {'ndvi': self.get_ndvi, 'ndwi': self.get_ndwi, 'mndwi': self.mndwi, 'evi': self.get_evi, 
+                'savi': self.get_savi, 'gndvi': self.get_gndvi, 'avi': self.get_avi, 'nbri': self.get_nbri, 
+                'ndsi': self.get_ndsi, 'aweinsh': self.get_aweinsh, 'awei': self.get_awei, 'ndmi': self.get_ndmi}
 
         #Periods!
         # Here we define the periods splitting the year in 4, 12 or 24 equal parts. Feel free to change the dates in case your are looking for different seasons
@@ -283,19 +445,141 @@ class NdviSeasonality:
     #Someday it would be good just use Awesome spectral indexes library
     def get_ndvi(self, image):
 
-        '''Here we apply the NDVI calculation'''   
+        """
+        Calculate Normalized Difference Vegetation Index (NDVI).
+        
+        NDVI is calculated as (NIR - Red) / (NIR + Red) and is used to assess
+        vegetation health and density. Values range from -1 to +1, where higher
+        values indicate healthier vegetation.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Nir' and 'Red' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with NDVI values.
+            
+        Notes
+        -----
+        NDVI formula: (NIR - Red) / (NIR + Red)
+        
+        Typical value ranges:
+        - Water: -1 to 0
+        - Bare soil: 0 to 0.2
+        - Sparse vegetation: 0.2 to 0.4
+        - Dense vegetation: 0.4 to 1.0
+        
+        Examples
+        --------
+        >>> ndvi_image = self.get_ndvi(scaled_image)
+        """   
 
         return image.normalizedDifference(['Nir', 'Red'])
     
     def get_ndwi(self, image):
 
-        '''Here we apply the NDWI calculation'''   
+        """
+        Calculate Normalized Difference Water Index (NDWI).
+        
+        NDWI is used to delineate open water features and enhance their presence
+        in remotely sensed imagery. It's calculated using Green and NIR bands.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Green' and 'Nir' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with NDWI values.
+            
+        Notes
+        -----
+        NDWI formula: (Green - NIR) / (Green + NIR)
+        
+        Positive values typically indicate water bodies, while negative values
+        indicate vegetation and dry surfaces.
+        
+        Examples
+        --------
+        >>> ndwi_image = self.get_ndwi(scaled_image)
+        """   
 
         return image.normalizedDifference(['Green', 'Nir'])
+
+    def get_mndwi(self, image):
+
+        """
+        Calculate Modified Normalized Difference Water Index (MNDWI).
+        
+        MNDWI is a modification of NDWI that uses SWIR1 instead of NIR,
+        providing better discrimination between water and built-up areas.
+        It's particularly effective for urban water body detection.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Green' and 'Swir1' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with MNDWI values.
+            
+        Notes
+        -----
+        MNDWI formula: (Green - SWIR1) / (Green + SWIR1)
+        
+        MNDWI typically performs better than NDWI for:
+        - Urban water body detection
+        - Distinguishing water from built-up areas
+        - Areas with mixed water and urban features
+        
+        Positive values indicate water bodies, while negative values indicate
+        non-water surfaces. MNDWI is less affected by built-up noise compared
+        to traditional NDWI.
+        
+        Examples
+        --------
+        >>> mndwi_image = self.get_mndwi(scaled_image)
+        """
+
+        return image.normalizedDifference(['Green', 'Swir1'])
     
     def get_evi(self, image):
     
-        '''Here we apply the EVI calculation'''   
+        """
+        Calculate Enhanced Vegetation Index (EVI).
+        
+        EVI is an optimized vegetation index that minimizes canopy background
+        variations and maintains sensitivity over dense vegetation conditions.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Nir', 'Red', and 'Blue' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with EVI values.
+            
+        Notes
+        -----
+        EVI formula: 2.5 * ((NIR - Red) / (NIR + 6 * Red - 7.5 * Blue + 1))
+        
+        EVI provides better sensitivity in high biomass regions and improved
+        vegetation monitoring through a de-coupling of the canopy background
+        signal and a reduction in atmosphere influences.
+        
+        Examples
+        --------
+        >>> evi_image = self.get_evi(scaled_image)
+        """   
 
         # Compute the EVI using an expression.
         return image.expression(
@@ -306,7 +590,36 @@ class NdviSeasonality:
     
     def get_savi(self, image, L=0.428):
         
-        '''Here we apply the SAVI calculation'''   
+        """
+        Calculate Soil Adjusted Vegetation Index (SAVI).
+        
+        SAVI is a vegetation index that attempts to minimize soil brightness
+        influences using a soil brightness correction factor (L).
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Nir' and 'Red' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with SAVI values.
+            
+        Notes
+        -----
+        SAVI formula: ((NIR - Red) / (NIR + Red + L)) * (1 + L)
+        where L = 0.5 (soil brightness correction factor)
+        
+        The L factor varies based on vegetation density:
+        - L = 1 for low vegetation cover
+        - L = 0.5 for intermediate vegetation cover
+        - L = 0.25 for high vegetation cover
+        
+        Examples
+        --------
+        >>> savi_image = self.get_savi(scaled_image)
+        """   
 
         # Compute the SAVI using an expression.
         return image.expression(
@@ -317,7 +630,34 @@ class NdviSeasonality:
     
     def get_aweinsh(self, image):
         
-        '''Here we apply the SAVI calculation'''   
+        """
+        Calculate Automated Water Extraction Index - No Shadow (AWEInsh).
+        
+        AWEInsh is designed to extract water bodies while minimizing shadow
+        effects that can cause confusion in water detection algorithms.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Blue', 'Green', 'Nir', 'Swir1', and 'Swir2' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with AWEInsh values.
+            
+        Notes
+        -----
+        AWEInsh formula: 4 * (Green - SWIR1) - (0.25 * NIR + 2.75 * SWIR2)
+        
+        Positive values typically indicate water bodies, while negative values
+        indicate non-water surfaces. The index is particularly effective in
+        urban and mountainous areas where shadows are prevalent.
+        
+        Examples
+        --------
+        >>> aweinsh_image = self.get_aweinsh(scaled_image)
+        """   
 
         # Compute the SAVI using an expression.
         return image.expression(
@@ -329,7 +669,33 @@ class NdviSeasonality:
     
     def get_awei(self, image):
         
-        '''Here we apply the SAVI calculation'''   
+        """
+        Calculate Automated Water Extraction Index (AWEI).
+        
+        AWEI is designed for automatic water extraction from satellite imagery,
+        particularly effective in urban environments and areas with built-up surfaces.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Blue', 'Green', 'Nir', 'Swir1', and 'Swir2' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with AWEI values.
+            
+        Notes
+        -----
+        AWEI formula: Blue + 2.5 * Green - 1.5 * (NIR + SWIR1) - 0.25 * SWIR2
+        
+        Positive values typically indicate water bodies. AWEI is particularly
+        useful for water extraction in complex environments with mixed land cover.
+        
+        Examples
+        --------
+        >>> awei_image = self.get_awei(scaled_image)
+        """   
 
         # Compute the SAVI using an expression.
         return image.expression(
@@ -342,7 +708,33 @@ class NdviSeasonality:
 
     def get_gndvi(self, image):
         
-        '''Here we apply the SAVI calculation'''   
+        """
+        Calculate Green Normalized Difference Vegetation Index (GNDVI).
+        
+        GNDVI uses the green band instead of the red band and is more sensitive
+        to chlorophyll concentration than NDVI.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Nir' and 'Green' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with GNDVI values.
+            
+        Notes
+        -----
+        GNDVI formula: (NIR - Green) / (NIR + Green)
+        
+        GNDVI is more sensitive to chlorophyll-a than NDVI and can be useful
+        for assessing photosynthetic activity and nitrogen content in vegetation.
+        
+        Examples
+        --------
+        >>> gndvi_image = self.get_gndvi(scaled_image)
+        """   
 
         # Compute the GNDVI using an expression.
         return image.normalizedDifference(['Nir', 'Green'])
@@ -350,7 +742,33 @@ class NdviSeasonality:
     
     def get_avi(self, image, L=0.428):
         
-        '''Here we apply the SAVI calculation'''   
+        """
+        Calculate Advanced Vegetation Index (AVI).
+        
+        AVI is designed to be more sensitive to vegetation than traditional
+        vegetation indices, particularly in areas with sparse vegetation cover.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Nir' and 'Red' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with AVI values.
+            
+        Notes
+        -----
+        AVI formula: (NIR * (1 - Red) * (NIR - Red))^(1/3)
+        
+        AVI is particularly useful for monitoring vegetation in arid and
+        semi-arid environments where vegetation cover is sparse.
+        
+        Examples
+        --------
+        >>> avi_image = self.get_avi(scaled_image)
+        """   
 
         # Compute the SAVI using an expression.
         return image.expression(
@@ -360,21 +778,103 @@ class NdviSeasonality:
 
     def get_nbri(self, image):
         
-        '''Here we apply the SAVI calculation'''   
+        """
+        Calculate Normalized Burn Ratio Index (NBRI).
+        
+        NBRI is used to identify burned areas and assess burn severity by
+        highlighting the difference between healthy vegetation and burned areas.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Nir' and 'Swir2' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with NBRI values.
+            
+        Notes
+        -----
+        NBRI formula: (NIR - SWIR2) / (NIR + SWIR2)
+        
+        High values indicate healthy vegetation, while low values indicate
+        burned areas. The index is particularly useful for post-fire assessment
+        and monitoring vegetation recovery.
+        
+        Examples
+        --------
+        >>> nbri_image = self.get_nbri(scaled_image)
+        """   
 
         # Compute the EVI using an expression.
         return image.normalizedDifference(['Nir', 'Swir2'])
     
     def get_ndsi(self, image):
         
-        '''Here we apply the SAVI calculation'''   
+        """
+        Calculate Normalized Difference Snow Index (NDSI).
+        
+        NDSI is used to identify snow cover by exploiting the difference in
+        reflectance between visible and shortwave infrared bands.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Green' and 'Swir1' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with NDSI values.
+            
+        Notes
+        -----
+        NDSI formula: (Green - SWIR1) / (Green + SWIR1)
+        
+        Values above 0.4 typically indicate snow cover, while values below
+        0.4 indicate snow-free surfaces. The index is widely used for snow
+        mapping and monitoring seasonal snow cover changes.
+        
+        Examples
+        --------
+        >>> ndsi_image = self.get_ndsi(scaled_image)
+        """   
 
         # Compute the EVI using an expression.
         return image.normalizedDifference(['Green', 'Swir1'])
 
     def get_ndmi(self, image):
         
-        '''Here we apply the NDMI calculation'''   
+        """
+        Calculate Normalized Difference Moisture Index (NDMI).
+        
+        NDMI is sensitive to moisture levels in vegetation and can be used to
+        monitor drought conditions and vegetation water stress.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Input image with 'Nir' and 'Swir1' bands.
+            
+        Returns
+        -------
+        ee.Image
+            Single-band image with NDMI values.
+            
+        Notes
+        -----
+        NDMI formula: (NIR - SWIR1) / (NIR + SWIR1)
+        
+        Values range from -1 to +1, where:
+        - High values indicate high moisture content
+        - Low values indicate low moisture content or stress
+        - Negative values may indicate bare soil or very dry conditions
+        
+        Examples
+        --------
+        >>> ndmi_image = self.get_ndmi(scaled_image)
+        """   
 
         # Compute the EVI using an expression.
         return image.normalizedDifference(['Nir', 'Swir1'])
@@ -384,7 +884,26 @@ class NdviSeasonality:
 
     def get_winter(self, y):
         
-        '''Here comes the funny thing. We generate the winter image for each year'''
+        """
+        Generates the seasonal image for the winter period of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.winter` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the winter period image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.winter[0], str(y) + self.winter[1]
 
@@ -408,7 +927,26 @@ class NdviSeasonality:
     
     def get_spring(self, y):
         
-        '''Here comes the funny thing. We generate the spring image for each year'''
+        """
+        Generates the seasonal image for the winter period of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.spring` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the winter period image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.spring[0], str(y) + self.spring[1]
         
@@ -433,7 +971,26 @@ class NdviSeasonality:
 
     def get_summer(self, y):
         
-        '''Here comes the funny thing. We generate the summer image for each year'''
+        """
+        Generates the seasonal image for the winter period of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.summer` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the winter period image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.summer[0], str(y) + self.summer[1]
         
@@ -457,7 +1014,26 @@ class NdviSeasonality:
         
     def get_autumn(self, y):
                 
-        '''Here comes the funny thing. We generate the autumn image for each year'''
+        """
+        Generates the seasonal image for the winter period of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.autumn` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the winter period image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.autumn[0], str(y) + self.autumn[1]
 
@@ -481,7 +1057,26 @@ class NdviSeasonality:
     
     def get_january(self, y):
                 
-        '''Here comes the funny thing. We generate the winter image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in january for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.january[0], str(y) + self.january[1]
 
@@ -505,7 +1100,26 @@ class NdviSeasonality:
                 
     def get_february(self, y):
         
-        '''Here comes the funny thing. We generate the spring image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in february for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.february[0], str(y) + self.february[1]
         d = {'ndvi': self.get_ndvi, 'ndwi': self.get_ndwi}
@@ -531,7 +1145,26 @@ class NdviSeasonality:
 
     def get_march(self, y):
         
-        '''Here comes the funny thing. We generate the summer image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in march for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.march[0], str(y) + self.march[1]
 
@@ -556,7 +1189,26 @@ class NdviSeasonality:
         
     def get_april(self, y):
         
-        '''Here comes the funny thing. We generate the autumn image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in april for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.april[0], str(y) + self.april[1]
 
@@ -581,7 +1233,26 @@ class NdviSeasonality:
 
     def get_may(self, y):
         
-        '''Here comes the funny thing. We generate the winter image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in may for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.may[0], str(y) + self.may[1]
 
@@ -605,7 +1276,26 @@ class NdviSeasonality:
         
     def get_june(self, y):
         
-        '''Here comes the funny thing. We generate the spring image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in june for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.june[0], str(y) + self.june[1]
 
@@ -630,8 +1320,26 @@ class NdviSeasonality:
 
     def get_july(self, y):
         
-        '''Here comes the funny thing. We generate the summer image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
 
+        This function filters the input image collection using the date range defined
+        in july for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
         init, ends = str(y) + self.july[0], str(y) + self.july[1]
 
         if self.sat != 'S1':
@@ -655,7 +1363,26 @@ class NdviSeasonality:
         
     def get_august(self, y):
         
-        '''Here comes the funny thing. We generate the autumn image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in august for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.august[0], str(y) + self.august[1]
 
@@ -680,7 +1407,26 @@ class NdviSeasonality:
 
     def get_september(self, y):
             
-            '''Here comes the funny thing. We generate the winter image for each year'''
+            """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in september for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
             init, ends = str(y) + self.september[0], str(y) + self.september[1]
 
@@ -705,7 +1451,26 @@ class NdviSeasonality:
 
     def get_october(self, y):
         
-        '''Here comes the funny thing. We generate the spring image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in october for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.october[0], str(y) + self.october[1]
 
@@ -730,7 +1495,26 @@ class NdviSeasonality:
 
     def get_november(self, y):
         
-        '''Here comes the funny thing. We generate the summer image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in november for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.november[0], str(y) + self.november[1]
 
@@ -755,7 +1539,26 @@ class NdviSeasonality:
         
     def get_december(self, y):
         
-        '''Here comes the funny thing. We generate the autumn image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in december for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.december[0], str(y) + self.december[1]
 
@@ -780,7 +1583,26 @@ class NdviSeasonality:
 
     def get_p1(self, y):
                 
-        '''Here comes the funny thing. We generate the winter image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p1` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p1[0], str(y) + self.p1[1]
 
@@ -804,7 +1626,26 @@ class NdviSeasonality:
         
     def get_p2(self, y):
         
-        '''Here comes the funny thing. We generate the spring image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p2` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p2[0], str(y) + self.p2[1]
 
@@ -829,7 +1670,26 @@ class NdviSeasonality:
 
     def get_p3(self, y):
         
-        '''Here comes the funny thing. We generate the summer image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p3` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p3[0], str(y) + self.p3[1]
 
@@ -854,7 +1714,26 @@ class NdviSeasonality:
         
     def get_p4(self, y):
         
-        '''Here comes the funny thing. We generate the autumn image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p4` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p4[0], str(y) + self.p4[1]
 
@@ -879,7 +1758,26 @@ class NdviSeasonality:
         
     def get_p5(self, y):
         
-        '''Here comes the funny thing. We generate the winter image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p5` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p5[0], str(y) + self.p5[1]
 
@@ -903,7 +1801,26 @@ class NdviSeasonality:
         
     def get_p6(self, y):
         
-        '''Here comes the funny thing. We generate the spring image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p6` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p6[0], str(y) + self.p6[1]
 
@@ -928,7 +1845,26 @@ class NdviSeasonality:
 
     def get_p7(self, y):
         
-        '''Here comes the funny thing. We generate the summer image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p7` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p7[0], str(y) + self.p7[1]
 
@@ -953,7 +1889,26 @@ class NdviSeasonality:
         
     def get_p8(self, y):
         
-        '''Here comes the funny thing. We generate the autumn image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p8` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p8[0], str(y) + self.p8[1]
 
@@ -978,7 +1933,26 @@ class NdviSeasonality:
         
     def get_p9(self, y):
             
-        '''Here comes the funny thing. We generate the winter image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p9` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p9[0], str(y) + self.p9[1]
 
@@ -1003,7 +1977,26 @@ class NdviSeasonality:
         
     def get_p10(self, y):
         
-        '''Here comes the funny thing. We generate the spring image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p10` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p10[0], str(y) + self.p10[1]
 
@@ -1028,7 +2021,26 @@ class NdviSeasonality:
 
     def get_p11(self, y):
         
-        '''Here comes the funny thing. We generate the summer image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p11` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p11[0], str(y) + self.p11[1]
 
@@ -1053,7 +2065,26 @@ class NdviSeasonality:
         
     def get_p12(self, y):
         
-        '''Here comes the funny thing. We generate the autumn image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p12` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p12[0], str(y) + self.p12[1]
 
@@ -1078,7 +2109,26 @@ class NdviSeasonality:
 
     def get_p13(self, y):
             
-        '''Here comes the funny thing. We generate the winter image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p13` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p13[0], str(y) + self.p13[1]
 
@@ -1102,7 +2152,26 @@ class NdviSeasonality:
         
     def get_p14(self, y):
         
-        '''Here comes the funny thing. We generate the spring image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p14` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p14[0], str(y) + self.p14[1]
 
@@ -1127,7 +2196,26 @@ class NdviSeasonality:
 
     def get_p15(self, y):
         
-        '''Here comes the funny thing. We generate the summer image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p15` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p15[0], str(y) + self.p15[1]
 
@@ -1152,7 +2240,26 @@ class NdviSeasonality:
                     
     def get_p16(self, y):
         
-        '''Here comes the funny thing. We generate the autumn image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p16` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p16[0], str(y) + self.p16[1]
 
@@ -1177,7 +2284,26 @@ class NdviSeasonality:
 
     def get_p17(self, y):
         
-        '''Here comes the funny thing. We generate the winter image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p17` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p17[0], str(y) + self.p17[1]
 
@@ -1201,7 +2327,26 @@ class NdviSeasonality:
                     
     def get_p18(self, y):
         
-        '''Here comes the funny thing. We generate the spring image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p18` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p18[0], str(y) + self.p18[1]
 
@@ -1226,7 +2371,26 @@ class NdviSeasonality:
 
     def get_p19(self, y):
         
-        '''Here comes the funny thing. We generate the summer image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p19` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p19[0], str(y) + self.p19[1]
 
@@ -1251,7 +2415,26 @@ class NdviSeasonality:
         
     def get_p20(self, y):
         
-        '''Here comes the funny thing. We generate the autumn image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p20` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p20[0], str(y) + self.p20[1]
 
@@ -1276,7 +2459,26 @@ class NdviSeasonality:
             
     def get_p21(self, y):
             
-        '''Here comes the funny thing. We generate the winter image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p21` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p21[0], str(y) + self.p21[1]
 
@@ -1301,7 +2503,26 @@ class NdviSeasonality:
         
     def get_p22(self, y):
         
-        '''Here comes the funny thing. We generate the spring image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p22` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p22[0], str(y) + self.p22[1]
 
@@ -1326,7 +2547,26 @@ class NdviSeasonality:
 
     def get_p23(self, y):
         
-        '''Here comes the funny thing. We generate the summer image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p23` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p23[0], str(y) + self.p23[1]
 
@@ -1351,7 +2591,26 @@ class NdviSeasonality:
                     
     def get_p24(self, y):
         
-        '''Here comes the funny thing. We generate the autumn image for each year'''
+        """
+        Generates the seasonal image for the custom period p1 of the specified year.
+
+        This function filters the input image collection using the date range defined
+        in `self.p24` for the given year. It computes statistical summaries
+        (maximum, median, mean, 90th percentile, and 95th percentile) over the images
+        in that period. For optical sensors, the selected index function is applied
+        before aggregation; for radar data (e.g., Sentinel-1), raw values are used.
+
+        Parameters
+        ----------
+        y : int or str
+            Year for which the custom period p1 image should be computed.
+
+        Returns
+        -------
+        ee.Image
+            The image corresponding to the selected statistical metric,
+            defined in `self.key`.
+        """
 
         init, ends = str(y) + self.p24[0], str(y) + self.p24[1]
 
@@ -1375,12 +2634,106 @@ class NdviSeasonality:
 
     
 
-
     
     #This should be done just once. But we will get into this later
     def get_year_composite(self):
         
-        '''Return the composite ndvi for each year'''
+        """
+        Generate composite NDVI or SAR images for each year across specified time periods.
+        
+        This method creates temporal composites by combining imagery from different periods
+        within each year of the specified date range. It supports seasonal (4 periods),
+        monthly (12 periods), and bi-monthly (24 periods) compositing strategies.
+        
+        The method handles both optical satellite data (NDVI-based) and SAR data (Sentinel-1),
+        with support for different statistical aggregations including mean, 90th percentile,
+        and 95th percentile values.
+        
+        Returns
+        -------
+        ee.ImageCollection
+            An Earth Engine ImageCollection containing composite images for each year.
+            Each image in the collection represents one year of data with bands corresponding
+            to the temporal periods (seasons, months, or bi-monthly periods).
+        
+        Notes
+        -----
+        The method behavior depends on several instance attributes:
+        
+        - `self.periods` : {4, 12, 24}
+            Number of temporal periods to composite:
+            * 4: Seasonal composites (winter, spring, summer, autumn)
+            * 12: Monthly composites (january through december)
+            * 24: Bi-monthly composites (p1 through p24)
+        
+        - `self.sat` : str
+            Satellite type. If 'S1', uses SAR band naming convention (VH),
+            otherwise uses optical band naming (nd for NDVI)
+        
+        - `self.key` : str
+            Statistical measure to extract:
+            * Default: mean values
+            * 'perc_90': 90th percentile values take
+            * 'perc_95': 95th percentile values
+        
+        - `self.start_year`, `self.end_year` : int
+            Year range for composite generation (inclusive start, exclusive end)
+        
+        - `self.roi` : ee.Geometry
+            Region of interest for clipping the composites
+        
+        - `self.imagelist` : list
+            Instance list that gets populated with composite images
+        
+        Band Naming Convention
+        ----------------------
+        Optical data (non-S1):
+            - Mean: 'nd', 'nd_1', 'nd_2', ...
+            - 90th percentile: 'nd_p90', 'nd_p90_1', 'nd_p90_2', ...
+            - 95th percentile: 'nd_p95', 'nd_p95_1', 'nd_p95_2', ...
+        
+        SAR data (S1):
+            - Mean: 'VH', 'VH_1', 'VH_2', ...
+            - 90th percentile: 'VH_p90', 'VH_p90_1', 'VH_p90_2', ...
+            - 95th percentile: 'VH_p95', 'VH_p95_1', 'VH_p95_2', ...
+        
+        Output Band Names
+        -----------------
+        4 periods: ['winter', 'spring', 'summer', 'autumn']
+        12 periods: ['january', 'february', ..., 'december']
+        24 periods: ['p1', 'p2', ..., 'p24']
+        
+        Examples
+        --------
+        >>> # Assuming an instance with periods=4, sat='L8', key='mean'
+        >>> composite_collection = instance.get_year_composite()
+        >>> # Returns ImageCollection with seasonal composites for each year
+        
+        >>> # For SAR data with 90th percentile
+        >>> # instance.sat = 'S1', instance.key = 'perc_90'
+        >>> sar_composites = instance.get_year_composite()
+        >>> # Returns ImageCollection with VH 90th percentile seasonal composites
+        
+        Raises
+        ------
+        ValueError
+            If `self.periods` is not 4, 12, or 24
+        
+        Warning
+        -------
+        Prints warning message if `self.key` is not recognized (not in ['perc_90', 'perc_95'])
+        
+        Dependencies
+        ------------
+        Requires the following instance methods to be implemented:
+        - For 4 periods: get_winter(), get_spring(), get_summer(), get_autumn()
+        - For 12 periods: get_january() through get_december()
+        - For 24 periods: get_p1() through get_p24()
+        
+        See Also
+        --------
+        The method assumes Earth Engine (ee) is initialized and available.
+        """
         
         # Maybe this should do with .map instead of a loop
         if self.periods == 4:
@@ -1592,21 +2945,36 @@ class NdviSeasonality:
 
     def get_export_single(self, image, name='mycomposition.tif', crs='EPSG:4326', scale=10):
             
-        '''Export single composition as .tif to your local folder. So long as we can do really nice
-        multiseasonal composites, e.g. median seasonal NDVI for whole Africa between 2001 and 2020. 
-        I thought that would be interesting to have the chance to export this composites.
-        This method calls geemap.ee_export_image.
-        
-        Args:
-            crs (string): Coordinate Reference System of the output tifs. Use EPSG style e.g. "EPSG:4326"; "EPSG:32629"
-            scale (int): Value for pixel size of your output tifs, default is 10 because default sat is Sentinel 2 NDVI,
-                with bands 8 and 4 (10 m pix/resolution). In case you choose Landsat yous should change scale to 30. 
-                You can also considerer use this parameter like resample in case you get a size limitation error
-                when try to download a big area. 
-        Returns:
-          object(tif): 4 bands mycompositon.tif, with max, median or perc_90 for the period you chosen, 
-          downloaded at your current working directory 
-          '''
+        """
+        Exports a single Earth Engine image as a GeoTIFF file to the local filesystem.
+
+        This method is useful to export seasonal or custom composites (e.g., median NDVI for Africa
+        from 2001–2020) created within the pipeline. It leverages `geemap.ee_export_image` to save
+        the image locally in GeoTIFF format.
+
+        Parameters
+        ----------
+        image : ee.Image
+            The Earth Engine image to export.
+        name : str, optional
+            Filename of the output image, including the extension (default is 'mycomposition.tif').
+        crs : str, optional
+            Coordinate Reference System in EPSG format (e.g., 'EPSG:4326', 'EPSG:32629').
+        scale : int, optional
+            Pixel resolution of the output image, in meters. Defaults to 10, appropriate for
+            Sentinel-2 data. For Landsat data, use 30. Can also be reduced to avoid
+            export size limitations.
+
+        Returns
+        -------
+        None
+            The image is saved to the current working directory as a GeoTIFF file with four bands
+            (e.g., max, median, or 90th percentile).
+
+        Notes
+        -----
+        The export region is defined by `self.roi`.
+        """
         
         filename = os.path.join(os.getcwd(), name)
         geemap.ee_export_image(image, filename=filename, scale=scale, crs=crs, region=self.roi, file_per_band=False) 
@@ -1616,18 +2984,33 @@ class NdviSeasonality:
         
     def get_export(self, crs='EPSG:4326', scale=10):
         
-        '''Export NDVI year compositions as .tif to your local folder.
-        This method calls geemap.ee_export_image.
-        
-        Args:
-            crs (string): Coordinate Reference System of the output tifs. Use EPSG style e.g. "EPSG:4326"; "EPSG:32629"
-            scale (int): Value for pixel size of your output tifs, default is 10 because default sat is Sentinel 2 NDVI,
-                with bands 8 and 4 (10 m pix/resolution). In case you choose Landsat yous should change scale to 30. 
-                You can also considerer use this parameter like resample in case you get a size limitation error
-                when try to download a big area. 
-        Returns:
-          object(tif): 4 bands ndvi_year.tif per year in your ndvi collection, downloaded at your current working directory 
-          '''
+        """
+        Exports yearly NDVI composites from the current image collection as GeoTIFF files.
+
+        This method generates a yearly composite for each year in the range defined
+        by `self.start_year` and `self.end_year`, and exports each image to the local
+        working directory using `geemap.ee_export_image`.
+
+        Parameters
+        ----------
+        crs : str, optional
+            Coordinate Reference System in EPSG format (e.g., 'EPSG:4326', 'EPSG:32629').
+        scale : int, optional
+            Pixel resolution of the output images, in meters. Defaults to 10 (suitable for
+            Sentinel-2). For Landsat, use 30. Can also be reduced to work around export
+            size limitations when downloading large areas.
+
+        Returns
+        -------
+        None
+            The method saves one GeoTIFF per year in the current working directory,
+            named as 'ndvi_<year>.tif'. Each file includes 4 bands (e.g., max, median,
+            mean, 90th percentile).
+
+        Notes
+        -----
+        The export region is defined by `self.roi`.
+        """
 
         self.imagelist = []
         self.get_year_composite()
@@ -1648,15 +3031,36 @@ class NdviSeasonality:
 
     def get_gif(self, name='mygif.gif', bands=['winter', 'spring', 'summer']):
 
-        '''Export NDVI year compositions as .gif to your local folder. 
-        This method calls geemap.download_ee_video & geemap.add_text_to_gif.
+        """
+        Exports a seasonal NDVI composite animation as a GIF file.
 
-        Args:
-            name (string): Name of the output gif. It will be saved at your current working directory.
-            bands (list): List where you define the band combination for your gif.
-        Returns:
-            object(gif): myname.gif and myname_texted.gif downloaded at your current working directory
-        '''
+        This method generates a GIF animation from yearly NDVI composites using the selected
+        seasonal bands (e.g., winter, spring, summer). The animation is created with
+        `geemap.download_ee_video` and annotated using `geemap.add_text_to_gif`.
+
+        Parameters
+        ----------
+        name : str, optional
+            Name of the output GIF file (default is 'mygif.gif'). The file will be saved
+            to the current working directory.
+        bands : list of str, optional
+            List of seasonal or statistical band names to include in the RGB channels
+            of the GIF (e.g., ['winter', 'spring', 'summer']).
+
+        Returns
+        -------
+        None
+            Two files are saved:
+            - `<name>.gif`: The unannotated composite animation.
+            - `<name>_texted.gif`: The same animation with year text overlay.
+
+        Notes
+        -----
+        - Visualization parameters are automatically adapted based on the satellite type.
+        For SAR data, dynamic percentiles are computed; for optical data, standard values
+        are used (`min=0.15`, `max=0.85`).
+        - The region used for export is defined by `self.roi`.
+        """
         
         self.imagelist = [0]
         self.get_year_composite()
@@ -1707,61 +3111,156 @@ class NdviSeasonality:
                                 add_progress_bar=False, duration=300)
 
 
-def get_stats(image, geom, name, stat='MEDIAN', scale=10):
+    def export_with_fishnet(self, image, name_prefix='composite', scale=10, crs='EPSG:4326'):
     
-        '''Compute zonal statistics for a local shapefile or Map user Geometries. It could be used like a Point Sampling Tool also.
-        This method calls geemap.zonal_statistics.
-        
-        Args:
-            image (ee.Image or ee.ImageCollection): Coordinate Reference System of the output tifs. Use EPSG style e.g. "EPSG:4326"; "EPSG:32629"
-            geom (Shapefile or ee.FeatureCollection): feature collection with the polygons or points to get the statistics
-            name (string): Name of the output shapefile in your current folder
-            stat (string): Name of the desired statistic. Available names are 'MEAN', 'MEDIAN', 'MIN' and 'MAX'
-            scale(int): Resample pixel size in case it needed
-        Returns:
-          object(Shapefile): Shapefile with the statistics for each rasters bands in the Ndvi2Gif composite, 
-          downloaded at your current working directory 
-          '''
-        
-        out_shp = os.path.join(os.getcwd(), name + '.shp')
-        if geom is None:
-            # When no geometry is passed we use a default area over Donana Natural Space
-            print('Please select an area to compute the statistics')
-            
-        elif isinstance(geom, str):
+        """
+        Exports an image by dividing the region of interest (ROI) into adaptive tiles using a fishnet grid.
 
+        This method splits the ROI into smaller tiles based on pixel resolution and exports each tile
+        individually as a GeoTIFF file. Useful for handling large areas or avoiding export size limits
+        in Earth Engine.
+
+        Parameters
+        ----------
+        image : ee.Image
+            The Earth Engine image to export.
+        name_prefix : str, optional
+            Prefix used for naming each exported tile (default is 'composite').
+        scale : int, optional
+            Pixel resolution of the output tiles in meters. Default is 10 (suitable for Sentinel-2).
+        crs : str, optional
+            Coordinate Reference System in EPSG format (e.g., 'EPSG:4326').
+
+        Returns
+        -------
+        None
+            Each tile is exported as a separate GeoTIFF file, saved to the current working directory.
+
+        Notes
+        -----
+        - The method dynamically adjusts tile size: ~25 km² for high-resolution (<=10 m) and ~50 km² for lower resolution.
+        - Only tiles that intersect the ROI are exported.
+        - Uses `geemap.ee_export_image` for exporting.
+        """
+
+        import math
+
+        # Determinar tamaño del tile según la resolución
+        tile_km = 50 if scale >= 30 else 25
+        tile_m = tile_km * 1000
+
+        bounds = self.roi.bounds()
+        coords = bounds.coordinates().getInfo()[0]
+        xmin, ymin = coords[0]
+        xmax, ymax = coords[2]
+
+        # Calcular pasos en longitud/latitud aproximando metros
+        x_steps = math.ceil((xmax - xmin) * 111320 / tile_m)
+        y_steps = math.ceil((ymax - ymin) * 110540 / tile_m)
+
+        tile_id = 0
+        for i in range(x_steps):
+            for j in range(y_steps):
+                x0 = xmin + (i * tile_m / 111320)
+                y0 = ymin + (j * tile_m / 110540)
+                x1 = x0 + tile_m / 111320
+                y1 = y0 + tile_m / 110540
+                cell = ee.Geometry.Rectangle([x0, y0, x1, y1])
+
+                # Solo exportar si hay intersección
+                if self.roi.intersects(cell, ee.ErrorMargin(1)).getInfo():
+                    region = cell.intersection(self.roi, ee.ErrorMargin(1))
+                    filename = f"{name_prefix}_tile_{tile_id}.tif"
+                    tile_id += 1
+
+                    print(f'Exporting tile {tile_id} to {filename}')
+                    geemap.ee_export_image(
+                        image.clip(region),
+                        filename=os.path.join(os.getcwd(), filename),
+                        scale=scale,
+                        region=region,
+                        crs=crs,
+                        file_per_band=False
+                    )
+
+        print('All tiles have been exported.')
+
+
+    def get_stats(self, image, geom=None, name=None, stat='MEDIAN', scale=10, to_file=False):
+
+        """
+        Computes zonal statistics for a given image and geometry, and returns the result as a GeoDataFrame.
+
+        This method supports both local file paths (e.g., shapefiles, GeoJSON) and Earth Engine geometry
+        objects. It calculates summary statistics (e.g., mean, median) over the specified regions using
+        `geemap.zonal_statistics`.
+
+        Parameters
+        ----------
+        image : ee.Image
+            The Earth Engine image from which to compute zonal statistics.
+        geom : str or ee.FeatureCollection or ee.Geometry, optional
+            The geometry to use for zonal statistics. Can be:
+            - A file path to a `.shp` or `.geojson` file
+            - An Earth Engine `FeatureCollection` or `Geometry`
+            - `None` to use `self.roi`
+        name : str, optional
+            Output filename prefix for saving the results (default is 'zonal_stats').
+            Used only if `to_file=True`.
+        stat : str, optional
+            Type of statistic to compute (e.g., 'MEAN', 'MEDIAN', 'MIN', 'MAX').
+        scale : int, optional
+            Pixel resolution in meters used for sampling (default is 10).
+        to_file : bool, optional
+            If True, the result will be saved as a shapefile in the current working directory.
+
+        Returns
+        -------
+        geopandas.GeoDataFrame
+            A GeoDataFrame containing the computed zonal statistics for each feature.
+
+        Raises
+        ------
+        ValueError
+            If the input geometry path is not a `.shp` or `.geojson` file.
+
+        Notes
+        -----
+        - This method uses `geemap.zonal_statistics` under the hood.
+        - Exported shapefiles include the computed statistics and geometry.
+        """
+
+        if geom is None:
+            roi = self.roi
+        elif isinstance(geom, str):
             if geom.endswith('.shp'):
                 roi = geemap.shp_to_ee(geom)
-            elif roi.endswith('.geojson'):
+            elif geom.endswith('.geojson'):
                 roi = geemap.geojson_to_ee(geom)
             else:
-                print('It seems that your path is broken. Remember that await for shapefiles or geojson')
-
-            
-            geemap.zonal_statistics(image, roi, out_shp, stat, scale)
-
-
+                raise ValueError("Path must be to a .shp or .geojson file.")
         else:
+            roi = geom.geometry() if hasattr(geom, 'geometry') else geom
 
-            if not isinstance(geom, ee.Geometry):
+        if name is None:
+            name = 'zonal_stats'
 
-                try:
-                    roi = geom.geometry()
-                except Exception as e:
-                    print('Could not convert the provided roi to ee.Geometry')
-                    print(e)
-                    return
-                
-            else:
+        # Ruta temporal si se desea exportar
+        out_shp = os.path.join(os.getcwd(), name + '.shp')
 
-                try:
-                    roi = geom
-                except Exception as e:
-                    print('Could not convert the provided roi to ee.Geometry')
-                    print(e)
-                    return
+        # Ejecutar análisis y capturar como GeoDataFrame
+        gdf = geemap.zonal_statistics(
+            image=image,
+            roi=roi,
+            statistics_type=stat,
+            scale=scale,
+            return_fc=True  # <- Devuelve FeatureCollection
+        )
 
+        gdf = gpd.GeoDataFrame.from_features(gdf.getInfo()['features'])
 
-            out_shp = os.path.join(os.getcwd(), 'stats.shp')
-            geemap.zonal_statistics(image, roi=roi, out_shp=out_shp, statistics_type=stat, scale=scale)
+        if to_file:
+            gdf.to_file(out_shp)
+            print(f'Saved as {out_shp}')
 
+        return gdf

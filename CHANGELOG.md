@@ -3,6 +3,9 @@
 All notable changes to the `ndvi2gif` package will be documented in this file.
 
 ---
+## [0.1.3] - 2025-05-25
+
+- Nothing really changes, just a f* problem with release version management.
 
 ## [0.1.2] - 2025-05-25
 

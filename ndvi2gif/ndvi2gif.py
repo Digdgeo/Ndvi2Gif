@@ -83,7 +83,7 @@ class NdviSeasonality:
                 print('Loading Sentinel-2 MGRS tile from GitHub...')
                 tile_id = self.roi.replace('s2:', '').strip().upper()
 
-                url = 'https://raw.githubusercontent.com/Digdgeo/Ndvi2Gif/master/data/s2tiles.geojson'
+                url = 'https://raw.githubusercontent.com/Digdgeo/Ndvi2Gif/master/data/s2tiles_2d.geojson'
                 s2 = gpd.read_file(url)
                 subset = s2[s2['Name'] == tile_id]
 

@@ -6,6 +6,7 @@ import zipfile
 import geopandas as gpd
 import fiona
 from io import BytesIO
+from shapely import force_2d
 
 def scale_OLI(image):
         opticalBands = image.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
@@ -65,29 +66,33 @@ class NdviSeasonality:
                 gdf = deims.getSiteBoundaries(id_)
                 self.roi = geemap.geopandas_to_ee(gdf)
             elif self.roi.startswith('wrs:'):
-                print('Loading WRS-2 geometry from USGS...')
-                pathrow = self.roi.replace('wrs:', '').split(',')
-                path = int(pathrow[0])
-                row = int(pathrow[1])
+                print('Loading Landsat WRS-2 geometry from GitHub...')
+                path, row = map(int, self.roi.replace('wrs:', '').split(','))
 
-                # Descargar ZIP en memoria
-                url = 'https://prd-tnm.s3.amazonaws.com/StagedProducts/WRS/WRS2_descending/WRS2_descending.zip'
-                response = requests.get(url)
-                with zipfile.ZipFile(BytesIO(response.content)) as z:
-                    # Buscar el archivo .shp
-                    shapefile_name = [f for f in z.namelist() if f.endswith('.shp')][0]
-                    with z.open(shapefile_name) as shp:
-                        with fiona.BytesCollection(z.read(shapefile_name)) as collection:
-                            wrs = gpd.GeoDataFrame.from_features(collection, crs=collection.crs)
-
-                # Filtrar Path/Row
+                url = 'https://raw.githubusercontent.com/Digdgeo/Ndvi2Gif/master/data/l2tiles.geojson'
+                wrs = gpd.read_file(url)
                 subset = wrs[(wrs['PATH'] == path) & (wrs['ROW'] == row)]
 
                 if subset.empty:
-                    raise ValueError(f"No geometry found for path {path} and row {row}")
+                    raise ValueError(f"No geometry found for Path {path}, Row {row}")
                 
-                print(f'Found WRS geometry for Path {path}, Row {row}')
+                print(f'Found Landsat tile for Path {path}, Row {row}')
                 self.roi = geemap.geopandas_to_ee(subset)
+
+            elif self.roi.startswith('s2:'):
+                print('Loading Sentinel-2 MGRS tile from GitHub...')
+                tile_id = self.roi.replace('s2:', '').strip().upper()
+
+                url = 'https://raw.githubusercontent.com/Digdgeo/Ndvi2Gif/master/data/s2tiles.geojson'
+                s2 = gpd.read_file(url)
+                subset = s2[s2['Name'] == tile_id]
+
+                if subset.empty:
+                    raise ValueError(f"No geometry found for Sentinel-2 tile {tile_id}")
+                
+                print(f'Found Sentinel-2 tile for {tile_id}')
+                self.roi = geemap.geopandas_to_ee(subset)
+
             else:
                 print('It seems that your ROI path is invalid.\n\nAccepted formats:\n'
                 '- Shapefile path (e.g. "myfile.shp")\n'

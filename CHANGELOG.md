@@ -3,6 +3,16 @@
 All notable changes to the `ndvi2gif` package will be documented in this file.
 
 ---
+
+## [0.1.5] - 2025-05-26
+
+- Fixing bug with MNDWI index.
+
+
+## [0.1.4] - 2025-05-25
+
+- Nothing really changes, just a f* problem with release version management.
+
 ## [0.1.3] - 2025-05-25
 
 - Nothing really changes, just a f* problem with release version management.

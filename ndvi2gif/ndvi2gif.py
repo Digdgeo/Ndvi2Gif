@@ -289,7 +289,7 @@ class NdviSeasonality:
             self.key=key
         self.imagelist = []
         self.index = index
-        self.d = {'ndvi': self.get_ndvi, 'ndwi': self.get_ndwi, 'mndwi': self.mndwi, 'evi': self.get_evi, 
+        self.d = {'ndvi': self.get_ndvi, 'ndwi': self.get_ndwi, 'mndwi': self.get_mndwi, 'evi': self.get_evi, 
                 'savi': self.get_savi, 'gndvi': self.get_gndvi, 'avi': self.get_avi, 'nbri': self.get_nbri, 
                 'ndsi': self.get_ndsi, 'aweinsh': self.get_aweinsh, 'awei': self.get_awei, 'ndmi': self.get_ndmi}
 

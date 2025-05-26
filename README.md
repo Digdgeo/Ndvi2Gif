@@ -143,7 +143,7 @@ See the [ndvi2gif_extended_version notebook](https://github.com/Digdgeo/Ndvi2Gif
 
 ## Roadmap 🗺️ 
 
-v0.2.0 🚀 Dynamic Periods
+**v0.2.0 🚀 Dynamic Periods**
 Status: Ready for release
 
 ✅ Dynamic period generation - Support for any number of temporal periods
@@ -158,7 +158,7 @@ Status: Ready for release
 
 Breaking changes: None
 
-v0.2.1 🎯 Custom Year Cycles
+**v0.2.1 🎯 Custom Year Cycles**
 Status: In planning
 
 📅 Custom year start - start_doy parameter for non-calendar years
@@ -175,7 +175,7 @@ Status: In planning
 
 Use cases: Water management, agricultural monitoring, institutional reporting
 
-v0.3.0 🔮 High-Frequency Analysis
+**v0.3.0 🔮 High-Frequency Analysis**
 Status: Future
 
 🛰️ Sentinel-3 support - Daily global coverage for rapid change detection

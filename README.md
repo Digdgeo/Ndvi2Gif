@@ -12,7 +12,7 @@
 **Ndvi2Gif** is a Python library designed to simplify access to global satellite data through the Google Earth Engine platform. While its name highlights the ability to create seasonal GIF animations, the true power of this tool lies in its capability to compute and export pixel-wise statistics for any regioque aun hace gifs
 n on Earth, across any time span covered by supported remote sensing datasets.
 
-Built on top of [Google Earth Engine](https://github.com/google/earthengine-api) and [geemap](https://github.com/giswqs/geemap), it allows you to:
+Built on top of [Google Earth Engine](https://github.com/google/earthengine-api) and [Geemap](https://github.com/giswqs/geemap), it allows you to:
 
 - Generate annual or multi-annual composited rasters (e.g., median NDVI per season between 2001 and 2020),
 - Apply multiple statistics (mean, max, percentiles) across space and time,
@@ -195,5 +195,7 @@ Use cases: Disaster monitoring, urban growth tracking, real-time environmental a
 We welcome contributions from the community! Whether you're a developer, researcher, or just curious about remote sensing, your input can help improve Ndvi2Gif.Have ideas for new features? Found a bug? We'd love to hear from you!
 
 🐛 Bug reports: GitHub Issues
+
 💡 Feature requests: GitHub Discussions
+
 🤝 Pull requests: Always welcome!

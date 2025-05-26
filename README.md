@@ -147,9 +147,13 @@ v0.2.0 🚀 Dynamic Periods
 Status: Ready for release
 
 ✅ Dynamic period generation - Support for any number of temporal periods
+
 ✅ Code optimization - Eliminated 90% of code duplication
+
 ✅ Flexible temporality - Easy configuration from 4 seasons to 52 weeks or custom periods
+
 ✅ Full backward compatibility - All existing code works without changes
+
 ✅ Enhanced extensibility - Adding new satellites and datasets is now trivial
 
 Breaking changes: None
@@ -158,10 +162,15 @@ v0.2.1 🎯 Custom Year Cycles
 Status: In planning
 
 📅 Custom year start - start_doy parameter for non-calendar years
+
 📅 Hydrological years - October 1st to September 30th cycles
+
 📅 Academic years - September 1st to August 31st cycles
+
 📅 Fiscal years - July 1st to June 30th cycles
+
 📅 Cross-calendar logic - Intelligent handling of periods spanning multiple calendar years
+
 📅 Smart period naming - Context-aware naming for custom year cycles
 
 Use cases: Water management, agricultural monitoring, institutional reporting

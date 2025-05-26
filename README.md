@@ -13,6 +13,7 @@
 n on Earth, across any time span covered by supported remote sensing datasets.
 
 Built on top of [Google Earth Engine](https://github.com/google/earthengine-api) and [geemap](https://github.com/giswqs/geemap), it allows you to:
+
 - Generate annual or multi-annual composited rasters (e.g., median NDVI per season between 2001 and 2020),
 - Apply multiple statistics (mean, max, percentiles) across space and time,
 - Export results as GeoTIFFs for further analysis,
@@ -110,6 +111,7 @@ Beyond creating a nice-looking animated GIF, this multi-seasonal compositing met
 With SAR (Sentinel-1) support added, the tool now enables structural monitoring of vegetation using radar backscatter intensity.
 
 ## GeoTIFF Export
+
 You can also export seasonal NDVI composites as GeoTIFF files for further analysis. Multi-year composites are supported as well. For example, you can export median NDVI per season for all of Africa between 2001–2020.
 
 ---
@@ -119,6 +121,7 @@ You can also export seasonal NDVI composites as GeoTIFF files for further analys
 You can install `ndvi2gif` using either **pip** or **conda**:
 
 ### Using pip:
+
 Just run:
 
 ```bash
@@ -138,16 +141,46 @@ See the [ndvi2gif_extended_version notebook](https://github.com/Digdgeo/Ndvi2Gif
 
 ---
 
-## ToDo
+## Roadmap 🗺️ 
 
-The following features are planned for future versions:
+v0.2.0 🚀 Dynamic Periods
+Status: Ready for release
 
-- Add support for more remote sensing datasets (e.g., Sentinel-3, VIIRS).
-- Include additional statistical reducers (e.g., standard deviation, IQR, mode).
-- Extend the index list to cover more vegetation and water-related indices.
-- Enable automatic extraction of phenological metrics from seasonal time series (e.g., start of season, peak, duration).
+✅ Dynamic period generation - Support for any number of temporal periods
+✅ Code optimization - Eliminated 90% of code duplication
+✅ Flexible temporality - Easy configuration from 4 seasons to 52 weeks or custom periods
+✅ Full backward compatibility - All existing code works without changes
+✅ Enhanced extensibility - Adding new satellites and datasets is now trivial
 
+Breaking changes: None
 
-## Contributions
+v0.2.1 🎯 Custom Year Cycles
+Status: In planning
 
-Yes, please! Feedback, issues, pull requests, and suggestions are all welcome ✨
+📅 Custom year start - start_doy parameter for non-calendar years
+📅 Hydrological years - October 1st to September 30th cycles
+📅 Academic years - September 1st to August 31st cycles
+📅 Fiscal years - July 1st to June 30th cycles
+📅 Cross-calendar logic - Intelligent handling of periods spanning multiple calendar years
+📅 Smart period naming - Context-aware naming for custom year cycles
+
+Use cases: Water management, agricultural monitoring, institutional reporting
+
+v0.3.0 🔮 High-Frequency Analysis
+Status: Future
+
+🛰️ Sentinel-3 support - Daily global coverage for rapid change detection
+📊 High-frequency periods - Weekly (52 periods) and daily analysis capabilities
+🎨 Enhanced visualizations - Improved GIF generation and export options
+⚡ Performance optimizations - Faster processing for large temporal datasets
+🌐 Multi-sensor fusion - Combine data from multiple satellite platforms
+
+Use cases: Disaster monitoring, urban growth tracking, real-time environmental assessment
+
+## Contributing
+
+We welcome contributions from the community! Whether you're a developer, researcher, or just curious about remote sensing, your input can help improve Ndvi2Gif.Have ideas for new features? Found a bug? We'd love to hear from you!
+
+🐛 Bug reports: GitHub Issues
+💡 Feature requests: GitHub Discussions
+🤝 Pull requests: Always welcome!

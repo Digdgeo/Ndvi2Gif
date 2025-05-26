@@ -1,5 +1,5 @@
 {% set name = "ndvi2gif" %}
-{% set version = "0.1.5" %}
+{% set version = "0.2.0" %}
 
 package:
   name: {{ name }}
@@ -14,17 +14,17 @@ build:
 
 requirements:
   host:
-    - python >=3.7
+    - python >=3.8
     - pip
     - setuptools  # <<-- Esta línea es necesaria
   run:
-    - python >=3.7
+    - python >=3.8  # <-- Cambiar de 3.7 a 3.8 (coherente con setup.cfg)
     - numpy <2.0
     - matplotlib
     - pillow
     - imageio
     - tqdm
-    - geemap ==0.29.5
+    - geemap >=0.29.5  # <-- Cambiar de == a >= (más flexible)
     - earthengine-api >=0.1.347
     - geopandas
     - fiona

@@ -179,9 +179,13 @@ v0.3.0 🔮 High-Frequency Analysis
 Status: Future
 
 🛰️ Sentinel-3 support - Daily global coverage for rapid change detection
+
 📊 High-frequency periods - Weekly (52 periods) and daily analysis capabilities
+
 🎨 Enhanced visualizations - Improved GIF generation and export options
+
 ⚡ Performance optimizations - Faster processing for large temporal datasets
+
 🌐 Multi-sensor fusion - Combine data from multiple satellite platforms
 
 Use cases: Disaster monitoring, urban growth tracking, real-time environmental assessment

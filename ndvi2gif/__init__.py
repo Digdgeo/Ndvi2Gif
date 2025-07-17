@@ -1,7 +1,7 @@
-"""Top-level package for lastebdtools"""
+"""Top-level package for ndvi2gif"""
 
-__author__ = """Diego Garcia Diaz"""
-__email__ = 'digd.geografo@gmail.com'
-__version__ = '0.0.6'
+__author__ = """Diego García Díaz"""
+__email__ = 'diegogarcia@ebd.csic.es'
+__version__ = '0.3.0'
 
 from .ndvi2gif import *

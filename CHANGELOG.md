@@ -4,6 +4,35 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 
 ---
 
+# Changelog
+
+## [0.3.0] - 2025-07-17
+
+### Added
+
+- **New SAR Indices**: RVI (Radar Vegetation Index), VV/VH ratio, VH, VV, DPSVI for Sentinel-1
+- **Flexible Percentiles**: Support for any percentile value (1-99) instead of fixed 90/95
+- **Enhanced Sentinel-1**: VV+VH dual polarization with speckle filtering
+- **Robust ROI Handling**: Support for drawn features, lists of features, and improved geometry conversion
+- **Incomplete Year Support**: Automatic detection and processing of available periods for current/incomplete years
+- **Enhanced Dependencies**: Added pycrs and deims as core dependencies (now available in conda)
+- **Example Notebooks**: Comprehensive examples in `examples_notebooks/` folder
+
+### Fixed
+
+- ROI conversion for drawn geometries and feature lists from geemap
+- Speckle filter now preserves temporal properties (system:time_start)
+- Band naming consistency for SAR indices
+- Error handling for missing data periods
+- Dependency issues with pycrs and deims
+
+### Improved
+
+- More robust error handling throughout the library
+- Better documentation and examples
+- Enhanced support for agricultural monitoring workflows
+- Simplified installation process
+
 ## [0.2.0] - 2025-01-27
 
 ### Added

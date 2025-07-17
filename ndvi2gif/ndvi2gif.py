@@ -26,7 +26,7 @@ class NdviSeasonality:
     and using a single generic function for all temporal composites.
     """
     
-    def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, sat='S2', key='max', index='ndvi'):
+    def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, sat='S2', key='max', index='ndvi', percentile=90):
         print('There we go again...')
         
         # Initialize ROI (same as original)
@@ -75,29 +75,51 @@ class NdviSeasonality:
             else:
                 print('Invalid ROI path format')
         else:
-            if not isinstance(roi, ee.Geometry):
+            # Para ROIs dibujados o Features, convertir a Geometry
+            if isinstance(self.roi, list) and len(self.roi) > 0:
+                # Manejar listas de Features (como Map.draw_features o draw_last_feature)
+                first_feature = self.roi[0]
+                if hasattr(first_feature, 'geometry'):
+                    self.roi = first_feature.geometry()
+                else:
+                    self.roi = ee.Geometry(first_feature)
+            elif hasattr(self.roi, 'geometry'):
+                self.roi = self.roi.geometry()
+            elif not isinstance(self.roi, ee.Geometry):
                 try:
-                    self.roi = self.roi.geometry()
+                    self.roi = ee.Geometry(self.roi)
                 except Exception as e:
                     print('Could not convert the provided roi to ee.Geometry')
-                    print(e)
-                    return
+                    print(f'ROI type: {type(self.roi)}')
+                    print(f'Error: {e}')
+                    # Usar ROI por defecto en lugar de return
+                    self.roi = ee.Geometry.Polygon(
+                        [[[-6.766047, 36.776586], 
+                        [-6.766047, 37.202186], 
+                        [-5.867729, 37.202186], 
+                        [-5.867729, 36.776586], 
+                        [-6.766047, 36.776586]]], None, False)
+                    print("Using default ROI")
         
         # Set parameters
         self.periods = periods
         self.start_year = start_year
         self.end_year = end_year
         self.sat = sat if sat in ['S2', 'Landsat', 'MODIS', 'S1'] else 'S2'
-        self.key = key if key in ['max', 'median', 'perc_90', 'perc_95', 'mean'] else 'max'
+        self.key = key if key in ['max', 'median', 'percentile', 'mean'] else 'max' 
+        self.percentile = percentile 
         self.imagelist = []
         self.index = index
         
-        # Index calculation methods
+        # Index calculation methods - EXPANDIDO con índices SAR
         self.d = {
             'ndvi': self.get_ndvi, 'ndwi': self.get_ndwi, 'mndwi': self.get_mndwi, 
             'evi': self.get_evi, 'savi': self.get_savi, 'gndvi': self.get_gndvi, 
             'avi': self.get_avi, 'nbri': self.get_nbri, 'ndsi': self.get_ndsi, 
-            'aweinsh': self.get_aweinsh, 'awei': self.get_awei, 'ndmi': self.get_ndmi
+            'aweinsh': self.get_aweinsh, 'awei': self.get_awei, 'ndmi': self.get_ndmi,
+            # Nuevos índices SAR
+            'rvi': self.get_rvi, 'vv': self.get_vv, 'vh': self.get_vh, 
+            'vv_vh_ratio': self.get_vv_vh_ratio, 'dpsvi': self.get_dpsvi
         }
         
         # **DYNAMIC PERIOD GENERATION** - This replaces all the hardcoded periods!
@@ -222,13 +244,25 @@ class NdviSeasonality:
             ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']
         ).filterBounds(self.roi)
         
-        # Sentinel-1
+        # Sentinel-1 - EXPANDIDO para incluir VV y VH con filtro speckle
         s1 = ee.ImageCollection('COPERNICUS/S1_GRD').filter(
             ee.Filter.listContains('transmitterReceiverPolarisation', 'VH')
+        ).filter(
+            ee.Filter.listContains('transmitterReceiverPolarisation', 'VV')
         ).filter(ee.Filter.eq('instrumentMode', 'IW'))
+        
+        # Aplicar filtro de speckle
+        def apply_speckle_filter(image):
+            filtered = image.focal_median(radius=1, kernelType='square', units='pixels')
+            return filtered.copyProperties(image, ['system:time_start', 'system:time_end'])
+        
         s1Ascending = s1.filter(ee.Filter.eq('orbitProperties_pass', 'ASCENDING'))
         s1Descending = s1.filter(ee.Filter.eq('orbitProperties_pass', 'DESCENDING'))
-        s1S1 = s1Ascending.select('VH').merge(s1Descending.select('VH')).filterBounds(self.roi)
+        
+        # Incluir ambas polarizaciones con filtro de speckle
+        s1S1 = s1Ascending.select(['VV', 'VH']).merge(
+            s1Descending.select(['VV', 'VH'])
+        ).map(apply_speckle_filter).filterBounds(self.roi)
         
         # Set the collection
         if self.sat == 'S2':
@@ -244,19 +278,7 @@ class NdviSeasonality:
     
     def get_period_composite(self, year, period_idx):
         """
-        SINGLE GENERIC FUNCTION that replaces ALL the get_winter, get_january, get_p1, etc. functions!
-        
-        Parameters
-        ----------
-        year : int
-            Year for the composite
-        period_idx : int
-            Index of the period (0 to n_periods-1)
-        
-        Returns
-        -------
-        ee.Image
-            Composite image for the specified period and year
+        SINGLE GENERIC FUNCTION with FLEXIBLE percentile support
         """
         start_date, end_date = self.period_dates[period_idx]
         init = str(year) + start_date
@@ -266,46 +288,76 @@ class NdviSeasonality:
         period_stats = {}
         
         if self.sat != 'S1':
-            # Optical satellites - apply index calculation first
+            # Optical satellites
             period_stats['max'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).max()
             period_stats['median'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).median()
             period_stats['mean'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).mean()
-            period_stats['perc_90'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).reduce(ee.Reducer.percentile([90]))
-            period_stats['perc_95'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).reduce(ee.Reducer.percentile([95]))
+            period_stats['percentile'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).reduce(ee.Reducer.percentile([self.percentile]))  # DINÁMICO
         else:
-            # SAR satellite - use raw values
-            period_stats['max'] = self.ndvi_col.filterDate(init, ends).max()
-            period_stats['median'] = self.ndvi_col.filterDate(init, ends).median()
-            period_stats['mean'] = self.ndvi_col.filterDate(init, ends).mean()
-            period_stats['perc_90'] = self.ndvi_col.filterDate(init, ends).reduce(ee.Reducer.percentile([90]))
-            period_stats['perc_95'] = self.ndvi_col.filterDate(init, ends).reduce(ee.Reducer.percentile([95]))
+            # SAR satellite
+            if self.index in ['vv', 'vh']:
+                period_stats['max'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).max()
+                period_stats['median'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).median()
+                period_stats['mean'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).mean()
+                period_stats['percentile'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).reduce(ee.Reducer.percentile([self.percentile]))  # DINÁMICO
+            elif self.index in ['rvi', 'vv_vh_ratio', 'dpsvi']:
+                period_stats['max'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).max()
+                period_stats['median'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).median()
+                period_stats['mean'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).mean()
+                period_stats['percentile'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).reduce(ee.Reducer.percentile([self.percentile]))  # DINÁMICO
+            else:
+                # Compatibilidad hacia atrás
+                period_stats['max'] = self.ndvi_col.filterDate(init, ends).select('VH').max()
+                period_stats['median'] = self.ndvi_col.filterDate(init, ends).select('VH').median()
+                period_stats['mean'] = self.ndvi_col.filterDate(init, ends).select('VH').mean()
+                period_stats['percentile'] = self.ndvi_col.filterDate(init, ends).select('VH').reduce(ee.Reducer.percentile([self.percentile]))  # DINÁMICO
         
         return period_stats[self.key]
     
     def get_year_composite(self):
         """
-        DRAMATICALLY SIMPLIFIED version that works with any number of periods!
-        
-        Returns
-        -------
-        ee.ImageCollection
-            Collection of yearly composites
+        DRAMATICALLY SIMPLIFIED version with FLEXIBLE percentile support
         """
         # Generate band names dynamically
         if self.sat != 'S1':
-            if self.key not in ['perc_90', 'perc_95']:
+            # Optical satellites
+            if self.key == 'percentile':
+                base_bands = [f'nd_p{self.percentile}'] + [f'nd_p{self.percentile}_{i}' for i in range(1, self.periods)]  # DINÁMICO
+            else:
                 base_bands = ['nd'] + [f'nd_{i}' for i in range(1, self.periods)]
-            elif self.key == 'perc_90':
-                base_bands = ['nd_p90'] + [f'nd_p90_{i}' for i in range(1, self.periods)]
-            else:  # perc_95
-                base_bands = ['nd_p95'] + [f'nd_p95_{i}' for i in range(1, self.periods)]
         else:
-            if self.key not in ['perc_90', 'perc_95']:
-                base_bands = ['VH'] + [f'VH_{i}' for i in range(1, self.periods)]
-            elif self.key == 'perc_90':
-                base_bands = ['VH_p90'] + [f'VH_p90_{i}' for i in range(1, self.periods)]
-            else:  # perc_95
-                base_bands = ['VH_p95'] + [f'VH_p95_{i}' for i in range(1, self.periods)]
+            # SAR satellite
+            if self.index == 'vv':
+                if self.key == 'percentile':
+                    base_bands = [f'VV_p{self.percentile}'] + [f'VV_p{self.percentile}_{i}' for i in range(1, self.periods)]
+                else:
+                    base_bands = ['VV'] + [f'VV_{i}' for i in range(1, self.periods)]
+            elif self.index == 'vh':
+                if self.key == 'percentile':
+                    base_bands = [f'VH_p{self.percentile}'] + [f'VH_p{self.percentile}_{i}' for i in range(1, self.periods)]
+                else:
+                    base_bands = ['VH'] + [f'VH_{i}' for i in range(1, self.periods)]
+            elif self.index == 'rvi':
+                if self.key == 'percentile':
+                    base_bands = [f'RVI_p{self.percentile}'] + [f'RVI_p{self.percentile}_{i}' for i in range(1, self.periods)]
+                else:
+                    base_bands = ['RVI'] + [f'RVI_{i}' for i in range(1, self.periods)]
+            elif self.index == 'vv_vh_ratio':
+                if self.key == 'percentile':
+                    base_bands = [f'RATIO_p{self.percentile}'] + [f'RATIO_p{self.percentile}_{i}' for i in range(1, self.periods)]
+                else:
+                    base_bands = ['RATIO'] + [f'RATIO_{i}' for i in range(1, self.periods)]
+            elif self.index == 'dpsvi':
+                if self.key == 'percentile':
+                    base_bands = [f'DPSVI_p{self.percentile}'] + [f'DPSVI_p{self.percentile}_{i}' for i in range(1, self.periods)]
+                else:
+                    base_bands = ['DPSVI'] + [f'DPSVI_{i}' for i in range(1, self.periods)]
+            else:
+                # Compatibilidad hacia atrás
+                if self.key == 'percentile':
+                    base_bands = [f'VH_p{self.percentile}'] + [f'VH_p{self.percentile}_{i}' for i in range(1, self.periods)]
+                else:
+                    base_bands = ['VH'] + [f'VH_{i}' for i in range(1, self.periods)]
         
         # Clear previous results
         self.imagelist = []
@@ -314,17 +366,42 @@ class NdviSeasonality:
         for year in range(self.start_year, self.end_year):
             # Get composites for all periods in this year
             period_images = []
+            successful_periods = 0  # Track how many periods actually have data
+            
             for period_idx in range(self.periods):
-                period_composite = self.get_period_composite(year, period_idx)
-                period_images.append(period_composite)
+                try:
+                    period_composite = self.get_period_composite(year, period_idx)
+                    # Check if the period has any data by trying to get band names
+                    band_count = period_composite.bandNames().size()
+                    
+                    # Only add if there's actually data
+                    if band_count.getInfo() > 0:
+                        period_images.append(period_composite)
+                        successful_periods += 1
+                    else:
+                        print(f"No data for period {period_idx + 1} in year {year}")
+                        break
+                except Exception as e:
+                    print(f"Error processing period {period_idx + 1} in year {year}: {str(e)}")
+                    break
             
-            # Combine all periods into a single multi-band image
-            composite = ee.Image.cat(period_images).clip(self.roi)
-            
-            # Rename bands to meaningful names
-            compositer = composite.select(base_bands, self.period_names)
-            
-            self.imagelist.append(compositer)
+            # Only proceed if we have at least one period with data
+            if successful_periods > 0:
+                # Combine all available periods into a single multi-band image
+                composite = ee.Image.cat(period_images).clip(self.roi)
+                
+                # Adjust band names and period names to match actual data
+                actual_base_bands = base_bands[:successful_periods]
+                actual_period_names = self.period_names[:successful_periods]
+                
+                # Rename bands to meaningful names
+                compositer = composite.select(actual_base_bands, actual_period_names)
+                
+                self.imagelist.append(compositer)
+                
+                print(f"Year {year}: Successfully processed {successful_periods} periods using {self.index} index")
+            else:
+                print(f"Year {year}: No data available, skipping")
         
         return ee.ImageCollection.fromImages(self.imagelist)
     
@@ -386,6 +463,36 @@ class NdviSeasonality:
 
     def get_ndmi(self, image):
         return image.normalizedDifference(['Nir', 'Swir1'])
+    
+    # Nuevos métodos para índices SAR
+    def get_rvi(self, image):
+        """Radar Vegetation Index - Más robusto que VH solo"""
+        return image.expression(
+            '4 * VH / (VV + VH)', {
+            'VV': image.select('VV'),
+            'VH': image.select('VH')}).rename(['RVI'])
+
+    def get_vv(self, image):
+        """VV polarization - Sensible a superficie rugosa"""
+        return image.select('VV').rename(['VV'])
+
+    def get_vh(self, image):
+        """VH polarization - Sensible a estructura vegetal"""
+        return image.select('VH').rename(['VH'])
+
+    def get_vv_vh_ratio(self, image):
+        """VV/VH ratio - Muy sensible a cambios estructurales (ideal para siega)"""
+        return image.expression(
+            'VV / VH', {
+            'VV': image.select('VV'),
+            'VH': image.select('VH')}).rename(['RATIO'])
+
+    def get_dpsvi(self, image):
+        """Dual-pol SAR Vegetation Index - Optimizado para vegetación densa"""
+        return image.expression(
+            '(VV - VH) / (VV + VH)', {
+            'VV': image.select('VV'),
+            'VH': image.select('VH')}).rename(['DPSVI'])
     
     # Export methods (same as original)
     def get_export_single(self, image, name='mycomposition.tif', crs='EPSG:4326', scale=10):

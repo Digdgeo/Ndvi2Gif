@@ -6,6 +6,12 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 
 # Changelog
 
+## [0.4.1] - 2025-07-21
+
+### Added
+
+- Just fixing some bugs in Readme.md
+
 ## [0.4.0] - 2025-07-21
 
 ### Added

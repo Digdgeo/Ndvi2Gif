@@ -27,7 +27,7 @@ Ndvi2Gif was updated and extended as part of its integration into the eLTER and 
 
 ![Interface Screenshot](https://i.imgur.com/Sv9LfYj.png)
 
-## ✨ What's New in v0.4.0
+## ✨ What's New in v0.4.1
 
 🛰️ **Sentinel-3 OLCI Support**: Revolutionary addition of Sentinel-3 with 21 spectral bands and daily global coverage 🆕  
 🌊 **Advanced Water Quality Indices**: Specialized indices for algae detection, turbidity, and aquatic monitoring  
@@ -155,9 +155,9 @@ Yes, it makes nice GIFs — but it's much more than that.
 
 - **[Sentinel-1 (SAR)](https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S1_GRD)** - Enhanced with dual polarization (VV+VH), speckle filtering, and orbit control
 - **[Sentinel-2 (Surface Reflectance)](https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED)** - High resolution optical imagery with Red Edge bands
-- **[Sentinel-3 OLCI](https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S3_OLCI)** - 21-band ocean and land color instrument with daily global coverage 🆕
+- **[Sentinel-3 OLCI (Level-1B TOA)](https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S3_OLCI)** - 21-band ocean and land color instrument with daily global coverage 🆕
 
-**Landsat:**
+**Landsat (Surface Reflectance):**
 
 - [Landsat 4 TM](https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LT04_C02_T1_L2)
 - [Landsat 5 TM](https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LT05_C02_T1_L2)
@@ -165,13 +165,13 @@ Yes, it makes nice GIFs — but it's much more than that.
 - [Landsat 8 OLI](https://developers.google.com/earth-engine/datasets/catalog/landsat-8)
 - [Landsat 9 OLI](https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LC09_C02_T1_L2)
 
-**MODIS:**
+**MODIS (Surface Reflectance):**
 
 - [MOD09A1 (SR)](https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD09A1)
 
 You can combine any of the supported indices, datasets, and statistical methods. By default, the tool uses NDVI with the **maximum** statistic to avoid cloud contamination. However, **median** and **custom percentiles** are often visually better for Landsat datasets and specific applications.
 
-Note: Sentinel-2 uses **Surface Reflectance** for superior data quality, Sentinel-3 uses **Level-1B TOA radiance** (optimized for aquatic applications), while Landsat and MODIS collections use **Surface Reflectance (SR)**.
+Note: **Sentinel-2** uses Surface Reflectance, **Sentinel-3** uses Level-1B TOA radiance (optimized for aquatic applications), while **Landsat and MODIS** use Surface Reflectance (SR) for superior atmospheric correction and scientific quality.
 
 The tool generates rasters with 4 (seasons), 12 (months), or 24 (custom periods) bands per year.
 
@@ -203,8 +203,8 @@ conda install -c conda-forge ndvi2gif
 
 Check out our comprehensive examples:
 
-- **[Comprehensive Example](examples_notebooks/ndvi2gif%20extended%20version.ipynb)** - Complete guide to all ndvi2gif features
-- **[Input Types Guide](examples_notebooks/NDVI2Gif_InputsTypes.ipynb)** - Different ways to specify your region of interest
+- **[Comprehensive Example](https://github.com/Digdgeo/Ndvi2Gif/blob/master/examples_notebooks/ndvi2gif%20extended%20version.ipynb)** - Complete guide to all ndvi2gif features
+- **[Input Types Guide](https://github.com/Digdgeo/Ndvi2Gif/blob/master/examples_notebooks/NDVI2Gif_InputsTypes.ipynb)** - Different ways to specify your region of interest
 
 *More examples are regularly added to showcase new capabilities and use cases.*
 
@@ -301,7 +301,7 @@ For complete examples, see the [example notebooks](examples_notebooks/) folder.
 
 ## Roadmap 🗺️ 
 
-**v0.4.0 ✅ Multi-Sensor Professional Suite**
+**v0.4.1 ✅ Multi-Sensor Professional Suite**
 Status: **Released!**
 
 ✅ **Sentinel-3 OLCI Support** - 21-band daily global coverage for water quality
@@ -368,8 +368,7 @@ Use cases: Disaster monitoring, urban growth tracking, real-time environmental a
 - Automated reporting with GeoTIFF exports
 - Quality assessment with robust statistics
 - Geometric consistency with SAR orbit control
-- Generate reference rasters for pseudo-invariant area radiometric normalization ([ProtocoloV2](https://github.com/Digdgeo/ProtocoloV2))
-- Create seasonal GIFs for public outreach and education
+- Generate reference rasters for pseudo-invariant feature normalization ([ProtocoloV2](https://github.com/Digdgeo/ProtocoloV2))
 
 ## Contributing
 
@@ -406,4 +405,4 @@ This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.t
 
 - Built on [Google Earth Engine](https://earthengine.google.com/) and [geemap](https://geemap.org/)
 - Developed as part of eLTER and SUMHAL projects
-- Special thanks to my colleagues at LAST-EBD and to Claude AI for collaborative development support
+- Special thanks to my colleagues at LAST-EBD and to Claude AI 🤖 for collaborative development support

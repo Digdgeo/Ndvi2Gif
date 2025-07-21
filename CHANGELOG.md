@@ -6,6 +6,52 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 
 # Changelog
 
+## [0.4.0] - 2025-07-21
+
+### Added
+
+- **🛰️ Sentinel-3 OLCI Support**: Revolutionary addition with 21 spectral bands and daily global coverage
+- **🌊 Advanced Water Quality Indices**: 10 specialized aquatic indices including OCI, TSI, CDOM, turbidity, SPM, KD490, floating algae detection
+- **🔬 Enhanced Sentinel-2**: Complete Red Edge implementation with Surface Reflectance for superior data quality  
+- **💧 Cyanobacteria Detection**: New NDCI index for harmful algal bloom monitoring and water quality assessment
+- **⚙️ SAR Orbit Control**: Precise control over Sentinel-1 ascending/descending orbits for geometric consistency
+- **🎯 40+ Specialized Indices**: Comprehensive coverage with intelligent sensor-index validation
+- **📊 Professional Architecture**: Clean, extensible design with enhanced error handling and documentation
+
+### New Sentinel-3 Indices
+- **OCI** - OLCI Chlorophyll Index (optimized for S3)
+- **TSI** - Trophic State Index (water quality assessment) 
+- **CDOM** - Colored Dissolved Organic Matter Index
+- **Turbidity** - Water Turbidity Index (sediment monitoring)
+- **SPM** - Suspended Particulate Matter Index
+- **KD490** - Diffuse Attenuation Coefficient at 490nm
+- **Floating Algae** - Floating Algae Index (bloom detection)
+- **Red Edge Position** - OLCI-optimized red edge position
+- **Fluorescence Height** - Chlorophyll fluorescence detection
+- **Water Leaving Reflectance** - Aquatic reflectance analysis
+
+### New SAR Indices
+- **RFDI** - Radar Forest Degradation Index (deforestation monitoring)
+- **VSDI** - Vegetation Scattering Diversity Index (structural diversity)
+
+### Enhanced Features
+- **Intelligent Validation**: Smart index-sensor compatibility checking prevents invalid combinations
+- **Orbit Parameter**: Fine control over Sentinel-1 orbit selection (BOTH/ASCENDING/DESCENDING)
+- **Advanced Use Cases**: Support for pseudo-invariant area radiometric normalization workflows
+
+### Changed
+- **Sentinel-2 to Surface Reflectance**: Upgraded from TOA to Surface Reflectance for better scientific quality
+- **Simplified Architecture**: Removed unnecessary complexity while maintaining full functionality
+- **Enhanced Documentation**: Professional-grade docstrings and examples
+
+### Technical Improvements
+- Modular sensor setup with clean separation of concerns
+- Comprehensive sensor-index mapping and validation
+- Enhanced error messages for better user experience
+- Support for advanced radiometric normalization workflows
+
+---
+
 ## [0.3.0] - 2025-07-17
 
 ### Added

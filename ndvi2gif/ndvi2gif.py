@@ -26,7 +26,48 @@ class NdviSeasonality:
     and using a single generic function for all temporal composites.
     """
     
-    def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, sat='S2', key='max', index='ndvi', percentile=90):
+    def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, 
+             sat='S2', key='max', index='ndvi', percentile=90, orbit='BOTH'):
+        """
+        Initialize NdviSeasonality object for temporal remote sensing analysis.
+        
+        Parameters
+        ----------
+        roi : ee.Geometry, str, or None, optional
+            Region of interest. Can be ee.Geometry, path to shapefile/geojson,
+            DEIMS ID, WRS path/row, or S2 tile ID. Default is None (uses Andalusia).
+        periods : int, optional
+            Number of temporal periods. Default is 4 (seasons).
+        start_year : int, optional
+            Start year for analysis. Default is 2016.
+        end_year : int, optional
+            End year for analysis. Default is 2020.
+        sat : str, optional
+            Satellite sensor. Options: 'S2', 'Landsat', 'MODIS', 'S1'. Default is 'S2'.
+        key : str, optional
+            Statistical reducer. Options: 'max', 'median', 'mean', 'percentile'. Default is 'max'.
+        index : str, optional
+            Spectral index to compute. Available indices depend on satellite. Default is 'ndvi'.
+        percentile : int, optional
+            Percentile value when key='percentile'. Default is 90.
+        orbit : str, optional
+            Sentinel-1 orbit direction. Options: 'BOTH', 'ASCENDING', 'DESCENDING'. 
+            Default is 'BOTH'. Only used when sat='S1'.
+            - 'BOTH': Use all available orbits (maximum data coverage)
+            - 'DESCENDING': Use only descending orbits (better geometric consistency)
+            - 'ASCENDING': Use only ascending orbits (better geometric consistency)
+        
+        Examples
+        --------
+        >>> # Default: use both orbits for maximum coverage
+        >>> sar_gif = NdviSeasonality(sat='S1', index='vh')
+        
+        >>> # Use only descending orbits for consistency
+        >>> sar_gif = NdviSeasonality(sat='S1', index='vh', orbit='DESCENDING')
+        
+        >>> # Optical satellites ignore orbit parameter
+        >>> ndvi_gif = NdviSeasonality(sat='S2', index='ndvi', orbit='DESCENDING')  # orbit ignored
+        """
         print('There we go again...')
         
         # Initialize ROI (same as original)
@@ -105,22 +146,103 @@ class NdviSeasonality:
         self.periods = periods
         self.start_year = start_year
         self.end_year = end_year
-        self.sat = sat if sat in ['S2', 'Landsat', 'MODIS', 'S1'] else 'S2'
-        self.key = key if key in ['max', 'median', 'percentile', 'mean'] else 'max' 
-        self.percentile = percentile 
+        self.key = key if key in ['max', 'median', 'percentile', 'mean'] else 'max'
+        self.percentile = percentile
         self.imagelist = []
         self.index = index
         
-        # Index calculation methods - EXPANDIDO con índices SAR
-        self.d = {
-            'ndvi': self.get_ndvi, 'ndwi': self.get_ndwi, 'mndwi': self.get_mndwi, 
-            'evi': self.get_evi, 'savi': self.get_savi, 'gndvi': self.get_gndvi, 
-            'avi': self.get_avi, 'nbri': self.get_nbri, 'ndsi': self.get_ndsi, 
-            'aweinsh': self.get_aweinsh, 'awei': self.get_awei, 'ndmi': self.get_ndmi,
-            # Nuevos índices SAR
-            'rvi': self.get_rvi, 'vv': self.get_vv, 'vh': self.get_vh, 
-            'vv_vh_ratio': self.get_vv_vh_ratio, 'dpsvi': self.get_dpsvi
+        # Validar parámetro orbit
+        valid_orbits = ['BOTH', 'ASCENDING', 'DESCENDING']
+        if orbit not in valid_orbits:
+            raise ValueError(f"Orbit '{orbit}' is not valid. Available options are: {valid_orbits}")
+        
+        self.orbit = orbit
+    
+        # Advertencia si se usa orbit con sensores no-SAR
+        if sat != 'S1' and orbit != 'BOTH':
+            print(f"Warning: orbit parameter '{orbit}' is only used with Sentinel-1. Ignoring for {sat}.")
+            
+        # Índices básicos (todos los sensores ópticos)
+        self.optical_indices = {
+            'ndvi', 'ndwi', 'mndwi', 'evi', 'savi', 'gndvi', 'avi', 
+            'nbri', 'ndsi', 'aweinsh', 'awei', 'ndmi', 'msi', 'nmi', 
+            'ndti', 'cri1', 'cri2', 'lai', 'pri', 'wdrvi'
         }
+
+        # Exclusivos S2 (Red Edge)
+        self.s2_exclusive_indices = {
+            'ireci', 'mcari', 'ndre', 'reip', 'psri', 'cire', 'mtci', 's2rep', 'ndci'
+        }
+
+        # Exclusivos S3 (OLCI)
+        self.s3_exclusive_indices = {
+            'oci', 'tsi', 'cdom', 'turbidity', 'spm', 'kd490', 'floating_algae', 
+            'red_edge_position', 'fluorescence_height', 'water_leaving_reflectance'
+        }
+
+        # SAR (S1)
+        self.s1_indices = {
+            'rvi', 'vv', 'vh', 'vv_vh_ratio', 'dpsvi', 'rfdi', 'vsdi'
+        }
+
+        # Mapeo final SIMPLE
+        self.sensor_indices = {
+            'S2': self.optical_indices | self.s2_exclusive_indices,
+            'Landsat': self.optical_indices,
+            'MODIS': self.optical_indices,
+            'S1': self.s1_indices,
+            'S3': self.optical_indices | self.s3_exclusive_indices
+        }
+        
+        # Validar satélite
+        if sat not in self.sensor_indices:
+            available_sats = list(self.sensor_indices.keys())
+            raise ValueError(f"Satellite '{sat}' is not supported. Available satellites are: {available_sats}")
+        
+        self.sat = sat
+        
+        # Validar índice para el satélite seleccionado
+        available_indices = self.sensor_indices[self.sat]
+        if index not in available_indices:
+            raise ValueError(
+                f"Index '{index}' is not available for {sat}. "
+                f"Available indices for {sat} are: {sorted(list(available_indices))}"
+            )
+        
+        self.index = index
+        
+        # Diccionario COMPLETO de métodos de cálculo (todos los índices)
+        self.d = {
+        # Índices básicos ópticos
+        'ndvi': self.get_ndvi, 'ndwi': self.get_ndwi, 'mndwi': self.get_mndwi, 
+        'evi': self.get_evi, 'savi': self.get_savi, 'gndvi': self.get_gndvi, 
+        'avi': self.get_avi, 'nbri': self.get_nbri, 'ndsi': self.get_ndsi, 
+        'aweinsh': self.get_aweinsh, 'awei': self.get_awei, 'ndmi': self.get_ndmi,
+        
+        # Índices adicionales ópticos (compartidos)
+        'msi': self.get_msi, 'nmi': self.get_nmi, 'ndti': self.get_ndti,
+        'cri1': self.get_cri1, 'cri2': self.get_cri2, 'lai': self.get_lai, 
+        'pri': self.get_pri, 'wdrvi': self.get_wdrvi,
+        
+        # Índices específicos S2 (Red Edge)
+        'ireci': self.get_ireci, 'mcari': self.get_mcari, 'reip': self.get_reip,
+        'psri': self.get_psri, 'ndre': self.get_ndre, 'cig': self.get_cig,
+        'cire': self.get_cire, 'mtci': self.get_mtci, 's2rep': self.get_s2rep,
+        'ndci': self.get_ndci,
+
+        # Índices específicos S3 (OLCI 21 bandas)
+        'oci': self.get_oci, 'tsi': self.get_tsi, 'cdom': self.get_cdom,
+        'turbidity': self.get_turbidity, 'spm': self.get_spm, 'kd490': self.get_kd490,
+        'floating_algae': self.get_floating_algae, 'red_edge_position': self.get_red_edge_position,
+        'fluorescence_height': self.get_fluorescence_height, 
+        'water_leaving_reflectance': self.get_water_leaving_reflectance,
+
+        # Índices SAR
+        'rvi': self.get_rvi, 'vv': self.get_vv, 'vh': self.get_vh, 
+        'vv_vh_ratio': self.get_vv_vh_ratio, 'dpsvi': self.get_dpsvi,
+        'rfdi': self.get_rfdi, 'vsdi': self.get_vsdi
+        }
+
         
         # **DYNAMIC PERIOD GENERATION** - This replaces all the hardcoded periods!
         self.period_dates, self.period_names = self._generate_periods(periods)
@@ -218,8 +340,9 @@ class NdviSeasonality:
         return period_dates, period_names
     
     def _setup_satellite_collections(self):
-        """Setup satellite collections (same as original)"""
-        # Landsat collections
+        """Setup satellite collections - SIMPLE y DIRECTO"""
+        
+        # Landsat collections (igual que antes)
         LC09col = ee.ImageCollection("LANDSAT/LC09/C02/T1_L2").filterBounds(self.roi) 
         LC08col = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterBounds(self.roi) 
         LE07col = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2").filterBounds(self.roi) 
@@ -232,11 +355,13 @@ class NdviSeasonality:
         ETM_ = ETM.map(scale_ETM)
         Landsat = OLI_.merge(ETM_)
         
-        # Sentinel-2
-        S2col = ee.ImageCollection("COPERNICUS/S2_HARMONIZED").select(
-            ['B2', 'B3', 'B4', 'B8', 'B11', 'B12'], 
-            ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']
-        ).filterBounds(self.roi)
+        # Sentinel-2 - Surface Reflectance con todas las bandas
+        S2col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").select([
+            'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B11', 'B12'
+        ], [
+            'Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3', 
+            'Nir', 'Swir1', 'Swir2'
+        ]).filterBounds(self.roi)
         
         # MODIS
         MOD09Q1 = ee.ImageCollection("MODIS/061/MOD09A1").select(
@@ -244,27 +369,54 @@ class NdviSeasonality:
             ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']
         ).filterBounds(self.roi)
         
-        # Sentinel-1 - EXPANDIDO para incluir VV y VH con filtro speckle
+        # Sentinel-1 - SAR con control de órbitas
         s1 = ee.ImageCollection('COPERNICUS/S1_GRD').filter(
             ee.Filter.listContains('transmitterReceiverPolarisation', 'VH')
         ).filter(
             ee.Filter.listContains('transmitterReceiverPolarisation', 'VV')
         ).filter(ee.Filter.eq('instrumentMode', 'IW'))
         
-        # Aplicar filtro de speckle
+        # Aplicar filtro de órbita según parámetro del usuario
+        if self.orbit == 'ASCENDING':
+            s1 = s1.filter(ee.Filter.eq('orbitProperties_pass', 'ASCENDING'))
+            print("Using Sentinel-1 ascending orbits only.")
+        elif self.orbit == 'DESCENDING':
+            s1 = s1.filter(ee.Filter.eq('orbitProperties_pass', 'DESCENDING'))
+            print("Using Sentinel-1 descending orbits only.")
+        else:  # orbit == 'BOTH'
+            print("Using all Sentinel-1 orbits (ascending + descending).")
+        
         def apply_speckle_filter(image):
             filtered = image.focal_median(radius=1, kernelType='square', units='pixels')
             return filtered.copyProperties(image, ['system:time_start', 'system:time_end'])
         
-        s1Ascending = s1.filter(ee.Filter.eq('orbitProperties_pass', 'ASCENDING'))
-        s1Descending = s1.filter(ee.Filter.eq('orbitProperties_pass', 'DESCENDING'))
+        s1S1 = s1.select(['VV', 'VH']).map(apply_speckle_filter).filterBounds(self.roi)
         
-        # Incluir ambas polarizaciones con filtro de speckle
-        s1S1 = s1Ascending.select(['VV', 'VH']).merge(
-            s1Descending.select(['VV', 'VH'])
-        ).map(apply_speckle_filter).filterBounds(self.roi)
+        # Sentinel-3 - OLCI Level-1B (21 bandas espectrales)
+        S3col = ee.ImageCollection("COPERNICUS/S3/OLCI").select([
+            'Oa01_radiance',  # 400nm - Violet
+            'Oa02_radiance',  # 412.5nm - Blue
+            'Oa03_radiance',  # 442.5nm - Blue2
+            'Oa04_radiance',  # 490nm - Blue_Green
+            'Oa05_radiance',  # 510nm - Green
+            'Oa06_radiance',  # 560nm - Green2
+            'Oa07_radiance',  # 620nm - Red
+            'Oa08_radiance',  # 665nm - Red2
+            'Oa09_radiance',  # 673.75nm - Red3
+            'Oa10_radiance',  # 681.25nm - Red_Edge1
+            'Oa11_radiance',  # 708.75nm - Red_Edge2
+            'Oa12_radiance',  # 753.75nm - NIR
+            'Oa16_radiance',  # 778.75nm - NIR2
+            'Oa17_radiance',  # 865nm - NIR3
+            'Oa18_radiance',  # 885nm - NIR4
+            'Oa21_radiance'   # 1020nm - NIR5
+        ], [
+            'Violet', 'Blue', 'Blue2', 'Blue_Green', 'Green', 'Green2',
+            'Red', 'Red2', 'Red3', 'Red_Edge1', 'Red_Edge2', 'NIR',
+            'NIR2', 'NIR3', 'NIR4', 'NIR5'
+        ]).filterBounds(self.roi)
         
-        # Set the collection
+        # Set the collection - SIMPLE if/elif chain
         if self.sat == 'S2':
             self.ndvi_col = S2col
         elif self.sat == 'Landsat':
@@ -273,12 +425,14 @@ class NdviSeasonality:
             self.ndvi_col = MOD09Q1
         elif self.sat == 'S1':
             self.ndvi_col = s1S1
+        elif self.sat == 'S3':
+            self.ndvi_col = S3col
         else: 
             print('Not a valid satellite')
     
     def get_period_composite(self, year, period_idx):
         """
-        SINGLE GENERIC FUNCTION with FLEXIBLE percentile support
+        Función simplificada - ya no necesita validación porque se hace en __init__
         """
         start_date, end_date = self.period_dates[period_idx]
         init = str(year) + start_date
@@ -287,36 +441,68 @@ class NdviSeasonality:
         # Dictionary to store results for all statistics
         period_stats = {}
         
-        if self.sat != 'S1':
-            # Optical satellites
-            period_stats['max'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).max()
-            period_stats['median'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).median()
-            period_stats['mean'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).mean()
-            period_stats['percentile'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).reduce(ee.Reducer.percentile([self.percentile]))  # DINÁMICO
-        else:
-            # SAR satellite
-            if self.index in ['vv', 'vh']:
-                period_stats['max'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).max()
-                period_stats['median'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).median()
-                period_stats['mean'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).mean()
-                period_stats['percentile'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).reduce(ee.Reducer.percentile([self.percentile]))  # DINÁMICO
-            elif self.index in ['rvi', 'vv_vh_ratio', 'dpsvi']:
-                period_stats['max'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).max()
-                period_stats['median'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).median()
-                period_stats['mean'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).mean()
-                period_stats['percentile'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).reduce(ee.Reducer.percentile([self.percentile]))  # DINÁMICO
-            else:
-                # Compatibilidad hacia atrás
-                period_stats['max'] = self.ndvi_col.filterDate(init, ends).select('VH').max()
-                period_stats['median'] = self.ndvi_col.filterDate(init, ends).select('VH').median()
-                period_stats['mean'] = self.ndvi_col.filterDate(init, ends).select('VH').mean()
-                period_stats['percentile'] = self.ndvi_col.filterDate(init, ends).select('VH').reduce(ee.Reducer.percentile([self.percentile]))  # DINÁMICO
+        # Aplicar el método del índice directamente (ya está validado)
+        period_stats['max'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).max()
+        period_stats['median'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).median()
+        period_stats['mean'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).mean()
+        period_stats['percentile'] = self.ndvi_col.filterDate(init, ends).map(self.d[self.index]).reduce(ee.Reducer.percentile([self.percentile]))
         
         return period_stats[self.key]
     
+    def get_available_indices(self, satellite=None):
+        """
+        Método público para consultar índices disponibles
+        """
+        if satellite is None:
+            satellite = self.sat
+            
+        if satellite not in self.sensor_indices:
+            available_sats = list(self.sensor_indices.keys())
+            raise ValueError(f"Satellite '{satellite}' is not supported. Available satellites are: {available_sats}")
+        
+        return sorted(list(self.sensor_indices[satellite]))
+    
+    def get_all_available_indices(self):
+        """
+        Devuelve todos los índices disponibles organizados por sensor
+        """
+        result = {}
+        for sensor, indices in self.sensor_indices.items():
+            result[sensor] = sorted(list(indices))
+        return result
+    
     def get_year_composite(self):
         """
-        DRAMATICALLY SIMPLIFIED version with FLEXIBLE percentile support
+        Generate temporal composite images for each year in the specified time range.
+        
+        Creates multi-band images where each band represents a temporal period 
+        (seasons, months, etc.) using the specified statistical reducer (max, median, 
+        mean, or percentile) and the selected spectral index.
+        
+        The function automatically handles:
+        - Dynamic band naming based on satellite type and index
+        - Flexible temporal periods (4, 12, 24, or custom)
+        - Multiple statistical reducers with configurable percentiles
+        - Proper band naming for both optical and SAR indices
+        - Data availability validation for each period
+        
+        Returns
+        -------
+        ee.ImageCollection
+            Collection of multi-band composite images, one per year. Each image
+            contains bands named after the temporal periods (e.g., 'winter', 'spring'
+            for seasonal composites, or 'january', 'february' for monthly composites).
+            
+        Examples
+        --------
+        >>> # Seasonal NDVI composites
+        >>> ndvi_gif = NdviSeasonality(sat='S2', index='ndvi', periods=4)
+        >>> collection = ndvi_gif.get_year_composite()
+        
+        >>> # Monthly SAR composites with 90th percentile
+        >>> sar_gif = NdviSeasonality(sat='S1', index='vh', periods=12, 
+        ...                          key='percentile', percentile=90)
+        >>> collection = sar_gif.get_year_composite()
         """
         # Generate band names dynamically
         if self.sat != 'S1':
@@ -326,38 +512,31 @@ class NdviSeasonality:
             else:
                 base_bands = ['nd'] + [f'nd_{i}' for i in range(1, self.periods)]
         else:
-            # SAR satellite
+            # SAR satellite - CORREGIDO para todos los índices SAR
             if self.index == 'vv':
-                if self.key == 'percentile':
-                    base_bands = [f'VV_p{self.percentile}'] + [f'VV_p{self.percentile}_{i}' for i in range(1, self.periods)]
-                else:
-                    base_bands = ['VV'] + [f'VV_{i}' for i in range(1, self.periods)]
+                band_prefix = 'VV'
             elif self.index == 'vh':
-                if self.key == 'percentile':
-                    base_bands = [f'VH_p{self.percentile}'] + [f'VH_p{self.percentile}_{i}' for i in range(1, self.periods)]
-                else:
-                    base_bands = ['VH'] + [f'VH_{i}' for i in range(1, self.periods)]
+                band_prefix = 'VH'
             elif self.index == 'rvi':
-                if self.key == 'percentile':
-                    base_bands = [f'RVI_p{self.percentile}'] + [f'RVI_p{self.percentile}_{i}' for i in range(1, self.periods)]
-                else:
-                    base_bands = ['RVI'] + [f'RVI_{i}' for i in range(1, self.periods)]
+                band_prefix = 'RVI'
             elif self.index == 'vv_vh_ratio':
-                if self.key == 'percentile':
-                    base_bands = [f'RATIO_p{self.percentile}'] + [f'RATIO_p{self.percentile}_{i}' for i in range(1, self.periods)]
-                else:
-                    base_bands = ['RATIO'] + [f'RATIO_{i}' for i in range(1, self.periods)]
+                band_prefix = 'RATIO'
             elif self.index == 'dpsvi':
-                if self.key == 'percentile':
-                    base_bands = [f'DPSVI_p{self.percentile}'] + [f'DPSVI_p{self.percentile}_{i}' for i in range(1, self.periods)]
-                else:
-                    base_bands = ['DPSVI'] + [f'DPSVI_{i}' for i in range(1, self.periods)]
+                band_prefix = 'DPSVI'
+            elif self.index == 'rfdi':
+                band_prefix = 'RFDI'
+            elif self.index == 'vsdi':
+                band_prefix = 'VSDI'
             else:
-                # Compatibilidad hacia atrás
-                if self.key == 'percentile':
-                    base_bands = [f'VH_p{self.percentile}'] + [f'VH_p{self.percentile}_{i}' for i in range(1, self.periods)]
-                else:
-                    base_bands = ['VH'] + [f'VH_{i}' for i in range(1, self.periods)]
+                # Fallback para compatibilidad hacia atrás
+                band_prefix = 'VH'
+                print(f"Warning: Unknown SAR index '{self.index}', using VH as fallback")
+            
+            # Generar nombres de bandas con el prefijo correcto
+            if self.key == 'percentile':
+                base_bands = [f'{band_prefix}_p{self.percentile}'] + [f'{band_prefix}_p{self.percentile}_{i}' for i in range(1, self.periods)]
+            else:
+                base_bands = [band_prefix] + [f'{band_prefix}_{i}' for i in range(1, self.periods)]
         
         # Clear previous results
         self.imagelist = []
@@ -464,6 +643,242 @@ class NdviSeasonality:
     def get_ndmi(self, image):
         return image.normalizedDifference(['Nir', 'Swir1'])
     
+    def get_msi(self, image):
+        """Moisture Stress Index"""
+        return image.expression(
+            'SWIR1 / NIR', {
+            'NIR': image.select('Nir'),
+            'SWIR1': image.select('Swir1')
+        }).rename(['nd'])
+
+    def get_nmi(self, image):
+        """Normalized Multi-band Drought Index"""
+        return image.expression(
+            '(NIR - (SWIR1 + SWIR2)) / (NIR + (SWIR1 + SWIR2))', {
+            'NIR': image.select('Nir'),
+            'SWIR1': image.select('Swir1'),
+            'SWIR2': image.select('Swir2')
+        }).rename(['nd'])
+
+    def get_ndti(self, image):
+        """Normalized Difference Tillage Index"""
+        return image.normalizedDifference(['Swir1', 'Swir2'])
+
+    def get_cri1(self, image):
+        """Carotenoid Reflectance Index 1"""
+        return image.expression(
+            '(1 / BLUE) - (1 / GREEN)', {
+            'BLUE': image.select('Blue'),
+            'GREEN': image.select('Green')
+        }).rename(['nd'])
+
+    def get_cri2(self, image):
+        """Carotenoid Reflectance Index 2"""
+        return image.expression(
+            '(1 / BLUE) - (1 / RED)', {
+            'BLUE': image.select('Blue'),
+            'RED': image.select('Red')
+        }).rename(['nd'])
+
+    def get_lai(self, image):
+        """Leaf Area Index approximation"""
+        return image.expression(
+            '3.618 * EVI - 0.118', {
+            'EVI': self.get_evi(image).select('nd')
+        }).rename(['nd'])
+
+    def get_pri(self, image):
+        """Photochemical Reflectance Index"""
+        return image.normalizedDifference(['Green', 'Blue'])
+
+    def get_wdrvi(self, image):
+        """Wide Dynamic Range Vegetation Index"""
+        return image.expression(
+            '(0.1 * NIR - RED) / (0.1 * NIR + RED)', {
+            'NIR': image.select('Nir'),
+            'RED': image.select('Red')
+        }).rename(['nd'])
+
+    def get_cig(self, image):
+        """Chlorophyll Index Green"""
+        return image.expression(
+            '(Nir / Green) - 1', {
+            'Green': image.select('Green'),
+            'Nir': image.select('Nir')
+        }).rename(['nd'])
+
+    # ÍNDICES SENTINEL-2 CON RED EDGE
+    def get_ireci(self, image):
+        """Inverted Red-Edge Chlorophyll Index - Muy sensible a clorofila"""
+        return image.expression(
+            '(Red_Edge3 - Red) / (Red_Edge1 / Red_Edge2)', {
+            'Red': image.select('Red'),
+            'Red_Edge1': image.select('Red_Edge1'),    # B5
+            'Red_Edge2': image.select('Red_Edge2'),    # B6
+            'Red_Edge3': image.select('Red_Edge3')     # B7
+        }).rename(['nd'])
+
+    def get_mcari(self, image):
+        """Modified Chlorophyll Absorption Ratio Index"""
+        return image.expression(
+            '((Red_Edge1 - Red) - 0.2 * (Red_Edge1 - Green)) * (Red_Edge1 / Red)', {
+            'Green': image.select('Green'),
+            'Red': image.select('Red'), 
+            'Red_Edge1': image.select('Red_Edge1')     # B5
+        }).rename(['nd'])
+
+    def get_ndre(self, image):
+        """Normalized Difference Red Edge - Sensible a contenido de clorofila"""
+        return image.normalizedDifference(['Nir', 'Red_Edge1'])  # NIR - Red Edge 1
+
+    def get_reip(self, image):
+        """Red Edge Inflection Point - Aproximación"""
+        return image.expression(
+            '700 + 40 * ((((Red + Red_Edge3) / 2) - Red_Edge1) / (Red_Edge2 - Red_Edge1))', {
+            'Red': image.select('Red'),
+            'Red_Edge1': image.select('Red_Edge1'),    # B5
+            'Red_Edge2': image.select('Red_Edge2'),    # B6
+            'Red_Edge3': image.select('Red_Edge3')     # B7
+        }).rename(['nd'])
+
+    def get_psri(self, image):
+        """Plant Senescence Reflectance Index"""
+        return image.expression(
+            '(Red - Blue) / Red_Edge2', {
+            'Blue': image.select('Blue'),
+            'Red': image.select('Red'),
+            'Red_Edge2': image.select('Red_Edge2')     # B6
+        }).rename(['nd'])
+
+    def get_cire(self, image):
+        """Chlorophyll Index Red Edge"""
+        return image.expression(
+            '(Nir / Red_Edge1) - 1', {
+            'Red_Edge1': image.select('Red_Edge1'),    # B5
+            'Nir': image.select('Nir')
+        }).rename(['nd'])
+
+    def get_mtci(self, image):
+        """MERIS Terrestrial Chlorophyll Index"""
+        return image.expression(
+            '(Red_Edge2 - Red_Edge1) / (Red_Edge1 - Red)', {
+            'Red': image.select('Red'),
+            'Red_Edge1': image.select('Red_Edge1'),    # B5
+            'Red_Edge2': image.select('Red_Edge2')     # B6
+        }).rename(['nd'])
+
+    def get_s2rep(self, image):
+        """Sentinel-2 Red Edge Position - Simplificado"""
+        return image.expression(
+            '705 + 35 * ((((Red + Red_Edge3) / 2) - Red_Edge1) / (Red_Edge2 - Red_Edge1))', {
+            'Red': image.select('Red'),
+            'Red_Edge1': image.select('Red_Edge1'),    # B5
+            'Red_Edge2': image.select('Red_Edge2'),    # B6
+            'Red_Edge3': image.select('Red_Edge3')     # B7
+        }).rename(['nd'])
+    
+    def get_ndci(self, image):
+        """
+        Normalized Difference Chlorophyll Index (NDCI)
+        Especialmente útil para detectar cianobacterias y clorofila-a en agua
+        Usa Red Edge 1 (B5) y Red (B4) - optimizado para Sentinel-2
+        
+        Fórmula: (Red_Edge1 - Red) / (Red_Edge1 + Red)
+        
+        Referencias:
+        - Mishra & Mishra (2012) - Cyanobacteria detection
+        - Gitelson et al. (2007) - Chlorophyll-a estimation
+        """
+        return image.normalizedDifference(['Red_Edge1', 'Red'])
+    
+    # =================================================================
+    # ÍNDICES S3 IMPLEMENTADOS (todos basados en radiancia L1B)
+    # =================================================================
+
+    def get_oci(self, image):
+        """OLCI Chlorophyll Index - Custom usando radiancia L1B"""
+        return image.expression(
+            '(Red_Edge1 - Red2) / (Red_Edge1 + Red2)', {
+            'Red2': image.select('Red2'),              # Oa08 - 665nm
+            'Red_Edge1': image.select('Red_Edge1')     # Oa10 - 681.25nm
+        }).rename(['nd'])
+
+    def get_tsi(self, image):
+        """Trophic State Index - Estado trófico de agua"""
+        return image.expression(
+            '(Red2 - Blue_Green) / (NIR - Blue_Green)', {
+            'Blue_Green': image.select('Blue_Green'),  # Oa04 - 490nm
+            'Red2': image.select('Red2'),              # Oa08 - 665nm  
+            'NIR': image.select('NIR')                 # Oa12 - 753.75nm
+        }).rename(['nd'])
+
+    def get_cdom(self, image):
+        """Colored Dissolved Organic Matter Index"""
+        return image.expression(
+            'Blue / Blue_Green', {
+            'Blue': image.select('Blue'),              # Oa02 - 412.5nm
+            'Blue_Green': image.select('Blue_Green')   # Oa04 - 490nm
+        }).rename(['nd'])
+
+    def get_turbidity(self, image):
+        """Water Turbidity Index usando bandas OLCI"""
+        return image.expression(
+            'Red2 / Blue_Green', {
+            'Red2': image.select('Red2'),              # Oa08 - 665nm
+            'Blue_Green': image.select('Blue_Green')   # Oa04 - 490nm
+        }).rename(['nd'])
+
+    def get_spm(self, image):
+        """Suspended Particulate Matter - Materia particulada suspendida"""
+        return image.expression(
+            '(Red3 - Red2) / (Red3 + Red2)', {
+            'Red2': image.select('Red2'),    # Oa08 - 665nm
+            'Red3': image.select('Red3')     # Oa09 - 673.75nm
+        }).rename(['nd'])
+
+    def get_kd490(self, image):
+        """Diffuse Attenuation Coefficient at 490nm"""
+        return image.expression(
+            'log(Blue2 / Blue_Green)', {
+            'Blue2': image.select('Blue2'),            # Oa03 - 442.5nm
+            'Blue_Green': image.select('Blue_Green')   # Oa04 - 490nm
+        }).rename(['nd'])
+
+    def get_floating_algae(self, image):
+        """Floating Algae Index - Detección de algas flotantes"""
+        return image.expression(
+            '(NIR - Red_Edge2) / (NIR + Red_Edge2)', {
+            'Red_Edge2': image.select('Red_Edge2'),    # Oa11 - 708.75nm
+            'NIR': image.select('NIR')                 # Oa12 - 753.75nm
+        }).rename(['nd'])
+
+    def get_red_edge_position(self, image):
+        """Red Edge Position optimizado para OLCI"""
+        return image.expression(
+            '681.25 + 27.5 * ((Red2 + Red_Edge2) / 2 - Red_Edge1) / (Red_Edge2 - Red_Edge1)', {
+            'Red2': image.select('Red2'),              # Oa08 - 665nm
+            'Red_Edge1': image.select('Red_Edge1'),    # Oa10 - 681.25nm
+            'Red_Edge2': image.select('Red_Edge2')     # Oa11 - 708.75nm
+        }).rename(['nd'])
+
+    def get_fluorescence_height(self, image):
+        """Chlorophyll Fluorescence Height"""
+        return image.expression(
+            'Red3 - (Red2 + (Red_Edge1 - Red2) * (673.75 - 665) / (681.25 - 665))', {
+            'Red2': image.select('Red2'),              # Oa08 - 665nm
+            'Red3': image.select('Red3'),              # Oa09 - 673.75nm
+            'Red_Edge1': image.select('Red_Edge1')     # Oa10 - 681.25nm
+        }).rename(['nd'])
+
+    def get_water_leaving_reflectance(self, image):
+        """Water Leaving Reflectance (simplified approximation)"""
+        return image.expression(
+            'Green / (Blue + Green + Red)', {
+            'Blue': image.select('Blue'),      # Oa02 - 412.5nm
+            'Green': image.select('Green'),    # Oa05 - 510nm
+            'Red': image.select('Red')         # Oa07 - 620nm
+        }).rename(['nd'])
+        
     # Nuevos métodos para índices SAR
     def get_rvi(self, image):
         """Radar Vegetation Index - Más robusto que VH solo"""
@@ -493,6 +908,23 @@ class NdviSeasonality:
             '(VV - VH) / (VV + VH)', {
             'VV': image.select('VV'),
             'VH': image.select('VH')}).rename(['DPSVI'])
+    
+    def get_rfdi(self, image):
+        """Radar Forest Degradation Index"""
+        return image.expression(
+            '(VV - VH) / VV', {
+            'VV': image.select('VV'),
+            'VH': image.select('VH')
+        }).rename(['RFDI'])
+
+    def get_vsdi(self, image):
+        """Vegetation Scattering Diversity Index"""
+        return image.expression(
+            'sqrt((VV - VH) ** 2 + (VV + VH) ** 2)', {
+            'VV': image.select('VV'),
+            'VH': image.select('VH')
+        }).rename(['VSDI'])
+
     
     # Export methods (same as original)
     def get_export_single(self, image, name='mycomposition.tif', crs='EPSG:4326', scale=10):

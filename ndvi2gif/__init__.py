@@ -2,6 +2,7 @@
 
 __author__ = """Diego García Díaz"""
 __email__ = 'diegogarcia@ebd.csic.es'
-__version__ = '0.3.0'
+__version__ = '0.4.1'
 
 from .ndvi2gif import *
+from .s1_ard import *

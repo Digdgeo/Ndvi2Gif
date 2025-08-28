@@ -27,34 +27,61 @@ Ndvi2Gif was updated and extended as part of its integration into the eLTER and 
 
 ![Interface Screenshot](https://i.imgur.com/Sv9LfYj.png)
 
-## ✨ What's New in v0.4.1
+## ✨ What's New in v0.5.0
 
-🛰️ **Sentinel-3 OLCI Support**: Revolutionary addition of Sentinel-3 with 21 spectral bands and daily global coverage 🆕  
-🌊 **Advanced Water Quality Indices**: Specialized indices for algae detection, turbidity, and aquatic monitoring  
-🔬 **Enhanced Sentinel-2**: Complete Red Edge implementation with Surface Reflectance for superior data quality  
-💧 **Cyanobacteria Detection**: New NDCI index for water quality and harmful algal bloom monitoring  
-⚙️ **SAR Orbit Control**: Precise control over Sentinel-1 orbits for geometric consistency  
-🎯 **40+ Specialized Indices**: Comprehensive coverage across all sensors with intelligent validation  
-📊 **Professional Architecture**: Clean, extensible design with enhanced error handling  
+The **0.5.0 release** takes *Ndvi2Gif* from a seasonal compositing tool to a **full-featured remote sensing analysis suite**.  
+You still get everything you had before — effortless access to **Sentinel-1/2/3, Landsat, MODIS**, flexible statistics, and GIF/GeoTIFF exports — but now with a whole new layer of analytical power:
+
+### 🚀 All the classics, better than ever
+
+- Seasonal & multi-annual composites of NDVI, NDWI, EVI, and 40+ indices  
+- Flexible statistics: mean, median, max, percentiles  
+- Multi-sensor support across optical and SAR missions  
+- Easy ROI handling from drawn geometries, shapefiles, DEIMS IDs, or tile codes  
+- Exports to **GeoTIFFs** and **GIF animations** for instant visualization  
+
+### 🔥 Brand-new in 0.5.0
+
+- 🛰️ **Sentinel-1 ARD Processor** – professional SAR preprocessing with terrain correction and a suite of speckle filters  
+- 📈 **TimeSeriesAnalyzer** – extract robust time series, test for trends (Mann-Kendall, Sen’s slope, linear), and visualize dynamics with multi-panel dashboards  
+- 🌱 **Extended NdviSeasonality** – dynamic temporal periods (4, 12, 24, custom), smarter ROI handling, SAR normalization, and improved sensor-index validation  
+- 🎨 **Polished Visualizations** – publication-ready layouts with unified Seaborn/Matplotlib styling  
+
+With this release, *Ndvi2Gif* is not just about generating composites — it’s about **understanding change**:  
+phenology cycles, long-term trends, vegetation structure, and water quality dynamics.
 
 ## Why use Ndvi2Gif?
 
-Unlike many visualization-oriented tools, Ndvi2Gif is designed as a **remote sensing analytics helper** that abstracts much of the complexity of working directly with Google Earth Engine.
+Unlike many visualization-oriented tools, Ndvi2Gif is designed as a **remote sensing analytics suite** that abstracts much of the complexity of working directly with Google Earth Engine, while giving you the flexibility to go far beyond GIF creation.
 
 You can:
 
-- **Access pixel-wise statistics** over any Earth location, at any scale and time span.
-  - Example: *Obtain the monthly median of the 85th NDVI percentile per pixel from 1984 to 2024 using Landsat data.*
-  - Example: *Calculate the maximum of the seasonal NDWI maximums between 2017 and 2023 using Sentinel-2.*
-  - Example: *Monitor crop harvest timing with bi-monthly VV/VH ratio analysis using Sentinel-1.*
-  - Example: *Track daily algal blooms with Sentinel-3 OLCI turbidity indices.*
-- **Perform nested aggregations**:
-  - First compute temporal summaries (e.g., per-season percentiles or means), then apply a second statistical reduction across years (e.g., median, min, max).
-- **Target any ecological or phenological metric** by choosing the appropriate index and statistical pipeline.
+- **Access pixel-wise statistics** over any Earth location, at any scale and time span.  
+  - Example: *Obtain the monthly median of the 85th NDVI percentile per pixel from 1984 to 2024 using Landsat data.*  
+  - Example: *Calculate the maximum of the seasonal NDWI maximums between 2017 and 2023 using Sentinel-2.*  
+  - Example: *Monitor crop harvest timing with bi-monthly VV/VH ratio analysis using Sentinel-1.*  
+  - Example: *Track daily algal blooms with Sentinel-3 OLCI turbidity indices.*  
+
+- **Perform nested aggregations**:  
+  First compute temporal summaries (e.g., per-season percentiles or means), then apply a second statistical reduction across years (e.g., median, min, max).
+
+- **Run advanced time series analysis** with the new `TimeSeriesAnalyzer`:  
+  - Trend detection (Mann-Kendall, Sen’s slope, linear regression)  
+  - Multi-panel dashboards (seasonal patterns, autocorrelation, data quality)  
+  - Phenology metrics such as Start/End of Season, Peak, Length, amplitude, and rates of change  
+
+- **Preprocess Sentinel-1 SAR like a pro** with the `S1ARDProcessor`:  
+  - Radiometric terrain correction for mountainous regions  
+  - Multiple speckle filtering options (Boxcar, Lee, Refined Lee, Gamma-MAP, Lee Sigma)  
+  - Flexible DEM support (Copernicus and SRTM)  
+
+- **Target any ecological or phenological metric** by choosing the appropriate index and analysis pipeline.
+
 - **Work globally**, without needing to download or preprocess raw satellite data — all computations are handled via Earth Engine's cloud infrastructure.
+
 - **Handle real-time monitoring** with automatic detection of available data periods for incomplete years.
 
-In other words: if you can describe a temporal range, a spatial region, an index, and a chain of statistics — `ndvi2gif` can likely generate it.
+In other words: if you can describe a temporal range, a spatial region, an index, and a chain of statistics — `ndvi2gif` can not only generate it, but now also help you **analyze and interpret the changes over time**.
 
 Yes, it makes nice GIFs — but it's much more than that.
 ![GIF Example](https://i.imgur.com/xvrPYMH.gif)
@@ -212,8 +239,8 @@ Check out our comprehensive examples:
 
 ```python
 import ee
-from ndvi2gif import NdviSeasonality
 import geemap
+from ndvi2gif import NdviSeasonality, TimeSeriesAnalyzer, S1ARDProcessor
 
 # Authenticate Earth Engine
 ee.Authenticate()
@@ -293,52 +320,75 @@ cyano_detection = NdviSeasonality(
     start_year=2023,
     end_year=2024
 )
-```
+
+#### TimeSeriesAnalyzer – trend and phenology ####
+# Seasonal NDVI composites
+ndvi = NdviSeasonality(
+    roi=your_roi,
+    sat='S2',
+    periods=12,   # monthly
+    start_year=2018,
+    end_year=2024,
+    index='ndvi'
+)
+
+# Analyze temporal trends and phenology
+ts = TimeSeriesAnalyzer(ndvi)
+df = ts.extract_time_series()
+trend = ts.analyze_trend(df)
+ts.plot_comprehensive_analysis()
+
+#### SAR Analysis ####
+
+from ndvi2gif import S1ARDProcessor
+import ee
+
+ee.Initialize()
+
+# Configure ARD processor with terrain correction + Refined Lee filter
+s1 = S1ARDProcessor(
+    speckle_filter='REFINED_LEE',
+    terrain_correction=True,
+    terrain_flattening_model='VOLUME',
+    dem='COPERNICUS_30'
+)
+
+# Apply corrections to a Sentinel-1 image
+image = ee.Image("COPERNICUS/S1_GRD/...")  # replace with your image ID
+processed = s1.apply_speckle_filter(s1.apply_terrain_correction(image))
+
 
 For complete examples, see the [example notebooks](examples_notebooks/) folder.
-
+```
 ---
 
 ## Roadmap 🗺️ 
 
-**v0.4.1 ✅ Multi-Sensor Professional Suite**
+**v0.5.0 ✅ Advanced SAR & Time Series Suite**  
 Status: **Released!**
 
-✅ **Sentinel-3 OLCI Support** - 21-band daily global coverage for water quality
+✅ **Sentinel-1 ARD Processor** – Terrain correction + multiple speckle filtering options  
+✅ **Time Series Analyzer** – Trend detection, seasonal dashboards, and phenology metrics  
+✅ **Extended NdviSeasonality** – Flexible periods (4, 12, 24, custom), ROI enhancements, SAR normalization  
+✅ **Improved Visualizations** – Publication-ready multi-panel dashboards  
 
-✅ **40+ Specialized Indices** - Comprehensive coverage across all sensors
+**v0.5.x 🎯 Cross-Annual Periods**  
+Status: **Planned (minor release before 0.6.0)**  
 
-✅ **Enhanced Water Quality** - Specialized aquatic monitoring capabilities
+📅 **Custom Year Start** – Agricultural seasons (Sep–Aug), hydrological years (Oct–Sep)  
+📅 **Cross-Calendar Logic** – Handle periods spanning multiple calendar years  
+📅 **Smart Period Naming** – Context-aware labels for non-standard years  
+📅 **Enhanced Date Handling** – More flexible `start_date`/`end_date`  
 
-✅ **SAR Orbit Control** - Precise geometric consistency options
+**v0.6.0 🔮 Next-Gen Analytics**  
+Status: **In development / Planned**
 
-✅ **Professional Architecture** - Clean, extensible, and well-documented
+🌐 **Multi-sensor Fusion** – Combine multiple satellite platforms in unified workflows  
+🤖 **Machine Learning Classification** – Integrated classifiers (e.g., Random Forest, SVM, CART) for land cover mapping and supervised analysis  
+📊 **Expanded Time Series Analysis** – Interactive plots, anomaly detection, advanced statistical metrics  
+🎨 **Enhanced Visualizations** – Interactive and publication-ready charting options  
+⚡ **Performance Optimizations** – Faster processing for large temporal datasets  
 
-**v0.5.0 🎯 Cross-Annual Periods**
-Status: In planning
-
-📅 **Custom Year Start** - Agricultural seasons (Sep-Aug), hydrological years (Oct-Sep)
-
-📅 **Cross-Calendar Logic** - Intelligent handling of periods spanning multiple calendar years
-
-📅 **Smart Period Naming** - Context-aware naming for custom year cycles
-
-📅 **Enhanced Date Handling** - Flexible start_date/end_date parameters
-
-Use cases: Agricultural monitoring, water management, institutional reporting
-
-**v0.6.0 🔮 Advanced Analytics**
-Status: Future
-
-📊 **Time Series Analysis** - Built-in trend analysis and anomaly detection
-
-🎨 **Enhanced Visualizations** - Interactive plots and advanced charting
-
-⚡ **Performance Optimizations** - Faster processing for large temporal datasets
-
-🌐 **Multi-sensor Fusion** - Combine data from multiple satellite platforms
-
-Use cases: Disaster monitoring, urban growth tracking, real-time environmental assessment
 
 ## Use Cases
 
@@ -404,5 +454,3 @@ This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.t
 ## Acknowledgments
 
 - Built on [Google Earth Engine](https://earthengine.google.com/) and [geemap](https://geemap.org/)
-- Developed as part of eLTER and SUMHAL projects
-- Special thanks to my colleagues at LAST-EBD and to Claude AI 🤖 for collaborative development support

@@ -1,3 +1,11 @@
-include LICENSE
+# Archivos de metadatos/documentación
+include LICENSE.txt
 include README.md
+include CHANGELOG.md
+include CONTRIBUTING.md
+
+# Tests (solo en sdist; no afectan al wheel)
+recursive-include tests *.py
+
+# Excluir datos pesados/no necesarios en la distribución
 exclude data/*

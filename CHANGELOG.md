@@ -6,6 +6,45 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 
 # Changelog
 
+## [0.5.1] - Unreleased
+
+### Planned
+- **Cross-Annual Period Support**  
+  - Custom year start (e.g., Sep–Aug for agricultural years, Oct–Sep for hydrological years)  
+  - Intelligent handling of periods spanning multiple calendar years  
+  - Smart period naming for non-standard year cycles  
+  - Enhanced date handling with flexible `start_date`/`end_date` parameters  
+
+_No functional changes have been released yet — this section tracks upcoming work for the next minor release._
+
+## [0.5.0] - 2025-08-28
+
+### Added
+
+- **🛰️ Sentinel-1 ARD Processor**: New `S1ARDProcessor` module for advanced SAR preprocessing:
+  - Radiometric terrain correction (angular method, Vollrath et al. 2020).
+  - Configurable speckle filters: Boxcar, Lee, Refined Lee, Gamma-MAP, Lee Sigma.
+  - Flexible DEM options (Copernicus 30/90, SRTM 30/90).
+- **📈 TimeSeriesAnalyzer**: New module for time series and phenological analysis:
+  - Robust extraction of temporal profiles from points or polygons.
+  - Trend analysis (Mann-Kendall, Linear regression, Sen’s slope).
+  - Comprehensive dashboards (trend, seasonality, autocorrelation, quality).
+  - Phenological metrics (SOS, EOS, POS, LOS, amplitude, growth/senescence rates).
+- **🌱 NdviSeasonality improvements**:
+  - Extended ROI handling: DEIMS sites, Sentinel-2 MGRS tiles, Landsat WRS path/row, shapefiles, GeoJSON.
+  - Flexible temporal periods (4, 12, 24, or custom definitions).
+  - Optional SAR normalization and enhanced orbit handling.
+  - More robust sensor-index validation.
+
+### Changed
+
+- **Visualization**: Unified plotting style with Seaborn/Matplotlib, clearer layouts.
+- **Documentation**: Updated examples covering SAR and time series analysis.
+
+### Fixed
+- More robust handling of null/NaN values in temporal extraction.
+- Minor bug fixes in period generation and export routines.
+
 ## [0.4.1] - 2025-07-21
 
 ### Added
@@ -25,6 +64,7 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 - **📊 Professional Architecture**: Clean, extensible design with enhanced error handling and documentation
 
 ### New Sentinel-3 Indices
+
 - **OCI** - OLCI Chlorophyll Index (optimized for S3)
 - **TSI** - Trophic State Index (water quality assessment) 
 - **CDOM** - Colored Dissolved Organic Matter Index
@@ -37,20 +77,24 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 - **Water Leaving Reflectance** - Aquatic reflectance analysis
 
 ### New SAR Indices
+
 - **RFDI** - Radar Forest Degradation Index (deforestation monitoring)
 - **VSDI** - Vegetation Scattering Diversity Index (structural diversity)
 
 ### Enhanced Features
+
 - **Intelligent Validation**: Smart index-sensor compatibility checking prevents invalid combinations
 - **Orbit Parameter**: Fine control over Sentinel-1 orbit selection (BOTH/ASCENDING/DESCENDING)
 - **Advanced Use Cases**: Support for pseudo-invariant area radiometric normalization workflows
 
 ### Changed
+
 - **Sentinel-2 to Surface Reflectance**: Upgraded from TOA to Surface Reflectance for better scientific quality
 - **Simplified Architecture**: Removed unnecessary complexity while maintaining full functionality
 - **Enhanced Documentation**: Professional-grade docstrings and examples
 
 ### Technical Improvements
+
 - Modular sensor setup with clean separation of concerns
 - Comprehensive sensor-index mapping and validation
 - Enhanced error messages for better user experience

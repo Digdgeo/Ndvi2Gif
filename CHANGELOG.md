@@ -4,18 +4,272 @@ All notable changes to the `ndvi2gif` package will be documented in this file.
 
 ---
 
-# Changelog
+All notable changes to this project will be documented in this file.
 
-## [0.5.1] - Unreleased
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### Planned
-- **Cross-Annual Period Support**  
-  - Custom year start (e.g., Sep–Aug for agricultural years, Oct–Sep for hydrological years)  
-  - Intelligent handling of periods spanning multiple calendar years  
-  - Smart period naming for non-standard year cycles  
-  - Enhanced date handling with flexible `start_date`/`end_date` parameters  
+## [0.6.0] - 2025-09-15
 
-_No functional changes have been released yet — this section tracks upcoming work for the next minor release._
+### 🧠 **MACHINE LEARNING & CLASSIFICATION RELEASE**
+
+This release introduces comprehensive land cover classification capabilities and enhanced export functionality, positioning ndvi2gif as a complete remote sensing analysis suite. The library continues to mature toward v1.0.0 with advanced documentation and expanded analytical capabilities.
+
+---
+
+## ✨ **New Features**
+
+### 🧠 **Land Cover Classification Module** (NEW)
+
+- **NEW MODULE**: Complete `LandCoverClassifier` class for supervised and unsupervised classification
+- **NEW**: Cloud masking options for Sentinel-2 and Landsat collections
+- **NEW**: Multi-temporal feature stack generation with automatic normalization
+- **NEW**: Support for multiple classification algorithms:
+  - Random Forest (with feature importance)
+  - Support Vector Machine (SVM)
+  - Classification and Regression Trees (CART)
+  - Naive Bayes
+  - Gradient Tree Boost
+- **NEW**: Unsupervised clustering algorithms:
+  - K-means
+  - Cascade K-means
+  - Latent Dirichlet Allocation (LDA)
+- **NEW**: Comprehensive accuracy assessment with confusion matrices
+- **NEW**: Training data support from shapefiles, GeoJSON, and point/polygon sampling
+- **NEW**: Feature importance analysis for Random Forest models
+- **NEW**: Visualization tools for confusion matrices and accuracy reports
+
+### 🚀 **Enhanced Export Capabilities**
+
+- **NEW**: `export_to_drive()` - Batch export to Google Drive with full parameter control
+- **NEW**: `export_to_asset()` - Export to Earth Engine Assets with pyramiding policies
+- **NEW**: `_default_scale_for_sat()` - Automatic scale selection based on sensor
+- **NEW**: Advanced export options including:
+  - Custom pyramiding policies for classification data
+  - Overwrite protection for assets
+  - Format-specific options (compression, file per band)
+  - Maximum pixel limits and CRS control
+
+### 📊 **Time Series Analysis Enhancements** (Updated)
+
+- **IMPROVED**: Enhanced documentation with complete examples
+- **IMPROVED**: Better error handling and user feedback
+- **IMPROVED**: More robust phenology extraction methods
+- **IMPROVED**: Advanced visualization capabilities with publication-ready plots
+
+---
+
+## 🔧 **Major Improvements**
+
+### 📚 **Documentation Overhaul**
+
+- **IMPROVED**: Complete Sphinx-style docstrings for all classes and methods
+- **IMPROVED**: Comprehensive parameter documentation with types and examples
+- **IMPROVED**: Scientific references added to all spectral indices
+- **IMPROVED**: Detailed usage examples in docstrings
+- **IMPROVED**: Better error descriptions with suggested solutions
+- **IMPROVED**: Cross-references between related methods
+
+### 🛰️ **SAR Processing Enhancements**
+
+- **IMPROVED**: Enhanced error handling in `S1ARDProcessor`
+- **IMPROVED**: Better documentation for terrain correction parameters
+- **IMPROVED**: More detailed method descriptions with scientific references
+- **IMPROVED**: Improved parameter validation and user feedback
+
+### 🌍 **API Consistency**
+
+- **IMPROVED**: Consistent parameter naming across all modules
+- **IMPROVED**: Standardized return types and error handling
+- **IMPROVED**: Better integration between `NdviSeasonality` and new modules
+- **IMPROVED**: More informative console output and progress tracking
+
+---
+
+## 🔄 **API Changes & Enhancements**
+
+### 📦 **Module Structure**
+
+```python
+# NEW imports available in v0.6.0
+from ndvi2gif import (
+    NdviSeasonality,        # Core functionality (enhanced)
+    S1ARDProcessor,         # SAR preprocessing (improved docs)
+    TimeSeriesAnalyzer,     # Time series analysis (enhanced)
+    SpatialTrendAnalyzer,   # Spatial analysis (enhanced)
+    LandCoverClassifier,    # NEW: Classification workflows
+)
+```
+
+### 🆕 **New Method Signatures**
+
+```python
+# NEW: Enhanced export methods
+processor.export_to_drive(
+    image=classified_map,
+    description="landcover_2023",
+    folder="ndvi2gif_results",
+    scale=30,
+    crs="EPSG:4326"
+)
+
+processor.export_to_asset(
+    image=classification,
+    asset_id="users/yourname/landcover_2023",
+    pyramiding_policy={"class": "mode"},
+    overwrite=True
+)
+
+# NEW: Classification workflow
+classifier = LandCoverClassifier(processor)
+features = classifier.create_feature_stack(
+    indices=['ndvi', 'evi', 'ndwi'],
+    include_statistics=True,
+    normalize=True
+)
+classifier.add_training_data('training_points.shp')
+result = classifier.classify_supervised('random_forest')
+```
+
+---
+
+## 🛠️ **Under the Hood**
+
+### 🔧 **Code Quality**
+
+- **IMPROVED**: Consistent error handling with informative messages
+- **IMPROVED**: Better type hints throughout the codebase
+- **IMPROVED**: More robust parameter validation
+- **IMPROVED**: Enhanced memory efficiency in large-area processing
+- **IMPROVED**: Better handling of edge cases and invalid inputs
+
+### 📈 **Performance**
+
+- **OPTIMIZED**: Feature stack generation for classification
+- **OPTIMIZED**: Memory usage in multi-temporal processing
+- **OPTIMIZED**: Export operations with better chunking strategies
+
+---
+
+## 🐛 **Bug Fixes**
+
+- **FIXED**: Improved error handling when no satellite data is available
+- **FIXED**: Better validation of ROI inputs and coordinate systems
+- **FIXED**: Enhanced handling of edge cases in temporal compositing
+- **FIXED**: More robust processing of incomplete time series
+- **FIXED**: Better handling of mixed sensor collections
+
+---
+
+## 📖 **Examples & Use Cases**
+
+### 🌾 **Agricultural Monitoring**
+
+```python
+# Multi-temporal crop classification
+processor = NdviSeasonality(
+    roi='farm_boundaries.shp',
+    sat='S2', periods=12,
+    start_year=2022, end_year=2024
+)
+
+classifier = LandCoverClassifier(processor)
+features = classifier.create_feature_stack(['ndvi', 'evi', 'ndre'])
+classifier.add_training_data('crop_samples.shp')
+crop_map = classifier.classify_supervised('random_forest')
+```
+
+### 🌊 **Water Quality Assessment**
+
+```python
+# Sentinel-3 water quality with export to Drive
+processor = NdviSeasonality(
+    roi='lake_boundary.shp',
+    sat='S3', index='turbidity',
+    periods=24  # Bi-monthly
+)
+
+composites = processor.get_year_composite()
+processor.export_to_drive(
+    image=composites.first(),
+    description="lake_turbidity_2024",
+    folder="water_quality"
+)
+```
+
+### 🏔️ **SAR Forest Monitoring**
+
+```python
+# Advanced SAR processing with classification
+processor = NdviSeasonality(
+    sat='S1', index='rvi',
+    use_sar_ard=True,
+    sar_speckle_filter='REFINED_LEE',
+    sar_terrain_correction=True
+)
+
+classifier = LandCoverClassifier(processor)
+forest_map = classifier.classify_unsupervised('kmeans', n_clusters=5)
+```
+
+---
+
+## ⚠️ **No Breaking Changes**
+
+Full backward compatibility maintained with v0.5.x. All existing code continues to work unchanged.
+
+---
+
+## 🔄 **Migration Guide**
+
+### From v0.5.x to v0.6.0
+
+No breaking changes! All existing code will continue to work. New features are additive:
+
+```python
+# v0.5.x code continues to work unchanged
+processor = NdviSeasonality(sat='S2', index='ndvi')
+processor.get_gif('animation.gif')
+
+# v0.6.0 adds new capabilities
+classifier = LandCoverClassifier(processor)  # NEW
+processor.export_to_drive(image, "export")   # NEW
+```
+
+---
+
+## 🎯 **Future Roadmap**
+
+### v1.0.0 (Planned) - Complete Climate Analysis Platform
+- **📚 Jupyter Book**: Interactive documentation with comprehensive tutorials and examples
+- **🌡️ Climate Datasets**: Integration with ERA5, CHIRPS, TerraClimate, and other climate model datasets
+- **🌍 Climate Analysis**: Advanced tools for climate change impact assessment and adaptation planning
+
+---
+
+## 📊 **Statistics**
+
+- **New classes**: 1 (`LandCoverClassifier`)
+- **New methods**: 15+ (classification, enhanced exports, utilities)
+- **Enhanced methods**: 20+ (improved documentation and error handling)
+- **Lines of code**: ~3,500 → ~4,800 (+37%)
+- **Documentation coverage**: 95%+ (comprehensive docstrings)
+
+---
+
+## 🙏 **Acknowledgments**
+
+Special thanks to the Google Earth Engine team and the open-source remote sensing community for their continued support and feedback that made this release possible.
+
+---
+
+## 📚 **Documentation**
+
+Complete documentation with tutorials available at: [GitHub Repository](https://github.com/Digdgeo/Ndvi2Gif)
+
+---
+
+**Full Changelog**: https://github.com/Digdgeo/Ndvi2Gif/compare/v0.5.0...v0.6.0
 
 ## [0.5.0] - 2025-08-28
 

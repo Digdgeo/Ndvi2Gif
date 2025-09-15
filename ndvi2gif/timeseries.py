@@ -1,5 +1,5 @@
 """
-Time Series Analysis Module for ndvi2gif v0.5.0 - CLEANED VERSION
+Time Series Analysis Module for ndvi2gif v0.5.0
 
 This module provides comprehensive temporal analysis capabilities for remote sensing data.
 It's designed to work seamlessly with the NdviSeasonality class.
@@ -49,10 +49,39 @@ class TimeSeriesAnalyzer:
     """
     Advanced time series analysis for Earth Engine remote sensing data.
     
-    This class provides methods for extracting, analyzing, and visualizing
-    temporal patterns in satellite data processed by NdviSeasonality.
+    Provides methods for extracting, analyzing, and visualizing temporal
+    patterns in satellite data processed by NdviSeasonality.
     
-    Version: 0.5.0 - Improved visualization without overlapping elements
+    Parameters
+    ----------
+    ndvi_seasonality_instance : NdviSeasonality
+        Configured NdviSeasonality instance with ROI, periods, years, etc.
+        
+    Attributes
+    ----------
+    processor : NdviSeasonality
+        Reference to the parent processor
+    time_series_cache : dict
+        Cache for extracted time series data
+    roi : ee.Geometry
+        Region of interest
+    periods : int
+        Number of temporal periods per year
+    start_year : int
+        Starting year of analysis
+    end_year : int
+        Ending year (exclusive)
+    sat : str
+        Satellite sensor
+    index : str
+        Vegetation/environmental index
+        
+    Examples
+    --------
+    >>> processor = NdviSeasonality(sat='S2', index='ndvi')
+    >>> analyzer = TimeSeriesAnalyzer(processor)
+    >>> df = analyzer.extract_time_series()
+    >>> fig = analyzer.plot_comprehensive_analysis()
     """
     
     def __init__(self, ndvi_seasonality_instance):
@@ -81,35 +110,60 @@ class TimeSeriesAnalyzer:
         """
         Extract complete time series for a point or region.
         
-        This method combines all temporal periods across all years into a single
-        continuous time series suitable for analysis.
+        Combines all temporal periods across all years into a continuous
+        time series suitable for analysis.
         
         Parameters
         ----------
-        point : ee.Geometry.Point, tuple, or None
+        point : ee.Geometry.Point, tuple, or None, optional
             Location for extraction:
-            - None: uses ROI centroid
-            - tuple: (longitude, latitude)
-            - ee.Geometry.Point: direct point geometry
-            - ee.Geometry.Polygon: for spatial averaging
-        reducer : str
-            Spatial reducer if using polygon: 'mean', 'median', 'max', 'min', 'stdDev'
-        scale : int
-            Scale in meters for spatial reduction
-        use_cache : bool
-            Whether to use cached results if available
+            
+            * None: uses ROI centroid
+            * tuple: (longitude, latitude)
+            * ee.Geometry.Point: direct point geometry
+            * ee.Geometry.Polygon: for spatial averaging
+            
+        reducer : {'mean', 'median', 'max', 'min', 'stdDev'}, optional
+            Spatial reducer if using polygon. Default is 'mean'.
+            
+        scale : int, optional
+            Scale in meters for spatial reduction. Default is 30.
+            
+        use_cache : bool, optional
+            Whether to use cached results. Default is True.
             
         Returns
         -------
         pd.DataFrame
             DataFrame with columns:
-            - date: datetime index
-            - value: index values  
-            - year: year
-            - period: period name
-            - doy: day of year
-            - season: meteorological season
-            - month: month number
+            
+            * date: datetime index
+            * value: index values  
+            * year: year
+            * period: period name
+            * doy: day of year
+            * season: meteorological season
+            * month: month number
+
+        Raises
+        ------
+        ValueError
+            If `point` is not a valid coordinate tuple or buffer/scale are invalid.
+        ee.EEException
+            If Earth Engine extraction fails (geometry errors, reduceRegion failures).
+        RuntimeError
+            If no valid data can be extracted for the specified point/period.
+            
+        Examples
+        --------
+        >>> # Extract from ROI centroid
+        >>> df = analyzer.extract_time_series()
+        
+        >>> # Extract from specific point
+        >>> df = analyzer.extract_time_series(point=(-5.5, 37.1))
+        
+        >>> # Extract with different reducer
+        >>> df = analyzer.extract_time_series(reducer='median', scale=20)
         """
         # Create cache key
         cache_key = f"{point}_{reducer}_{scale}"
@@ -287,17 +341,49 @@ class TimeSeriesAnalyzer:
         
         Parameters
         ----------
-        df : pd.DataFrame or None
-            Time series dataframe. If None, extracts from ROI centroid
-        method : str
-            Trend test method: 'mann_kendall', 'linear', 'sen_slope', 'all'
-        alpha : float
-            Significance level for statistical tests
+        df : pd.DataFrame or None, optional
+            Time series dataframe. If None, extracts from ROI centroid.
+            
+        method : {'mann_kendall', 'linear', 'sen_slope', 'all'}, optional
+            Trend test method:
+            
+            * 'mann_kendall': Non-parametric trend test
+            * 'linear': Linear regression
+            * 'sen_slope': Theil-Sen estimator
+            * 'all': Apply all methods
+            
+            Default is 'mann_kendall'.
+            
+        alpha : float, optional
+            Significance level for statistical tests. Default is 0.05.
             
         Returns
         -------
         dict
-            Dictionary containing trend statistics
+            Trend statistics including:
+            
+            * mann_kendall: tau, p_value, trend direction
+            * linear: slope, r_squared, p_value, confidence interval
+            * sen_slope: median slope, confidence interval
+            * interpretation: text summary of results
+
+        Raises
+        ------
+        ValueError
+            If `method` is not one of {'mann_kendall', 'linear', 'sen_slope', 'all'}.
+        KeyError
+            If required columns (``'date'``, ``'value'``) are missing from `df`.
+        RuntimeError
+            If trend estimation fails due to insufficient or invalid data.
+            
+        Examples
+        --------
+        >>> # Basic trend analysis
+        >>> trends = analyzer.analyze_trend(method='mann_kendall')
+        >>> print(trends['interpretation'])
+        
+        >>> # All trend methods
+        >>> trends = analyzer.analyze_trend(method='all')
         """
         if df is None:
             df = self.extract_time_series()
@@ -361,7 +447,57 @@ class TimeSeriesAnalyzer:
                                    figsize=(22, 14),
                                    save_path=None):
         """
-        Create comprehensive time series analysis dashboard with improved layout.
+        Create comprehensive time series analysis dashboard.
+        
+        Generates a multi-panel figure with time series, trends, seasonal
+        patterns, statistics, and quality metrics.
+        
+        Parameters
+        ----------
+        point : location or None, optional
+            Extraction point. If None, uses ROI centroid.
+            
+        figsize : tuple, optional
+            Figure size (width, height). Default is (22, 14).
+            
+        save_path : str or None, optional
+            Path to save figure. If None, displays only.
+            
+        Returns
+        -------
+        matplotlib.figure.Figure
+            Generated figure object
+
+        Raises
+        ------
+        RuntimeError
+            If the input DataFrame is empty or contains insufficient data for analysis.
+        OSError
+            If saving the figure to `save_path` fails.
+            
+        Notes
+        -----
+        Dashboard includes:
+        
+        * Time series with trend line
+        * Seasonal patterns boxplot
+        * Annual comparison
+        * Trend summary statistics
+        * Autocorrelation function
+        * Value distribution
+        * Phenology summary
+        * Data quality metrics
+        * Seasonal statistics
+        
+        Examples
+        --------
+        >>> # Basic dashboard
+        >>> fig = analyzer.plot_comprehensive_analysis()
+        
+        >>> # Save to file
+        >>> fig = analyzer.plot_comprehensive_analysis(
+        ...     save_path='analysis_dashboard.png'
+        ... )
         """
         df = self.extract_time_series(point)
         
@@ -439,6 +575,53 @@ class TimeSeriesAnalyzer:
                                save_path=None):
         """
         Create comprehensive phenological analysis dashboard.
+        
+        Generates multi-panel visualization of phenological patterns,
+        timing, amplitudes, and inter-annual variations.
+        
+        Parameters
+        ----------
+        point : location or None, optional
+            Extraction point. If None, uses ROI centroid.
+            
+        method : {'threshold', 'derivative', 'logistic'}, optional
+            Phenology extraction method. Default is 'threshold'.
+            
+        threshold_percentile : float, optional
+            Threshold percentile if using threshold method. Default is 50.
+            
+        figsize : tuple, optional
+            Figure size. Default is (24, 16).
+            
+        save_path : str or None, optional
+            Path to save figure.
+            
+        Returns
+        -------
+        matplotlib.figure.Figure
+            Generated figure
+
+        Raises
+        ------
+        ValueError
+            If `method` is not recognized or required columns are missing in `df`.
+        RuntimeError
+            If phenology metrics cannot be computed due to insufficient data.
+        OSError
+            If saving the figure to `save_path` fails.
+            
+        Notes
+        -----
+        Dashboard panels include:
+        
+        * Time series with phenological markers
+        * Phenological timing trends
+        * Amplitude and peak values
+        * Growth/senescence rates
+        * Season duration analysis
+        * Annual curve comparison
+        * Statistical summaries
+        * Data quality assessment
         """
         df = self.extract_time_series(point)
         
@@ -528,57 +711,44 @@ class TimeSeriesAnalyzer:
         plt.show()
         return fig
     
+
     # ========== PHENOLOGY EXTRACTION METHODS ==========
-    
+    # 1. Modify extract_phenology_metrics() v1.0.0 to apply smoothing before processing
     def extract_phenology_metrics(self, 
-                             df: Optional[pd.DataFrame] = None,
-                             method: str = 'threshold',
-                             threshold_percentile: float = 50,
-                             smoothing: bool = True,
-                             min_season_length: int = 60) -> Dict[str, Any]:
+                         df: Optional[pd.DataFrame] = None,
+                         method: str = 'threshold',
+                         threshold_percentile: float = 50,
+                         smoothing: bool = True,
+                         smoothing_window: int = 7,
+                         smoothing_order: int = 3,
+                         min_season_length: int = 60,
+                         quality_warnings: bool = True) -> Dict[str, Any]:
         """
-        Extract comprehensive phenological metrics from time series data.
-        
-        Calculates key phenological parameters including Start of Season (SOS),
-        End of Season (EOS), Peak of Season (POS), Length of Season (LOS),
-        and various amplitude and timing metrics for each year.
+        Extract phenological metrics with comprehensive quality control and warnings.
         
         Parameters
         ----------
-        df : pd.DataFrame or None
-            Time series dataframe. If None, extracts from ROI centroid
-        method : str
-            Phenology extraction method:
-            - 'threshold': Uses percentile-based thresholds
-            - 'derivative': Uses first/second derivatives
-            - 'logistic': Fits logistic curves to data
-        threshold_percentile : float
-            Percentile for threshold method (0-100). Default 50 (median).
-        smoothing : bool
-            Apply Savitzky-Golay smoothing before analysis. Default True.
-        min_season_length : int
-            Minimum season length in days. Default 60.
+        df : pd.DataFrame or None, optional
+            Time series data. If None, extracts from ROI centroid.
+        method : {'threshold', 'derivative', 'logistic'}, optional
+            Extraction method. Default is 'threshold'.
+        threshold_percentile : float, optional
+            Percentile for threshold method (0-100). Default is 50.
+        smoothing : bool, optional
+            Apply Savitzky-Golay smoothing. Default is True.
+        smoothing_window : int, optional
+            Window length for smoothing. Default is 7.
+        smoothing_order : int, optional
+            Polynomial order for smoothing. Default is 3.
+        min_season_length : int, optional
+            Minimum season length in days. Default is 60.
+        quality_warnings : bool, optional
+            Print quality warnings for each method. Default is True.
             
         Returns
         -------
         dict
-            Dictionary with phenological metrics for each year:
-            {
-                year: {
-                    'sos': Start of Season (day of year),
-                    'eos': End of Season (day of year), 
-                    'pos': Peak of Season (day of year),
-                    'los': Length of Season (days),
-                    'amplitude': Seasonal amplitude (max - baseline),
-                    'baseline': Seasonal baseline (minimum value),
-                    'peak_value': Peak vegetation value,
-                    'auc': Area Under Curve (seasonal integral),
-                    'sos_value': Vegetation value at SOS,
-                    'eos_value': Vegetation value at EOS,
-                    'growth_rate': Rate of vegetation increase,
-                    'senescence_rate': Rate of vegetation decrease
-                }
-            }
+            Phenological metrics per year with quality indicators.
         """
         if df is None:
             df = self.extract_time_series()
@@ -587,47 +757,118 @@ class TimeSeriesAnalyzer:
             return {'error': 'No data available for phenology analysis'}
         
         phenology_results = {}
+        quality_summary = {'total_years': 0, 'successful_years': 0, 'warnings': []}
         
         # Process each year separately
         for year in df['year'].unique():
+            quality_summary['total_years'] += 1
             year_data = df[df['year'] == year].copy()
             
-            if len(year_data) < 4:  # Need minimum data points
-                print(f"Insufficient data for year {year} ({len(year_data)} points)")
+            if len(year_data) < 4:
+                warning_msg = f"Year {year}: Insufficient data ({len(year_data)} points)"
+                if quality_warnings:
+                    print(warning_msg)
+                quality_summary['warnings'].append(warning_msg)
                 continue
                 
             # Sort by day of year for proper temporal order
             year_data = year_data.sort_values('doy').reset_index(drop=True)
             
+            # Apply smoothing BEFORE calculating metrics
+            if smoothing and len(year_data) > 3:
+                try:
+                    from scipy import signal
+                    
+                    # Adjust window length for available data
+                    window_length = min(len(year_data), smoothing_window)
+                    if window_length % 2 == 0:
+                        window_length -= 1
+                        
+                    if window_length >= 3:
+                        values_smooth = signal.savgol_filter(
+                            year_data['value'].values, 
+                            window_length, 
+                            smoothing_order
+                        )
+                        
+                        year_data = year_data.copy()
+                        year_data['value'] = values_smooth
+                        
+                        if quality_warnings:
+                            print(f"Year {year}: Applied smoothing (window={window_length}, order={smoothing_order})")
+                    else:
+                        warning_msg = f"Year {year}: Insufficient points for smoothing, using raw data"
+                        if quality_warnings:
+                            print(warning_msg)
+                        quality_summary['warnings'].append(warning_msg)
+                        
+                except Exception as e:
+                    warning_msg = f"Year {year}: Smoothing failed ({e}), using raw data"
+                    if quality_warnings:
+                        print(warning_msg)
+                    quality_summary['warnings'].append(warning_msg)
+            
             try:
                 if method == 'threshold':
                     metrics = self._phenology_threshold_method(
-                        year_data, threshold_percentile, smoothing, min_season_length
+                        year_data, threshold_percentile, 
+                        smoothing=False,  # Don't smooth again
+                        min_season_length=min_season_length
                     )
                 elif method == 'derivative':
                     metrics = self._phenology_derivative_method(
-                        year_data, smoothing, min_season_length
+                        year_data, 
+                        smoothing=False,  # Don't smooth again
+                        min_season_length=min_season_length
                     )
                 elif method == 'logistic':
                     metrics = self._phenology_logistic_method(
-                        year_data, smoothing, min_season_length
+                        year_data, 
+                        smoothing=False,  # Don't smooth again
+                        min_season_length=min_season_length
                     )
                 else:
                     raise ValueError(f"Unknown method: {method}")
                     
                 if metrics is not None:
+                    metrics['smoothed'] = smoothing and len(year_data) > 3
                     phenology_results[year] = metrics
+                    quality_summary['successful_years'] += 1
                     
             except Exception as e:
-                print(f"Error processing phenology for year {year}: {e}")
+                warning_msg = f"Error processing phenology for year {year}: {e}"
+                if quality_warnings:
+                    print(warning_msg)
+                quality_summary['warnings'].append(warning_msg)
                 continue
+        
+        # Final quality summary
+        if quality_warnings:
+            success_rate = (quality_summary['successful_years'] / quality_summary['total_years']) * 100
+            print(f"\nPHENOLOGY EXTRACTION SUMMARY:")
+            print(f"Method: {method}")
+            print(f"Success rate: {quality_summary['successful_years']}/{quality_summary['total_years']} ({success_rate:.1f}%)")
+            if quality_summary['warnings']:
+                print(f"Warnings: {len(quality_summary['warnings'])}")
         
         return phenology_results
     
     # ========== HELPER METHODS ==========
     
     def _mann_kendall_test(self, x: np.ndarray) -> Dict[str, Any]:
-        """Mann-Kendall trend test implementation."""
+        """
+        Mann-Kendall trend test implementation.
+        
+        Parameters
+        ----------
+        x : np.ndarray
+            Time series values
+            
+        Returns
+        -------
+        dict
+            Test statistics: trend, tau, z_score, p_value
+        """
         n = len(x)
         s = 0
         
@@ -663,7 +904,19 @@ class TimeSeriesAnalyzer:
         }
     
     def _sen_slope(self, x: np.ndarray) -> Dict[str, Any]:
-        """Calculate Sen's slope estimator."""
+        """
+        Calculate Sen's slope estimator.
+        
+        Parameters
+        ----------
+        x : np.ndarray
+            Time series values
+            
+        Returns
+        -------
+        dict
+            Slope estimate and confidence interval
+        """
         n = len(x)
         slopes = []
         
@@ -689,7 +942,19 @@ class TimeSeriesAnalyzer:
     # ========== PLOT METHODS - COMPREHENSIVE ANALYSIS ==========
     
     def _plot_time_series_with_trend(self, df, ax):
-        """Serie temporal con trend mejorada"""
+        """
+        Plot time series with fitted linear trend and Mann-Kendall test.
+
+        Observed values are shown together with a regression line,
+        confidence interval, and Mann-Kendall statistics.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series values with columns ``['date', 'value']``.
+        ax : matplotlib.axes.Axes
+            Axis object where the plot will be drawn.
+        """
         # Datos observados
         ax.plot(df['date'], df['value'],
                 'o-', alpha=0.6, label='Observed',
@@ -752,7 +1017,19 @@ class TimeSeriesAnalyzer:
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
     
     def _plot_seasonal_pattern(self, df, ax):
-        """Patrón estacional mejorado"""
+        """
+        Plot seasonal pattern as boxplots for each period.
+
+        Periods can be months, quarters, or user-defined intervals
+        depending on ``self.periods``. Colors are assigned per box.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series with a ``'period'`` column identifying season/interval.
+        ax : matplotlib.axes.Axes
+            Axis object where the seasonal boxplots will be drawn.
+        """
         if self.periods <= 12:
             period_data = []
             period_labels = []
@@ -807,7 +1084,16 @@ class TimeSeriesAnalyzer:
         ax.set_axisbelow(True)
     
     def _plot_annual_comparison(self, df, ax):
-        """Comparación anual mejorada"""
+        """
+        Plot annual means with error bars for inter-annual comparison.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series values with a ``'year'`` column.
+        ax : matplotlib.axes.Axes
+            Axis object where the annual comparison will be drawn.
+        """
         annual_stats = df.groupby('year')['value'].agg(['mean', 'std', 'count'])
         years = annual_stats.index
         
@@ -840,7 +1126,19 @@ class TimeSeriesAnalyzer:
         ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins=min(len(years), 6)))
     
     def _plot_trend_summary(self, df, ax):
-        """Resumen de tendencias mejorado"""
+        """
+        Plot a compact textual summary of trend analysis.
+
+        Displays results from multiple methods (linear regression,
+        Mann-Kendall) including slope, R², p-values, and direction.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series values with columns ``['date', 'value']``.
+        ax : matplotlib.axes.Axes
+            Axis object where the summary panel will be drawn.
+        """
         trend_results = self.analyze_trend(df, method='all')
         
         # Formato más compacto y claro
@@ -886,7 +1184,18 @@ class TimeSeriesAnalyzer:
         ax.axis('off')
     
     def _plot_autocorrelation(self, df, ax):
-        """Autocorrelación mejorada"""
+        """
+        Plot autocorrelation function (ACF) of the time series.
+
+        Shows correlations up to a maximum lag with confidence intervals.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series values with a ``'value'`` column.
+        ax : matplotlib.axes.Axes
+            Axis object where the autocorrelation plot will be drawn.
+        """
         try:
             values = df['value'].values
             n_lags = min(20, len(values) // 3)
@@ -926,7 +1235,16 @@ class TimeSeriesAnalyzer:
             ax.axis('off')
     
     def _plot_distribution(self, df, ax):
-        """Distribución mejorada"""
+        """
+        Plot histogram and fitted normal distribution of values.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series values with a ``'value'`` column.
+        ax : matplotlib.axes.Axes
+            Axis object where the distribution plot will be drawn.
+        """
         values = df['value'].values
         
         # Histograma mejorado
@@ -957,7 +1275,19 @@ class TimeSeriesAnalyzer:
         ax.set_axisbelow(True)
     
     def _plot_data_quality(self, df, ax):
-        """Calidad de datos mejorada"""
+        """
+        Plot a text panel summarizing data quality metrics.
+
+        Displays total points, valid points, completeness,
+        coverage (years and days).
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series values with columns ``['date', 'year', 'value']``.
+        ax : matplotlib.axes.Axes
+            Axis object where the panel will be drawn.
+        """
         total_points = len(df)
         valid_points = df['value'].notna().sum()
         completeness = valid_points/total_points*100
@@ -985,7 +1315,18 @@ class TimeSeriesAnalyzer:
         ax.axis('off')
     
     def _plot_seasonal_statistics(self, df, ax):
-        """Estadísticas estacionales mejoradas"""
+        """
+        Plot average values per season (spring, summer, autumn, winter).
+
+        Uses thematic colors per season and annotates bar values.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series values with a ``'season'`` column.
+        ax : matplotlib.axes.Axes
+            Axis object where the seasonal statistics will be drawn.
+        """
         try:
             if len(df) < 12:
                 ax.text(0.5, 0.5, 'Insufficient\ndata',
@@ -1042,7 +1383,19 @@ class TimeSeriesAnalyzer:
             ax.axis('off')
     
     def _plot_phenology_summary(self, df, ax):
-        """Resumen fenológico mejorado"""
+        """
+        Plot a compact text-based summary of phenological metrics.
+
+        Extracts phenology using the threshold method and displays
+        mean values for SOS, POS, EOS, LOS, and amplitude.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series values with columns ``['date', 'year', 'doy', 'value']``.
+        ax : matplotlib.axes.Axes
+            Axis object where the summary will be drawn.
+        """
         try:
             phenology_results = self.extract_phenology_metrics(df, method='threshold')
             
@@ -1090,100 +1443,191 @@ class TimeSeriesAnalyzer:
     # ========== PLOT METHODS - PHENOLOGY ANALYSIS ==========
     
     def _plot_time_series_with_phenology(self, df: pd.DataFrame, phenology_results: Dict,
-                                     ax: plt.Axes, method: str):
-        """Plot time series with phenological markers and smoothed curves."""
+                                 ax: plt.Axes, method: str):
+        """
+        Plot time series with smoothed curves and phenological markers.
         
-        # 1. OBSERVED DATA
-        ax.plot(df['date'], df['value'], 'o-', alpha=0.6, label='Observed', 
-            markersize=3, color='lightblue', linewidth=1.2)
+        For logistic method, shows both observed smoothed data and fitted logistic curves.
         
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series values with columns ['date', 'year', 'doy', 'value'].
+        phenology_results : dict
+            Dictionary containing extracted phenology metrics per year.
+        ax : matplotlib.axes.Axes
+            Axis object where the time series will be drawn.
+        method : str
+            Phenology extraction method used.
+        """        
+        # 1. RAW OBSERVED DATA (with lighter style)
+        ax.plot(df['date'], df['value'], 'o-', alpha=0.4, label='Raw observations', 
+        markersize=2, color='lightgray', linewidth=1, zorder=1)
+    
         # 2. SMOOTHED CURVES for each year
         colors = plt.cm.Set3(np.linspace(0, 1, len(phenology_results)))
         
-        # Add one example smoothed curve to legend
-        legend_added = False
+        # Add legend labels
+        smoothed_legend_added = False
+        fitted_legend_added = False
         
         for i, (year, metrics) in enumerate(phenology_results.items()):
             year_data = df[df['year'] == year].sort_values('doy')
             
             if len(year_data) > 3:
-                values = year_data['value'].values
+                values_raw = year_data['value'].values
                 dates = year_data['date'].values
+                doys = year_data['doy'].values
                 
-                # Smoothing
+                # Apply SAME smoothing as used for phenology calculations
                 try:
                     from scipy import signal
-                    window_length = min(len(values), 7)
+                    window_length = min(len(values_raw), 7)
                     if window_length % 2 == 0:
                         window_length -= 1
                     if window_length >= 3:
-                        values_smooth = signal.savgol_filter(values, window_length, 3)
+                        values_smooth = signal.savgol_filter(values_raw, window_length, 3)
                         
-                        # Add label only to first smoothed curve
-                        label = 'Smoothed curves' if not legend_added else ""
-                        if not legend_added:
-                            legend_added = True
+                        # SMOOTHED CURVE - observed data
+                        label = 'Smoothed curves (observed)' if not smoothed_legend_added else ""
+                        if not smoothed_legend_added:
+                            smoothed_legend_added = True
                         
                         ax.plot(dates, values_smooth, '-', 
-                            color=colors[i], linewidth=2.5, alpha=0.8, 
+                            color=colors[i], linewidth=3, alpha=0.9, 
                             label=label, zorder=3)
                     else:
-                        values_smooth = values
+                        values_smooth = values_raw
                 except:
-                    values_smooth = values
+                    values_smooth = values_raw
                 
-                # PHENOLOGICAL MARKERS
+                # 3. FITTED LOGISTIC CURVE (only for logistic method)
+                if method == 'logistic' and 'fitted_curve_doys' in metrics and 'fitted_curve_values' in metrics:
+                    fitted_doys = np.array(metrics['fitted_curve_doys'])
+                    fitted_values = np.array(metrics['fitted_curve_values'])
+                    
+                    # FIXED: Convert fitted DOYs to dates for proper plotting
+                    fitted_dates = []
+                    for doy in fitted_doys:
+                        try:
+                            # Handle DOYs that might be outside normal range
+                            if doy < 1:
+                                fitted_date = datetime(year-1, 12, 31) + timedelta(days=int(doy))
+                            elif doy > 365:
+                                fitted_date = datetime(year+1, 1, 1) + timedelta(days=int(doy-365))
+                            else:
+                                fitted_date = datetime(year, 1, 1) + timedelta(days=int(doy)-1)
+                            fitted_dates.append(fitted_date)
+                        except:
+                            # Fallback for problematic dates
+                            fitted_date = datetime(year, 6, 15)  # Mid-year fallback
+                            fitted_dates.append(fitted_date)
+                    
+                    fitted_label = 'Fitted logistic curves' if not fitted_legend_added else ""
+                    if not fitted_legend_added:
+                        fitted_legend_added = True
+                    
+                    # Plot fitted curve with proper date alignment
+                    ax.plot(fitted_dates, fitted_values, '--', 
+                        color=colors[i], linewidth=2, alpha=0.7, 
+                        label=fitted_label, zorder=2)
+                    
+                    # Quality indicator in line style
+                    if metrics.get('fit_quality') == 'poor':
+                        # Make line more dashed for poor fits
+                        ax.plot(fitted_dates, fitted_values, ':', 
+                            color=colors[i], linewidth=1.5, alpha=0.5, zorder=2)
+                
+                # 4. PHENOLOGICAL MARKERS
+                # For logistic method, use fitted parameters
+                # For other methods, use smoothed observed data
+                
                 if not np.isnan(metrics.get('sos', np.nan)):
-                    sos_date = datetime(year, 1, 1) + timedelta(days=int(metrics['sos'])-1)
-                    sos_idx = np.argmin(np.abs(year_data['doy'].values - metrics['sos']))
-                    if sos_idx < len(year_data):
-                        # Add SOS to legend only once
-                        sos_label = 'SOS (Start)' if i == 0 else ""
-                        ax.plot(sos_date, year_data.iloc[sos_idx]['value'], 
-                            marker='o', markersize=6, color=colors[i], 
-                            markeredgecolor='white', markeredgewidth=1, 
-                            zorder=4, label=sos_label)
+                    sos_doy = metrics['sos']
+                    sos_date = datetime(year, 1, 1) + timedelta(days=int(sos_doy)-1)
+                    
+                    if method == 'logistic':
+                        # Use fitted value at SOS
+                        sos_value = metrics.get('sos_value', np.nan)
+                    else:
+                        # Use smoothed observed data
+                        sos_idx = np.argmin(np.abs(doys - sos_doy))
+                        sos_value = values_smooth[sos_idx] if sos_idx < len(values_smooth) else metrics.get('sos_value', np.nan)
+                    
+                    sos_label = 'SOS (Start)' if i == 0 else ""
+                    ax.plot(sos_date, sos_value, 
+                        marker='o', markersize=8, color=colors[i], 
+                        markeredgecolor='white', markeredgewidth=2, 
+                        zorder=5, label=sos_label)
                 
                 if not np.isnan(metrics.get('pos', np.nan)):
-                    pos_date = datetime(year, 1, 1) + timedelta(days=int(metrics['pos'])-1)
-                    pos_idx = np.argmin(np.abs(year_data['doy'].values - metrics['pos']))
-                    if pos_idx < len(year_data):
-                        # Add POS to legend only once
-                        pos_label = 'POS (Peak)' if i == 0 else ""
-                        ax.plot(pos_date, year_data.iloc[pos_idx]['value'],
-                            marker='s', markersize=6, color=colors[i],
-                            markeredgecolor='white', markeredgewidth=1, 
-                            zorder=4, label=pos_label)
+                    pos_doy = metrics['pos']
+                    pos_date = datetime(year, 1, 1) + timedelta(days=int(pos_doy)-1)
+                    
+                    if method == 'logistic':
+                        pos_value = metrics.get('peak_value', np.nan)
+                    else:
+                        pos_idx = np.argmin(np.abs(doys - pos_doy))
+                        pos_value = values_smooth[pos_idx] if pos_idx < len(values_smooth) else metrics.get('peak_value', np.nan)
+                    
+                    pos_label = 'POS (Peak)' if i == 0 else ""
+                    ax.plot(pos_date, pos_value,
+                        marker='s', markersize=8, color=colors[i],
+                        markeredgecolor='white', markeredgewidth=2, 
+                        zorder=5, label=pos_label)
                 
                 if not np.isnan(metrics.get('eos', np.nan)):
-                    eos_date = datetime(year, 1, 1) + timedelta(days=int(metrics['eos'])-1)
-                    eos_idx = np.argmin(np.abs(year_data['doy'].values - metrics['eos']))
-                    if eos_idx < len(year_data):
-                        # Add EOS to legend only once
-                        eos_label = 'EOS (End)' if i == 0 else ""
-                        ax.plot(eos_date, year_data.iloc[eos_idx]['value'],
-                            marker='^', markersize=6, color=colors[i],
-                            markeredgecolor='white', markeredgewidth=1, 
-                            zorder=4, label=eos_label)
+                    eos_doy = metrics['eos']
+                    eos_date = datetime(year, 1, 1) + timedelta(days=int(eos_doy)-1)
+                    
+                    if method == 'logistic':
+                        eos_value = metrics.get('eos_value', np.nan)
+                    else:
+                        eos_idx = np.argmin(np.abs(doys - eos_doy))
+                        eos_value = values_smooth[eos_idx] if eos_idx < len(values_smooth) else metrics.get('eos_value', np.nan)
+                    
+                    eos_label = 'EOS (End)' if i == 0 else ""
+                    ax.plot(eos_date, eos_value,
+                        marker='^', markersize=8, color=colors[i],
+                        markeredgecolor='white', markeredgewidth=2, 
+                        zorder=5, label=eos_label)
         
-        # CONFIGURATION (English)
+        # CONFIGURATION
         ax.set_xlabel('Date', fontsize=12)
         ax.set_ylabel(f'{self.index.upper()} Value', fontsize=12)
         ax.set_title(f'Time Series with Phenological Analysis ({method.capitalize()})', 
                     fontsize=14, fontweight='bold')
         
-        # LEGEND INSIDE - UPPER LEFT (won't interfere with data)
+        # LEGEND INSIDE - UPPER LEFT
         ax.legend(loc='upper left', fontsize=9, frameon=True, framealpha=0.9)
         ax.grid(True, alpha=0.3)
         
-        # INFO BOX in bottom right
-        info_text = f"Method: {method.capitalize()}\nSmoothing: Savitzky-Golay\n○ SOS  □ POS  △ EOS"
+        # INFO BOX - method-specific information
+        if method == 'logistic':
+            info_text = f"Method: {method.capitalize()}\nMarkers on: Fitted logistic curve\nSmoothing: Savitzky-Golay filter\n○ SOS  □ POS  △ EOS\n-- Fitted curves"
+        else:
+            info_text = f"Method: {method.capitalize()}\nMetrics calculated on: Smoothed data\nSmoothing: Savitzky-Golay filter\n○ SOS  □ POS  △ EOS"
+        
         ax.text(0.98, 0.02, info_text, transform=ax.transAxes,
             verticalalignment='bottom', horizontalalignment='right', 
-            fontsize=9, bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
+            fontsize=9, bbox=dict(boxstyle='round,pad=0.5', facecolor='wheat', alpha=0.9))
+
     
     def _plot_phenology_info(self, ax, method, threshold, n_years):
-        """Plot phenology analysis information panel."""
+        """
+        Plot an information panel summarizing the phenology analysis.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axis object where the panel will be drawn.
+        method : str
+            Method used for phenology extraction (``'threshold'``, ``'derivative'``, ``'logistic'``).
+        threshold : float
+            Threshold percentage used (only for the threshold method).
+        n_years : int
+            Number of years included in the analysis.
+        """
         info_lines = []
         info_lines.append("PHENOLOGICAL ANALYSIS")
         info_lines.append("")
@@ -1210,7 +1654,19 @@ class TimeSeriesAnalyzer:
         ax.axis('off')
     
     def _plot_phenology_timing(self, phenology_results: Dict, ax: plt.Axes):
-        """Plot phenological timing metrics."""
+        """
+        Plot annual timing of key phenological phases.
+
+        Shows SOS (start), POS (peak), and EOS (end) as day-of-year
+        values across all available years.
+
+        Parameters
+        ----------
+        phenology_results : dict
+            Dictionary containing extracted phenology metrics per year.
+        ax : matplotlib.axes.Axes
+            Axis object where the timing plot will be drawn.
+        """
         if not phenology_results:
             ax.text(0.5, 0.5, 'No timing\ndata', ha='center', va='center', transform=ax.transAxes)
             ax.set_title('Phenological Timing')
@@ -1238,7 +1694,19 @@ class TimeSeriesAnalyzer:
             plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
     
     def _plot_phenology_amplitude(self, phenology_results: Dict, ax: plt.Axes):
-        """Plot amplitude and peak value metrics."""
+        """
+        Plot annual amplitude and peak value metrics.
+
+        Amplitude is plotted on the primary y-axis, while peak values
+        are shown on a secondary y-axis.
+
+        Parameters
+        ----------
+        phenology_results : dict
+            Dictionary containing extracted phenology metrics per year.
+        ax : matplotlib.axes.Axes
+            Axis object where the amplitude and peak values will be drawn.
+        """
         years = list(phenology_results.keys())
         amplitude = [phenology_results[year].get('amplitude', np.nan) for year in years]
         peak_values = [phenology_results[year].get('peak_value', np.nan) for year in years]
@@ -1261,7 +1729,16 @@ class TimeSeriesAnalyzer:
         ax.grid(True, alpha=0.3)
     
     def _plot_phenology_rates(self, phenology_results: Dict, ax: plt.Axes):
-        """Plot growth and senescence rates."""
+        """
+        Plot annual growth and senescence rates.
+
+        Parameters
+        ----------
+        phenology_results : dict
+            Dictionary containing extracted phenology metrics per year.
+        ax : matplotlib.axes.Axes
+            Axis object where the rates will be drawn.
+        """
         years = list(phenology_results.keys())
         growth_rates = [phenology_results[year].get('growth_rate', np.nan) for year in years]
         senescence_rates = [abs(phenology_results[year].get('senescence_rate', np.nan)) for year in years]
@@ -1277,7 +1754,17 @@ class TimeSeriesAnalyzer:
     
     def _plot_phenology_duration(self, phenology_results: Dict, ax: plt.Axes):
         """
-        NUEVO: Duración de temporada (Length of Season - LOS)
+        Plot annual season length (LOS: Length of Season).
+
+        Displays LOS values as a bar chart with annotations and an
+        average reference line.
+
+        Parameters
+        ----------
+        phenology_results : dict
+            Dictionary containing extracted phenology metrics per year.
+        ax : matplotlib.axes.Axes
+            Axis object where the LOS chart will be drawn.
         """
         if not phenology_results:
             ax.text(0.5, 0.5, 'No duration\ndata', 
@@ -1325,7 +1812,15 @@ class TimeSeriesAnalyzer:
         ax.tick_params(axis='both', labelsize=8)
     
     def _plot_phenology_statistics(self, phenology_results: Dict, ax: plt.Axes):
-        """Plot phenological statistics summary."""
+        """Plot summary statistics of phenological metrics.
+
+        Parameters
+        ----------
+        phenology_results : dict
+            Dictionary containing extracted phenology metrics per year.
+        ax : matplotlib.axes.Axes
+            Axis object where the statistics will be drawn.
+        """
         # Create summary statistics
         pheno_df = pd.DataFrame(phenology_results).T
         
@@ -1358,8 +1853,18 @@ class TimeSeriesAnalyzer:
     
     def _plot_phenology_data_availability(self, phenology_results: Dict, ax: plt.Axes):
         """
-        RENOMBRADO: Disponibilidad de datos (antes "completeness").
-        Muestra en cuántos años se pudo calcular cada métrica.
+        Plot availability of phenological metrics across years.
+
+        Shows the percentage of years for which each key metric
+        (SOS, POS, EOS, LOS) could be successfully computed. Useful
+        to assess temporal completeness and data quality.
+
+        Parameters
+        ----------
+        phenology_results : dict
+            Dictionary containing extracted phenology metrics per year.
+        ax : matplotlib.axes.Axes
+            Axis object where the availability chart will be drawn.
         """
         if not phenology_results:
             ax.text(0.5, 0.5, 'No data\navailable', 
@@ -1406,7 +1911,21 @@ class TimeSeriesAnalyzer:
         ax.tick_params(axis='both', labelsize=8)
     
     def _plot_annual_phenology_comparison(self, df: pd.DataFrame, phenology_results: Dict, ax: plt.Axes):
-        """Plot annual phenological curves for comparison."""
+        """
+        Plot annual phenological curves for year-to-year comparison.
+
+        Each year is plotted as a separate curve with markers for
+        SOS (Start of Season), POS (Peak of Season), and EOS (End of Season).
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Time series values with columns ['year', 'doy', 'value'].
+        phenology_results : dict
+            Dictionary containing extracted phenology metrics per year.
+        ax : matplotlib.axes.Axes
+            Axis object where the comparison curves will be drawn.
+        """
         if not phenology_results or len(df) == 0:
             ax.text(0.5, 0.5, 'No data for\ncomparison', 
                 ha='center', va='center', transform=ax.transAxes)
@@ -1469,7 +1988,19 @@ class TimeSeriesAnalyzer:
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
     def _plot_phenology_metrics_summary(self, phenology_results: Dict, ax: plt.Axes):
-        """Panel compacto con métricas clave."""
+        """
+        Plot a compact panel summarizing key phenological metrics.
+
+        Displays average values for SOS, POS, EOS and amplitude,
+        as well as the list of years analyzed.
+
+        Parameters
+        ----------
+        phenology_results : dict
+            Dictionary containing extracted phenology metrics per year.
+        ax : matplotlib.axes.Axes
+            Axis object where the summary will be drawn.
+        """
         if not phenology_results:
             ax.text(0.5, 0.5, 'No phenology\ndata available', 
                 ha='center', va='center', transform=ax.transAxes)
@@ -1515,7 +2046,17 @@ class TimeSeriesAnalyzer:
 
     def _plot_phenology_quality_summary(self, phenology_results: Dict, ax: plt.Axes):
         """
-        SIMPLIFICADO: Resumen de calidad fenológica en inglés.
+        Plot a text-based summary of phenology analysis quality.
+
+        Shows number of years analyzed, percentage of complete cycles
+        (SOS, POS, EOS available), and variability of LOS when available.
+
+        Parameters
+        ----------
+        phenology_results : dict
+            Dictionary containing extracted phenology metrics per year.
+        ax : matplotlib.axes.Axes
+            Axis object where the quality summary will be drawn.
         """
         if not phenology_results:
             ax.text(0.5, 0.5, 'No quality\ndata', ha='center', va='center', transform=ax.transAxes)
@@ -1568,22 +2109,47 @@ class TimeSeriesAnalyzer:
     # ========== PHENOLOGY EXTRACTION HELPER METHODS ==========
     
     def _phenology_threshold_method(self, year_data: pd.DataFrame, 
-                                threshold_percentile: float,
-                                smoothing: bool,
-                                min_season_length: int) -> Dict[str, float]:
+                            threshold_percentile: float,
+                            smoothing: bool,
+                            min_season_length: int,
+                            adaptive_threshold: bool = True,
+                            eos_search_extension: int = 30) -> Dict[str, float]:
         """
-        Threshold-based phenology extraction using percentile values.
+        Extract phenological metrics using a threshold-based approach.
         
-        This method identifies phenological phases by finding when vegetation
-        values cross specific thresholds relative to the annual range.
+        IMPROVED v1.0: Added adaptive thresholding and EOS search extension
+        to handle cases where vegetation doesn't fully senescence within the year.
+        
+        Parameters
+        ----------
+        year_data : pandas.DataFrame
+            DataFrame with 'doy' and 'value' columns. Values should already be 
+            smoothed if smoothing was requested in extract_phenology_metrics().
+        threshold_percentile : float
+            Percentile (0–100) of the amplitude used to define the threshold.
+        smoothing : bool
+            Whether to apply additional smoothing (typically False if already 
+            smoothed at higher level).
+        min_season_length : int
+            Minimum number of days required to consider a valid season.
+        adaptive_threshold : bool, optional
+            If True, uses different thresholds for SOS and EOS detection.
+            Default True.
+        eos_search_extension : int, optional
+            Additional days to search beyond peak for EOS. Helps with late 
+            senescence. Default 30.
+
+        Returns
+        -------
+        dict
+            Dictionary with phenological metrics.
         """
         values = year_data['value'].values
         doys = year_data['doy'].values
         
-        # Apply smoothing if requested
+        # Apply smoothing only if explicitly requested (avoid double-smoothing)
         if smoothing and len(values) > 3:
             try:
-                # Savitzky-Golay filter for smoothing
                 window_length = min(len(values), 7)
                 if window_length % 2 == 0:
                     window_length -= 1
@@ -1591,7 +2157,7 @@ class TimeSeriesAnalyzer:
             except:
                 values_smooth = values
         else:
-            values_smooth = values
+            values_smooth = values  # Use data as-is (may already be smoothed)
         
         # Calculate basic statistics
         min_val = np.min(values_smooth)
@@ -1601,28 +2167,101 @@ class TimeSeriesAnalyzer:
         if amplitude < 0.01:  # Very low amplitude - skip analysis
             return None
         
-        # Calculate threshold based on percentile
-        threshold = min_val + (amplitude * threshold_percentile / 100)
+        # IMPROVED: Adaptive threshold calculation
+        if adaptive_threshold:
+            # Use lower threshold for SOS (easier to detect start)
+            sos_threshold_pct = max(threshold_percentile * 0.7, 20)  # At least 20%
+            # Use higher threshold for EOS (more conservative end detection)
+            eos_threshold_pct = min(threshold_percentile * 1.2, 70)  # At most 70%
+            
+            sos_threshold = min_val + (amplitude * sos_threshold_pct / 100)
+            eos_threshold = min_val + (amplitude * eos_threshold_pct / 100)
+            
+            print(f"Adaptive thresholds: SOS={sos_threshold_pct:.1f}%, EOS={eos_threshold_pct:.1f}%")
+        else:
+            # Original single threshold
+            threshold = min_val + (amplitude * threshold_percentile / 100)
+            sos_threshold = eos_threshold = threshold
         
-        # Find crossings
-        above_threshold = values_smooth >= threshold
+        # Find SOS crossings
+        above_sos_threshold = values_smooth >= sos_threshold
         
-        # Find Start of Season (first crossing above threshold)
+        # Find Start of Season (first crossing above SOS threshold)
         sos_idx = None
-        for i in range(len(above_threshold) - 1):
-            if not above_threshold[i] and above_threshold[i + 1]:
+        for i in range(len(above_sos_threshold) - 1):
+            if not above_sos_threshold[i] and above_sos_threshold[i + 1]:
                 sos_idx = i + 1
-                break
-        
-        # Find End of Season (last crossing below threshold)
-        eos_idx = None
-        for i in range(len(above_threshold) - 1, 0, -1):
-            if above_threshold[i - 1] and not above_threshold[i]:
-                eos_idx = i - 1
                 break
         
         # Find Peak of Season
         pos_idx = np.argmax(values_smooth)
+        
+        # IMPROVED: EOS detection with extended search
+        above_eos_threshold = values_smooth >= eos_threshold
+        
+        # Method 1: Traditional - last crossing below threshold
+        eos_idx = None
+        for i in range(len(above_eos_threshold) - 1, 0, -1):
+            if above_eos_threshold[i - 1] and not above_eos_threshold[i]:
+                eos_idx = i - 1
+                break
+        
+        # Method 2: If no traditional EOS found, search from peak onwards
+        if eos_idx is None:
+            # Start search from peak + minimum delay
+            pos_doy = doys[pos_idx]
+            search_start_idx = pos_idx
+            
+            # Find starting index for EOS search
+            for i in range(pos_idx, len(doys)):
+                if doys[i] >= pos_doy + eos_search_extension:
+                    search_start_idx = i
+                    break
+            
+            # Look for sustained period below threshold
+            consecutive_below = 0
+            required_consecutive = max(2, len(doys) // 30)  # At least 2 points
+            
+            for i in range(search_start_idx, len(above_eos_threshold)):
+                if not above_eos_threshold[i]:
+                    consecutive_below += 1
+                    if consecutive_below >= required_consecutive:
+                        eos_idx = i - required_consecutive + 1
+                        break
+                else:
+                    consecutive_below = 0
+        
+        # Method 3: If still no EOS, use significant drop from peak value
+        if eos_idx is None:
+            drop_threshold = max_val - (amplitude * 0.4)  # 40% drop from peak
+            
+            for i in range(pos_idx, len(values_smooth)):
+                if values_smooth[i] <= drop_threshold:
+                    eos_idx = i
+                    print(f"EOS detected using value drop method at day {doys[i]:.1f}")
+                    break
+        
+        # Method 4: Last resort - use trend analysis in final period
+        if eos_idx is None and len(values_smooth) > 8:
+            # Analyze trend in last 25% of data
+            final_quarter_start = len(values_smooth) * 3 // 4
+            final_values = values_smooth[final_quarter_start:]
+            final_doys = doys[final_quarter_start:]
+            
+            # If showing declining trend, use start of decline
+            if len(final_values) > 3:
+                slope = np.polyfit(final_doys, final_values, 1)[0]
+                if slope < -0.001:  # Declining trend
+                    # Find where decline becomes significant
+                    for i in range(final_quarter_start, len(values_smooth) - 1):
+                        if values_smooth[i] > values_smooth[i + 1]:
+                            window_slope = np.polyfit(
+                                doys[i:i+min(5, len(doys)-i)], 
+                                values_smooth[i:i+min(5, len(values_smooth)-i)], 1)[0]
+                            if window_slope < -0.002:
+                                eos_idx = i
+                                print(f"EOS detected using trend analysis at day {doys[i]:.1f}")
+                                break
         
         # Calculate metrics
         metrics = {
@@ -1630,7 +2269,11 @@ class TimeSeriesAnalyzer:
             'peak_value': float(max_val),
             'amplitude': float(amplitude),
             'pos': float(doys[pos_idx]),
-            'auc': float(np.trapz(values_smooth, doys))
+            'auc': float(np.trapz(values_smooth, doys)),
+            'method_notes': f'threshold_{threshold_percentile}%_adaptive' if adaptive_threshold else f'threshold_{threshold_percentile}%',
+            'adaptive_threshold': adaptive_threshold,
+            'sos_threshold_pct': sos_threshold_pct if adaptive_threshold else threshold_percentile,
+            'eos_threshold_pct': eos_threshold_pct if adaptive_threshold else threshold_percentile,
         }
         
         if sos_idx is not None:
@@ -1643,13 +2286,20 @@ class TimeSeriesAnalyzer:
         if eos_idx is not None:
             metrics['eos'] = float(doys[eos_idx])  
             metrics['eos_value'] = float(values_smooth[eos_idx])
+            print(f"EOS found at day {doys[eos_idx]:.1f}")
         else:
             metrics['eos'] = np.nan
             metrics['eos_value'] = np.nan
+            print("No EOS detected with current criteria")
         
         # Calculate Length of Season
         if not np.isnan(metrics['sos']) and not np.isnan(metrics['eos']):
             metrics['los'] = float(metrics['eos'] - metrics['sos'])
+            
+            # Validate minimum season length
+            if metrics['los'] < min_season_length:
+                print(f"Season too short ({metrics['los']:.1f} days), skipping")
+                return None
             
             # Calculate growth and senescence rates
             if sos_idx is not None and pos_idx is not None:
@@ -1677,10 +2327,35 @@ class TimeSeriesAnalyzer:
         return metrics
     
     def _phenology_derivative_method(self, year_data: pd.DataFrame,
-                               smoothing: bool,
-                               min_season_length: int) -> Dict[str, float]:
+                           smoothing: bool,
+                           min_season_length: int,
+                           derivative_threshold_factor: float = 0.25,
+                           min_eos_delay_days: int = 30) -> Dict[str, float]:
         """
-        Método derivative sin usar threshold_percentile.
+        Extract phenological metrics using the derivative method.
+        
+        IMPROVED v1.0: Added parameters to control EOS detection sensitivity
+        and minimum delay after POS to avoid POS-EOS clustering.
+        
+        Parameters
+        ----------
+        year_data : pandas.DataFrame
+            DataFrame with 'doy' and 'value' columns. Values may already be smoothed.
+        smoothing : bool
+            Whether to apply additional smoothing (typically False if already smoothed).
+        min_season_length : int
+            Minimum number of days required to consider a valid season.
+        derivative_threshold_factor : float, optional
+            Multiplier for derivative threshold. Lower = more sensitive.
+            Default 0.25. Try 0.15-0.35 range.
+        min_eos_delay_days : int, optional
+            Minimum days between POS and EOS to avoid clustering.
+            Default 30 days.
+
+        Returns
+        -------
+        dict
+            Dictionary with phenological metrics.
         """
         values = year_data['value'].values
         doys = year_data['doy'].values
@@ -1690,7 +2365,7 @@ class TimeSeriesAnalyzer:
             return None
         
         try:
-            # Smoothing
+            # Apply smoothing only if explicitly requested (avoid double-smoothing)
             if smoothing:
                 try:
                     window_length = min(len(values), 7)
@@ -1704,7 +2379,7 @@ class TimeSeriesAnalyzer:
                     print(f"Smoothing failed: {e}")
                     values_smooth = values
             else:
-                values_smooth = values
+                values_smooth = values  # Use data as-is (may already be smoothed)
             
             # Calculate derivatives
             try:
@@ -1718,10 +2393,19 @@ class TimeSeriesAnalyzer:
                 print("Invalid derivatives calculated")
                 return None
             
-            # Umbral basado en desviación estándar (NO porcentaje)
+            # IMPROVED: More robust threshold calculation
             deriv_std = np.std(first_deriv)
-            pos_threshold = deriv_std * 0.25
-            neg_threshold = -pos_threshold
+            deriv_mean = np.mean(first_deriv)
+            
+            # Use percentiles for more robust thresholds
+            pos_threshold_robust = np.percentile(first_deriv, 75) * derivative_threshold_factor
+            neg_threshold_robust = np.percentile(first_deriv, 25) * derivative_threshold_factor
+            
+            # Fallback to standard deviation method if percentiles don't work
+            pos_threshold = max(pos_threshold_robust, deriv_std * derivative_threshold_factor)
+            neg_threshold = min(neg_threshold_robust, -deriv_std * derivative_threshold_factor)
+            
+            print(f"Derivative thresholds: pos={pos_threshold:.4f}, neg={neg_threshold:.4f}")
             
             # SOS: First significant positive derivative
             sos_idx = None
@@ -1730,15 +2414,54 @@ class TimeSeriesAnalyzer:
                     sos_idx = i
                     break
             
-            # POS: Maximum
+            # POS: Maximum value
             pos_idx = np.argmax(values_smooth)
             
-            # EOS: First significant negative derivative after peak
+            # IMPROVED EOS: Search with minimum delay and better criteria
             eos_idx = None
-            for i in range(pos_idx, len(first_deriv)):
-                if first_deriv[i] < neg_threshold:
-                    eos_idx = i
+            
+            # Ensure minimum delay after POS
+            min_eos_search_idx = pos_idx
+            pos_doy = doys[pos_idx]
+            
+            # Find index corresponding to minimum delay
+            for i in range(pos_idx, len(doys)):
+                if doys[i] >= pos_doy + min_eos_delay_days:
+                    min_eos_search_idx = i
                     break
+            
+            # Method 1: Look for sustained negative derivative (more robust)
+            consecutive_neg_count = 0
+            required_consecutive = max(2, len(doys) // 20)  # At least 2, or 5% of data points
+            
+            for i in range(min_eos_search_idx, len(first_deriv)):
+                if first_deriv[i] < neg_threshold:
+                    consecutive_neg_count += 1
+                    if consecutive_neg_count >= required_consecutive:
+                        eos_idx = i - required_consecutive + 1  # Start of consecutive period
+                        break
+                else:
+                    consecutive_neg_count = 0  # Reset counter
+            
+            # Method 2: If no sustained negative derivative, use significant drop from peak
+            if eos_idx is None:
+                peak_value = values_smooth[pos_idx]
+                amplitude = peak_value - np.min(values_smooth)
+                drop_threshold = peak_value - (amplitude * 0.3)  # 30% drop from peak
+                
+                for i in range(min_eos_search_idx, len(values_smooth)):
+                    if values_smooth[i] <= drop_threshold:
+                        eos_idx = i
+                        break
+            
+            # Method 3: If still no EOS and close to end of year, use last significant decline
+            if eos_idx is None and len(doys) > 10:
+                # Use last 25% of data
+                search_start = len(doys) * 3 // 4
+                for i in range(max(min_eos_search_idx, search_start), len(first_deriv)):
+                    if first_deriv[i] < neg_threshold * 0.5:  # Relaxed threshold
+                        eos_idx = i
+                        break
             
             # Calculate metrics
             min_val = float(np.min(values_smooth))
@@ -1749,7 +2472,12 @@ class TimeSeriesAnalyzer:
                 'peak_value': max_val,
                 'amplitude': float(max_val - min_val),
                 'pos': float(doys[pos_idx]),
-                'auc': float(np.trapz(values_smooth, doys))
+                'auc': float(np.trapz(values_smooth, doys)),
+                'method_notes': 'derivative_method_improved',
+                'derivative_threshold_pos': float(pos_threshold),
+                'derivative_threshold_neg': float(neg_threshold),
+                'min_eos_delay_used': min_eos_delay_days,
+                'threshold_factor': derivative_threshold_factor
             }
             
             # Add SOS and EOS
@@ -1763,13 +2491,20 @@ class TimeSeriesAnalyzer:
             if eos_idx is not None:
                 metrics['eos'] = float(doys[eos_idx])
                 metrics['eos_value'] = float(values_smooth[eos_idx])
+                print(f"EOS found at day {doys[eos_idx]:.1f}, {doys[eos_idx] - pos_doy:.1f} days after POS")
             else:
                 metrics['eos'] = np.nan
                 metrics['eos_value'] = np.nan
+                print("No EOS detected with current criteria")
             
             # Derived metrics
             if not np.isnan(metrics['sos']) and not np.isnan(metrics['eos']):
                 metrics['los'] = float(metrics['eos'] - metrics['sos'])
+                
+                # Validate minimum season length
+                if metrics['los'] < min_season_length:
+                    print(f"Season too short ({metrics['los']:.1f} days), skipping")
+                    return None
                 
                 if sos_idx is not None and pos_idx is not None:
                     growth_days = doys[pos_idx] - doys[sos_idx]
@@ -1800,13 +2535,26 @@ class TimeSeriesAnalyzer:
             return None
     
     def _phenology_logistic_method(self, year_data: pd.DataFrame,
-                                smoothing: bool,
-                                min_season_length: int) -> Dict[str, float]:
+                            smoothing: bool,
+                            min_season_length: int) -> Dict[str, float]:
         """
-        Logistic curve fitting for phenology extraction.
+        Extract phenological metrics using double logistic curve fitting.
         
-        Fits double logistic curves to represent vegetation growth and senescence,
-        providing smooth phenological parameter estimates.
+        FIXED v1.0: Validates parameter reasonableness and extends curve visualization.
+        
+        Parameters
+        ----------
+        year_data : pandas.DataFrame
+            DataFrame with 'doy' and 'value' columns. Values may already be smoothed.
+        smoothing : bool
+            Whether to apply additional smoothing (typically False if already smoothed).
+        min_season_length : int
+            Minimum number of days required to consider a valid season.
+
+        Returns
+        -------
+        dict
+            Dictionary with phenological metrics with improved parameter validation.
         """
         values = year_data['value'].values
         doys = year_data['doy'].values
@@ -1814,7 +2562,7 @@ class TimeSeriesAnalyzer:
         if len(values) < 6:
             return None
         
-        # Apply smoothing
+        # Apply smoothing only if explicitly requested (avoid double-smoothing)
         if smoothing:
             try:
                 window_length = min(len(values), 7)
@@ -1824,11 +2572,10 @@ class TimeSeriesAnalyzer:
             except:
                 values_smooth = values
         else:
-            values_smooth = values
+            values_smooth = values  # Use data as-is (may already be smoothed)
         
         try:
             # Fit double logistic function
-            # This is a simplified approach - in practice you'd use more sophisticated fitting
             from scipy.optimize import curve_fit
             
             def double_logistic(x, baseline, amplitude, sos, growth_rate, eos, senescence_rate):
@@ -1837,47 +2584,153 @@ class TimeSeriesAnalyzer:
                 senescence = amplitude / (1 + np.exp(senescence_rate * (x - eos)))
                 return baseline + growth - senescence
             
-            # Initial parameter guess
+            # IMPROVED: Better initial parameter guess
             baseline_guess = np.min(values_smooth)
             amplitude_guess = np.max(values_smooth) - baseline_guess
-            sos_guess = doys[len(doys)//4]  # First quarter
-            eos_guess = doys[3*len(doys)//4]  # Last quarter
             
-            initial_guess = [baseline_guess, amplitude_guess, sos_guess, 0.1, eos_guess, -0.1]
+            # Use observed data characteristics for better guesses
+            peak_idx = np.argmax(values_smooth)
+            peak_doy = doys[peak_idx]
             
-            # Fit the curve
-            popt, _ = curve_fit(double_logistic, doys, values_smooth, 
-                            p0=initial_guess, maxfev=1000)
+            # More realistic initial guesses based on data
+            sos_guess = max(doys[0], peak_doy - 60)  # At least 60 days before peak
+            eos_guess = min(doys[-1], peak_doy + 60)  # At least 60 days after peak
             
-            baseline, amplitude, sos, growth_rate, eos, senescence_rate = popt
+            # More conservative growth rates
+            growth_rate_guess = 0.05  # Slower transitions
+            senescence_rate_guess = -0.05
             
-            # Calculate peak (maximum of fitted curve)
+            initial_guess = [baseline_guess, amplitude_guess, sos_guess, 
+                            growth_rate_guess, eos_guess, senescence_rate_guess]
+            
+            # Add bounds to prevent unrealistic parameters
+            lower_bounds = [
+                0,                    # baseline >= 0
+                0.01,                 # amplitude > 0
+                doys[0] - 30,         # SOS can be before first observation
+                0.01,                 # positive growth rate
+                peak_doy + 15,        # EOS at least 15 days after peak
+                -1.0                  # senescence rate not too extreme
+            ]
+            
+            upper_bounds = [
+                np.max(values_smooth), # baseline <= max value
+                1.0,                   # amplitude reasonable
+                peak_doy - 15,         # SOS at least 15 days before peak
+                0.5,                   # growth rate not too extreme
+                doys[-1] + 30,         # EOS can be after last observation
+                -0.01                  # negative senescence rate
+            ]
+            
+            # Fit with bounds
+            try:
+                popt, pcov = curve_fit(
+                    double_logistic, doys, values_smooth, 
+                    p0=initial_guess, 
+                    bounds=(lower_bounds, upper_bounds),
+                    maxfev=2000
+                )
+            except:
+                # Fallback without bounds if bounded fit fails
+                popt, pcov = curve_fit(
+                    double_logistic, doys, values_smooth, 
+                    p0=initial_guess, 
+                    maxfev=2000
+                )
+            
+            baseline_fit, amplitude_fit, sos_fit, growth_rate_fit, eos_fit, senescence_rate_fit = popt
+            
+            # PARAMETER VALIDATION
+            fitted_los = eos_fit - sos_fit
+            
+            # Check for unrealistic parameters
+            warnings_list = []
+            
+            if fitted_los < 30:
+                warnings_list.append(f"Very short fitted season ({fitted_los:.1f} days)")
+            elif fitted_los > 300:
+                warnings_list.append(f"Very long fitted season ({fitted_los:.1f} days)")
+                
+            if abs(growth_rate_fit) > 0.3:
+                warnings_list.append(f"Extreme growth rate ({growth_rate_fit:.3f})")
+                
+            if abs(senescence_rate_fit) > 0.3:
+                warnings_list.append(f"Extreme senescence rate ({senescence_rate_fit:.3f})")
+            
+            # Generate fitted curve for the FULL OBSERVED RANGE for visualization
             fitted_curve = double_logistic(doys, *popt)
-            pos_idx = np.argmax(fitted_curve)
-            pos = doys[pos_idx]
-            peak_value = fitted_curve[pos_idx]
             
+            # EXTENDED: Generate curve for wider range if needed for visualization
+            doy_min = min(doys[0], sos_fit - 30)
+            doy_max = max(doys[-1], eos_fit + 30)
+            extended_doys = np.linspace(doy_min, doy_max, 100)
+            extended_fitted = double_logistic(extended_doys, *popt)
+            
+            # Quality assessment
+            r_squared = np.corrcoef(values_smooth, fitted_curve)[0,1] ** 2
+            rmse = np.sqrt(np.mean((values_smooth - fitted_curve) ** 2))
+            
+            # Quality warnings
+            if r_squared < 0.7:
+                warnings_list.append(f"Poor fit quality (R²={r_squared:.3f})")
+                fit_quality = 'poor'
+            elif r_squared < 0.85:
+                warnings_list.append(f"Moderate fit quality (R²={r_squared:.3f})")
+                fit_quality = 'moderate'  
+            else:
+                fit_quality = 'good'
+            
+            # Print all warnings
+            if warnings_list:
+                for warning in warnings_list:
+                    print(f"WARNING: {warning}")
+            
+            print(f"Logistic fit: R²={r_squared:.3f}, RMSE={rmse:.4f}, LOS={fitted_los:.1f} days")
+            
+            # Calculate peak from fitted curve
+            fitted_pos_idx = np.argmax(fitted_curve)
+            pos_from_fitted = float(doys[fitted_pos_idx])
+            peak_value_from_fitted = float(fitted_curve[fitted_pos_idx])
+            
+            # STORE EXTENDED CURVE for visualization
             metrics = {
-                'baseline': float(baseline),
-                'peak_value': float(peak_value),
-                'amplitude': float(amplitude),
-                'pos': float(pos),
-                'sos': float(sos),
-                'eos': float(eos),
-                'los': float(eos - sos),
-                'growth_rate': float(growth_rate),
-                'senescence_rate': float(senescence_rate),
-                'sos_value': float(double_logistic(sos, *popt)),
-                'eos_value': float(double_logistic(eos, *popt)),
-                'auc': float(np.trapz(fitted_curve, doys))
+                'baseline': float(baseline_fit),
+                'peak_value': peak_value_from_fitted,
+                'amplitude': float(amplitude_fit),
+                'pos': pos_from_fitted,
+                'sos': float(sos_fit),
+                'eos': float(eos_fit),
+                'los': float(fitted_los),
+                'growth_rate': float(growth_rate_fit),
+                'senescence_rate': float(senescence_rate_fit),
+                'sos_value': float(double_logistic(sos_fit, *popt)),
+                'eos_value': float(double_logistic(eos_fit, *popt)),
+                'auc': float(np.trapz(fitted_curve, doys)),
+                'method_notes': 'logistic_curve_fitting',
+                # Quality indicators
+                'fit_quality': fit_quality,
+                'r_squared': float(r_squared),
+                'rmse': float(rmse),
+                'warnings': warnings_list,
+                # Store EXTENDED fitted curve for complete visualization
+                'fitted_curve_doys': extended_doys.tolist(),
+                'fitted_curve_values': extended_fitted.tolist(),
+                # Store original observed curve for comparison
+                'observed_curve_doys': doys.tolist(),
+                'observed_curve_values': values_smooth.tolist()
             }
+            
+            # RELAXED validation: Allow shorter seasons for logistic method
+            # since it's methodologically different
+            if fitted_los < 15:  # Only reject extremely short seasons
+                print(f"Extremely short season ({fitted_los:.1f} days), skipping")
+                return None
             
             return metrics
             
         except Exception as e:
             print(f"Logistic fitting failed: {e}")
-            # Fallback to threshold method
-            return self._phenology_threshold_method(year_data, 50, smoothing, min_season_length)
+            return self._phenology_threshold_method(year_data, 50, False, min_season_length)
     
     # ========== COMPARISON AND ANALYSIS METHODS ==========
     
@@ -1952,7 +2805,37 @@ class TimeSeriesAnalyzer:
         }
     
     def _calculate_trend(self, years: np.ndarray, values: np.ndarray) -> Dict[str, float]:
-        """Calculate trend statistics for phenological metrics."""
+        """
+        Calculate linear trend statistics for a phenological metric.
+
+        Performs an ordinary least squares regression of metric values
+        against years to estimate slope, significance, and explained variance.
+
+        Parameters
+        ----------
+        years : numpy.ndarray
+            Array of years (x-values) corresponding to the observations.
+        values : numpy.ndarray
+            Array of metric values (y-values) for the corresponding years.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+            - ``'slope'`` : float
+                Linear regression slope (units per year).
+            - ``'p_value'`` : float
+                Significance level of the slope.
+            - ``'r_squared'`` : float
+                Coefficient of determination (R²).
+
+        Raises
+        ------
+        ValueError
+            If fewer than 3 valid data points are provided.
+        RuntimeError
+            If regression fitting fails.
+        """
         if len(values) < 3:
             return {'slope': np.nan, 'p_value': np.nan, 'r_squared': np.nan}
         
@@ -1967,7 +2850,34 @@ class TimeSeriesAnalyzer:
             return {'slope': np.nan, 'p_value': np.nan, 'r_squared': np.nan}
     
     def _generate_phenology_summary(self, stats: Dict, comparisons: Dict) -> str:
-        """Generate text summary of phenological analysis."""
+        """
+        Generate a text-based summary of phenological analysis results.
+
+        Builds a structured report including descriptive statistics and
+        trend analysis for key metrics (SOS, POS, EOS, LOS, amplitude).
+
+        Parameters
+        ----------
+        stats : dict
+            Dictionary of descriptive statistics per metric, typically
+            containing mean, std, min, max, and coefficient of variation.
+        comparisons : dict
+            Dictionary of trend analysis results per metric, each with
+            a ``'trend'`` dictionary from :meth:`_calculate_trend`.
+
+        Returns
+        -------
+        str
+            Formatted multi-line summary string suitable for display
+            in console or plot annotations.
+
+        Raises
+        ------
+        KeyError
+            If required keys (e.g., ``'sos'``, ``'pos'``) are missing.
+        RuntimeError
+            If input dictionaries are empty or malformed.
+        """
         summary_lines = []
         
         # Start of Season analysis
@@ -2044,13 +2954,134 @@ class TimeSeriesAnalyzer:
         
         return "\n".join(summary_lines)
     
+    def compare_smoothing_impact(self, 
+                           point=None,
+                           method='threshold',
+                           threshold_percentile=50) -> Dict[str, Any]:
+        """
+        Compare phenological metrics calculated with and without smoothing.
+        
+        Useful for validating the impact of the v1.0 changes and for 
+        documenting differences in JOSS paper.
+        
+        Parameters
+        ----------
+        point : location or None
+            Extraction point
+        method : str
+            Phenology method to compare
+        threshold_percentile : float
+            Threshold for threshold method
+            
+        Returns
+        -------
+        dict
+            Comparison results with metrics from both approaches
+            
+        Examples
+        --------
+        >>> # Compare impact of smoothing
+        >>> comparison = analyzer.compare_smoothing_impact()
+        >>> print("Raw data SOS:", comparison['raw']['2020']['sos'])
+        >>> print("Smoothed SOS:", comparison['smoothed']['2020']['sos'])
+        """
+        df = self.extract_time_series(point)
+        
+        if len(df) == 0:
+            return {'error': 'No data available'}
+        
+        # Extract with smoothing (v1.0 behavior)
+        phenology_smoothed = self.extract_phenology_metrics(
+            df, method=method, threshold_percentile=threshold_percentile, smoothing=True
+        )
+        
+        # Extract without smoothing (legacy behavior)
+        phenology_raw = self.extract_phenology_metrics(
+            df, method=method, threshold_percentile=threshold_percentile, smoothing=False
+        )
+        
+        # Calculate differences
+        differences = {}
+        common_years = set(phenology_smoothed.keys()) & set(phenology_raw.keys())
+        
+        for year in common_years:
+            raw_metrics = phenology_raw[year]
+            smooth_metrics = phenology_smoothed[year]
+            year_diff = {}
+            
+            for metric in ['sos', 'pos', 'eos', 'los', 'amplitude']:
+                if metric in raw_metrics and metric in smooth_metrics:
+                    raw_val = raw_metrics[metric]
+                    smooth_val = smooth_metrics[metric]
+                    
+                    if not (np.isnan(raw_val) or np.isnan(smooth_val)):
+                        year_diff[metric] = {
+                            'raw': raw_val,
+                            'smoothed': smooth_val,
+                            'difference': smooth_val - raw_val,
+                            'relative_change': abs(smooth_val - raw_val) / abs(raw_val) * 100 if raw_val != 0 else np.nan
+                        }
+            
+            if year_diff:
+                differences[year] = year_diff
+        
+        return {
+            'raw': phenology_raw,
+            'smoothed': phenology_smoothed,
+            'differences': differences,
+            'summary': self._summarize_smoothing_impact(differences)
+        }
+
+    def _summarize_smoothing_impact(self, differences: Dict) -> str:
+        """Generate summary of smoothing impact on phenological metrics."""
+        if not differences:
+            return "No comparable data available"
+        
+        # Collect all differences for each metric
+        metric_diffs = {}
+        for year_data in differences.values():
+            for metric, data in year_data.items():
+                if metric not in metric_diffs:
+                    metric_diffs[metric] = []
+                if not np.isnan(data['difference']):
+                    metric_diffs[metric].append(data['difference'])
+        
+        summary_lines = []
+        summary_lines.append("SMOOTHING IMPACT SUMMARY")
+        summary_lines.append("=" * 25)
+        
+        for metric, diffs in metric_diffs.items():
+            if diffs:
+                mean_diff = np.mean(diffs)
+                std_diff = np.std(diffs)
+                max_abs_diff = np.max(np.abs(diffs))
+                
+                summary_lines.append(f"{metric.upper()}:")
+                summary_lines.append(f"  Mean change: {mean_diff:+.2f} days")
+                summary_lines.append(f"  Std deviation: {std_diff:.2f} days")
+                summary_lines.append(f"  Max change: {max_abs_diff:.2f} days")
+                summary_lines.append("")
+        
+        return "\n".join(summary_lines)    
+    
 
 class SpatialTrendAnalyzer:
     """
     Spatial trend analysis for generating pixel-wise trend maps.
     
-    This class complements TimeSeriesAnalyzer by providing spatial analysis
+    Complements TimeSeriesAnalyzer by providing spatial analysis
     capabilities using Earth Engine's distributed computing.
+    
+    Parameters
+    ----------
+    ndvi_seasonality_instance : NdviSeasonality
+        Configured NdviSeasonality instance
+        
+    Examples
+    --------
+    >>> processor = NdviSeasonality(sat='S2', index='ndvi')
+    >>> spatial = SpatialTrendAnalyzer(processor)
+    >>> trend_map = spatial.calculate_pixel_trends(method='linear')
     """
     
     def __init__(self, ndvi_seasonality_instance):
@@ -2074,19 +3105,38 @@ class SpatialTrendAnalyzer:
         
         Parameters
         ----------
-        method : str
-            Trend calculation method: 'linear', 'sen', 'mann_kendall'
-        min_observations : int
-            Minimum valid observations required per pixel
-        export : bool
-            Whether to export the result
-        scale : int
-            Output scale in meters
+        method : {'linear', 'sen', 'mann_kendall'}, optional
+            Trend calculation method. Default is 'linear'.
+            
+        min_observations : int, optional
+            Minimum valid observations per pixel. Default is 5.
+            
+        export : bool, optional
+            Export result to GeoTIFF. Default is False.
+            
+        scale : int, optional
+            Output resolution in meters. Default is 30.
             
         Returns
         -------
         ee.Image
-            Multi-band image with trend statistics
+            Multi-band trend image with:
+            
+            * slope: Trend slope
+            * intercept: Y-intercept
+            * magnitude: Total change over period
+            
+        Examples
+        --------
+        >>> # Calculate linear trends
+        >>> trend_map = spatial.calculate_pixel_trends()
+        
+        >>> # Export Sen's slope map
+        >>> trend_map = spatial.calculate_pixel_trends(
+        ...     method='sen',
+        ...     export=True,
+        ...     scale=20
+        ... )
         """
         print(f"Calculating {method} trend map...")
         

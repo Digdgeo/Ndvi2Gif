@@ -1,3 +1,59 @@
+"""
+ndvi2gif - Remote Sensing Time Series Analysis and Visualization
+================================================================
+
+A Python library for generating temporal composite animations and analyses from 
+multiple satellite data sources, supporting various spectral and radar indices.
+
+Key Features
+------------
+* Multi-sensor support (Sentinel-1/2/3, Landsat, MODIS)
+* 40+ vegetation and environmental indices
+* Flexible temporal compositing (seasonal, monthly, custom)
+* Advanced SAR preprocessing with ARD pipeline
+* Automated GIF generation for time series visualization
+* Large-area processing with fishnet tiling
+
+Quick Start
+-----------
+.. code-block:: python
+
+    from ndvi2gif import NdviSeasonality
+    
+    # Create seasonal NDVI composites
+    processor = NdviSeasonality(
+        roi='path/to/roi.shp',
+        sat='S2',
+        index='ndvi',
+        periods=4,
+        start_year=2020,
+        end_year=2023
+    )
+    
+    # Generate animated visualization
+    processor.get_gif('ndvi_trend.gif')
+
+Installation
+------------
+.. code-block:: bash
+
+    pip install ndvi2gif
+
+Requirements
+------------
+* earthengine-api >= 0.1.320
+* geemap >= 0.20.0
+* geopandas >= 0.12.0
+* numpy >= 1.21.0
+
+Module Contents
+---------------
+
+Author: Diego García Díaz
+Date: 2024
+License: MIT
+"""
+
 import os
 import ee
 import geemap
@@ -9,60 +65,76 @@ from geemap import zonal_statistics
 from io import BytesIO
 import calendar
 from datetime import datetime, timedelta
-
+from typing import Optional
 from .s1_ard import S1ARDProcessor
-from .timeseries import TimeSeriesAnalyzer
-
+#from .timeseries import TimeSeriesAnalyzer, SpatialTrendAnalyzer
+#from .clasification import LandCoverClassifier
 
 def scale_OLI(image):
     """
     Scale Landsat 8-9 OLI/TIRS sensor data to surface reflectance.
     
-    Applies the standard scaling factors and offset values for Landsat Collection 2
-    Level-2 surface reflectance products for Operational Land Imager (OLI) and
-    Thermal Infrared Sensor (TIRS) instruments on Landsat 8 and 9.
+    Applies Collection 2 Level-2 scaling factors to convert digital numbers (DN)
+    to surface reflectance values in the range [0, 1]. The scaling formula
+    (DN * 0.0000275 - 0.2) is specific to Landsat Collection 2 products.
     
     Parameters
     ----------
     image : ee.Image
         Raw Landsat 8 or 9 image from Collection 2 Level-2 with SR bands.
-        Must contain bands: SR_B2, SR_B3, SR_B4, SR_B5, SR_B6, SR_B7.
+        Required bands: SR_B2, SR_B3, SR_B4, SR_B5, SR_B6, SR_B7
         
     Returns
     -------
     ee.Image
-        Image with scaled optical bands added and renamed to standard names:
-        - SR_B2 → Blue
-        - SR_B3 → Green  
-        - SR_B4 → Red
-        - SR_B5 → Nir
-        - SR_B6 → Swir1
-        - SR_B7 → Swir2
+        Image with scaled and renamed optical bands:
         
-    Notes
-    -----
-    Scaling formula applied: (DN * 0.0000275) - 0.2
-    
-    This scaling converts digital numbers (DN) to surface reflectance values
-    in the range [0, 1]. The formula is specific to Landsat Collection 2
-    Level-2 surface reflectance products.
-    
+        * ``Blue`` : SR_B2 scaled (0.45-0.51 μm)
+        * ``Green`` : SR_B3 scaled (0.53-0.59 μm)
+        * ``Red`` : SR_B4 scaled (0.64-0.67 μm)
+        * ``Nir`` : SR_B5 scaled (0.85-0.88 μm)
+        * ``Swir1`` : SR_B6 scaled (1.57-1.65 μm)
+        * ``Swir2`` : SR_B7 scaled (2.11-2.29 μm)
+        
     Examples
     --------
-    >>> # Apply to a single Landsat 8 image
-    >>> l8_image = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044034_20140318')
-    >>> scaled_image = scale_OLI(l8_image)
-    >>> print(scaled_image.bandNames().getInfo())
-    ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2', ...]
+    Apply to a single Landsat 8 image::
     
-    >>> # Apply to image collection
-    >>> l8_collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
-    >>> scaled_collection = l8_collection.map(scale_OLI)
+        l8_image = ee.Image('LANDSAT/LC08/C02/T1_L2/LC08_044034_20140318')
+        scaled_image = scale_OLI(l8_image)
+        print(scaled_image.bandNames().getInfo())
+        # Output: ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2', ...]
+    
+    Apply to an image collection::
+    
+        l8_collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+        scaled_collection = l8_collection.map(scale_OLI)
+
+    Raises
+    ------
+    KeyError
+        If expected OLI surface reflectance bands are missing in `image`
+        (e.g., ``SR_B2``–``SR_B7``).
+    TypeError
+        If `image` is not an ``ee.Image``.
+    
+    Notes
+    -----
+    The scaling coefficients are defined by USGS for Collection 2:
+    
+    * Scale factor: 0.0000275
+    * Offset: -0.2
+    * Valid range after scaling: typically -0.2 to 1.5
+    * Negative values may occur in water or shadow areas
+    
+    See Also
+    --------
+    scale_ETM : Scaling function for Landsat 4-5-7
     
     References
     ----------
-    - USGS Landsat Collection 2 Level-2 Science Products
-    - https://www.usgs.gov/landsat-missions/landsat-collection-2-level-2-science-products
+    .. [1] USGS (2021). Landsat Collection 2 Level-2 Science Products.
+           https://www.usgs.gov/landsat-missions/landsat-collection-2-level-2-science-products
     """
     opticalBands = image.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
     return image.addBands(opticalBands, None, True)
@@ -72,105 +144,296 @@ def scale_ETM(image):
     """
     Scale Landsat 4-5-7 ETM+/TM sensor data to surface reflectance.
     
-    Applies the standard scaling factors and offset values for Landsat Collection 2
-    Level-2 surface reflectance products for Enhanced Thematic Mapper Plus (ETM+)
-    and Thematic Mapper (TM) instruments on Landsat 4, 5, and 7.
+    Applies Collection 2 Level-2 scaling factors for Enhanced Thematic Mapper Plus
+    (ETM+) on Landsat 7 and Thematic Mapper (TM) on Landsat 4-5. Uses the same
+    scaling formula as OLI but with different band numbering scheme.
     
     Parameters
     ----------
     image : ee.Image
-        Raw Landsat 4, 5, or 7 image from Collection 2 Level-2 with SR bands.
-        Must contain bands: SR_B1, SR_B2, SR_B3, SR_B4, SR_B5, SR_B7.
-        Note: SR_B6 (thermal) is excluded as it has different scaling.
+        Raw Landsat 4, 5, or 7 image from Collection 2 Level-2.
+        Required bands: SR_B1, SR_B2, SR_B3, SR_B4, SR_B5, SR_B7
+        Note: SR_B6 (thermal) is excluded as it requires different scaling
         
     Returns
     -------
     ee.Image
-        Image with scaled optical bands added and renamed to standard names:
-        - SR_B1 → Blue
-        - SR_B2 → Green
-        - SR_B3 → Red
-        - SR_B4 → Nir
-        - SR_B5 → Swir1
-        - SR_B7 → Swir2
+        Image with scaled and renamed optical bands:
         
-    Notes
-    -----
-    Scaling formula applied: (DN * 0.0000275) - 0.2
-    
-    This scaling converts digital numbers (DN) to surface reflectance values
-    in the range [0, 1]. The formula is specific to Landsat Collection 2
-    Level-2 surface reflectance products.
-    
-    Band 6 (thermal infrared) is intentionally excluded as it requires
-    different scaling factors and is not typically used for vegetation indices.
-    
+        * ``Blue`` : SR_B1 scaled (0.45-0.52 μm)
+        * ``Green`` : SR_B2 scaled (0.52-0.60 μm)
+        * ``Red`` : SR_B3 scaled (0.63-0.69 μm)
+        * ``Nir`` : SR_B4 scaled (0.77-0.90 μm)
+        * ``Swir1`` : SR_B5 scaled (1.55-1.75 μm)
+        * ``Swir2`` : SR_B7 scaled (2.09-2.35 μm)
+        
     Examples
     --------
-    >>> # Apply to a single Landsat 5 image
-    >>> l5_image = ee.Image('LANDSAT/LT05/C02/T1_L2/LT05_044034_20110716')
-    >>> scaled_image = scale_ETM(l5_image)
-    >>> print(scaled_image.bandNames().getInfo())
-    ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2', ...]
+    Apply to a Landsat 5 image::
     
-    >>> # Apply to mixed Landsat collection
-    >>> landsat_collection = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
-    >>> scaled_collection = landsat_collection.map(scale_ETM)
+        l5_image = ee.Image('LANDSAT/LT05/C02/T1_L2/LT05_044034_20110716')
+        scaled_image = scale_ETM(l5_image)
+    
+    Apply to mixed Landsat collection::
+    
+        landsat_457 = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
+        scaled_collection = landsat_457.map(scale_ETM)
+
+    Raises
+    ------
+    KeyError
+        If expected ETM+ surface reflectance bands are missing in `image`
+        (e.g., ``SR_B1``–``SR_B5`` and ``SR_B7``).
+    TypeError
+        If `image` is not an ``ee.Image``.
+    
+    Notes
+    -----
+    Band numbering differs between ETM/TM and OLI sensors:
+    
+    * ETM/TM Band 1 (Blue) → OLI Band 2
+    * ETM/TM Band 2 (Green) → OLI Band 3
+    * ETM/TM Band 3 (Red) → OLI Band 4
+    * No Band 6 processing (thermal requires different scaling)
+    
+    Warnings
+    --------
+    Landsat 7 ETM+ has scan line corrector failure (SLC-off) after May 2003,
+    resulting in data gaps. Consider using gap-filling techniques or
+    focusing on Landsat 4-5 for historical analysis.
+    
+    See Also
+    --------
+    scale_OLI : Scaling function for Landsat 8-9
     
     References
     ----------
-    - USGS Landsat Collection 2 Level-2 Science Products
-    - https://www.usgs.gov/landsat-missions/landsat-collection-2-level-2-science-products
+    .. [1] USGS (2021). Landsat Collection 2 Level-2 Science Products.
+           https://www.usgs.gov/landsat-missions/landsat-collection-2-level-2-science-products
     """
     opticalBands = image.select(['SR_B1','SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
     return image.addBands(opticalBands, None, True)
 
 class NdviSeasonality:
     """
-    Generate remote sensing index seasonal composition GIFs and images with dynamic period generation.
+    Generate remote sensing index seasonal composition GIFs and images.
     
-    This class provides a comprehensive framework for creating temporal composites from multiple
-    satellite data sources, supporting various spectral and radar indices with configurable
-    temporal periods and statistical reducers. The refactored version eliminates code duplication
-    by dynamically generating periods and using a single generic function for all temporal composites.
+    Comprehensive framework for creating temporal composites from multiple
+    satellite data sources. Supports 40+ spectral and radar indices with
+    configurable temporal periods and statistical reducers.
+    
+    Parameters
+    ----------
+    roi : ee.Geometry, str, list, or None, optional
+        Region of interest specification:
+        
+        * ``None`` : Default region (Andalusia, Spain)
+        * ``ee.Geometry`` : Direct Earth Engine geometry
+        * ``str`` : Path or special format
+            - ``'*.shp'`` : Shapefile path
+            - ``'*.geojson'`` : GeoJSON file path
+            - ``'deimsid/XXXXX'`` : DEIMS.org site ID
+            - ``'wrs:path,row'`` : Landsat WRS-2 tile (e.g., 'wrs:200,32')
+            - ``'s2:XXXXX'`` : Sentinel-2 MGRS tile (e.g., 's2:30TXN')
+        * ``list`` : Feature collection from Map.draw_features
+        
+    periods : int, optional
+        Number of temporal periods per year:
+        
+        * ``4`` : Seasonal (winter, spring, summer, autumn)
+        * ``12`` : Monthly (january through december)
+        * ``24`` : Bi-monthly (~15 days each, p1 through p24)
+        * Other : Custom equal division (p1 through pN)
+        
+        Default is 4.
+        
+    start_year : int, optional
+        Starting year for analysis (inclusive). Must be within satellite
+        data availability. Default is 2016.
+        
+    end_year : int, optional
+        Ending year for analysis (exclusive). Analysis includes years
+        from start_year to end_year-1. Default is 2020.
+        
+    sat : {'S2', 'S1', 'Landsat', 'MODIS', 'S3'}, optional
+        Satellite sensor selection:
+        
+        * ``'S2'`` : Sentinel-2 MSI (optical, 10-20m, 2015-present)
+        * ``'S1'`` : Sentinel-1 SAR (radar, 10m, 2014-present)
+        * ``'Landsat'`` : Merged L4-5-7-8-9 (optical, 30m, 1982-present)
+        * ``'MODIS'`` : Terra/Aqua (optical, 500m, 2000-present)
+        * ``'S3'`` : Sentinel-3 OLCI (ocean/land, 300m, 2016-present)
+        
+        Default is 'S2'.
+        
+    key : {'max', 'median', 'mean', 'percentile'}, optional
+        Statistical reducer for temporal aggregation:
+        
+        * ``'max'`` : Maximum value (vegetation peak detection)
+        * ``'median'`` : Median value (robust to outliers)
+        * ``'mean'`` : Mean value (smooth temporal profiles)
+        * ``'percentile'`` : Custom percentile (set with percentile param)
+        
+        Default is 'max'.
+        
+    index : str, optional
+        Spectral or radar index to compute. Available indices depend on
+        satellite. See :meth:`get_available_indices` for full list.
+        Common indices:
+        
+        * Vegetation: ``'ndvi'``, ``'evi'``, ``'savi'``, ``'gndvi'``
+        * Water: ``'ndwi'``, ``'mndwi'``, ``'awei'``
+        * Burn/Fire: ``'nbr'``, ``'nbri'``
+        * SAR: ``'vh'``, ``'vv'``, ``'rvi'``, ``'vv_vh_ratio'``
+        
+        Default is 'ndvi'.
+        
+    percentile : int, optional
+        Percentile value when key='percentile'. Range: 0-100.
+        Common values:
+        
+        * 10-25: Lower percentiles (minimum-like)
+        * 50: Median equivalent
+        * 75-95: Upper percentiles (maximum-like)
+        
+        Default is 90.
+        
+    orbit : {'BOTH', 'ASCENDING', 'DESCENDING'}, optional
+        Sentinel-1 orbit direction (only for sat='S1'):
+        
+        * ``'BOTH'`` : All orbits (maximum temporal coverage)
+        * ``'ASCENDING'`` : Single orbit (geometric consistency)
+        * ``'DESCENDING'`` : Single orbit (geometric consistency)
+        
+        Default is 'BOTH'.
+        
+    normalize_sar : bool, optional
+        If True, applies Z-score normalization to SAR indices for
+        better comparability with optical indices. Only applies when
+        sat='S1'. Default is False.
+        
+    use_sar_ard : bool, optional
+        If True, applies advanced SAR preprocessing (ARD pipeline) including
+        terrain correction and sophisticated speckle filtering. Recommended
+        for mountainous areas. Default is True.
+        
+    sar_speckle_filter : str or None, optional
+        Speckle filter algorithm for SAR (when use_sar_ard=True):
+        
+        * ``'REFINED_LEE'`` : Refined Lee with edge preservation
+        * ``'LEE'`` : Standard Lee filter
+        * ``'GAMMA_MAP'`` : Gamma Maximum A Posteriori
+        * ``'LEE_SIGMA'`` : Lee Sigma filter
+        * ``'BOXCAR'`` : Simple mean filter
+        * ``None`` : No speckle filtering
+        
+        Default is 'REFINED_LEE'.
+        
+    sar_terrain_correction : bool, optional
+        Enable radiometric terrain correction for SAR data.
+        Essential for mountainous regions. Default is True.
+        
+    sar_terrain_model : {'VOLUME', 'SURFACE'}, optional
+        Scattering model for terrain correction:
+        
+        * ``'VOLUME'`` : Volume scattering (vegetation, crops)
+        * ``'SURFACE'`` : Surface scattering (bare soil, water)
+        
+        Default is 'VOLUME'.
     
     Attributes
     ----------
     roi : ee.Geometry
-        Region of interest for analysis
+        Processed region of interest geometry
     periods : int
-        Number of temporal periods to divide each year
+        Number of temporal periods per year
     start_year : int
-        Starting year for temporal analysis
+        First year of analysis
     end_year : int
-        Ending year for temporal analysis (exclusive)
+        Last year of analysis (exclusive)
     sat : str
-        Satellite sensor identifier
+        Selected satellite sensor
+    index : str
+        Selected spectral/radar index
     key : str
         Statistical reducer method
-    index : str
-        Spectral or radar index to compute
     percentile : int
-        Percentile value for percentile-based statistics
-    orbit : str
-        Sentinel-1 orbit direction (for SAR data)
-    normalize_sar : bool, optional
-        If True, normalizes all SAR indices to [0,1] range for better comparability
-        with optical indices. Only applies when sat='S1'. Default is False.
-    period_dates : list
-        Generated date ranges for each period
-    period_names : list
+        Percentile value for percentile reducer
+    period_dates : list of list
+        Date ranges for each period [[start, end], ...]
+    period_names : list of str
         Names for each temporal period
     ndvi_col : ee.ImageCollection
         Configured satellite image collection
-    imagelist : list
-        List of processed composite images
+    imagelist : list of ee.Image
+        Processed composite images
+    
+    Examples
+    --------
+    Basic seasonal NDVI analysis::
+    
+        >>> processor = NdviSeasonality(
+        ...     roi='study_area.shp',
+        ...     periods=4,
+        ...     start_year=2020,
+        ...     end_year=2023,
+        ...     sat='S2',
+        ...     index='ndvi'
+        ... )
+        >>> processor.get_gif('seasonal_ndvi.gif')
+    
+    Monthly SAR analysis with percentile::
+    
+        >>> sar_processor = NdviSeasonality(
+        ...     periods=12,
+        ...     sat='S1',
+        ...     index='vh',
+        ...     key='percentile',
+        ...     percentile=90,
+        ...     orbit='DESCENDING'
+        ... )
+        >>> collection = sar_processor.get_year_composite()
+    
+    Using DEIMS site with custom periods::
+    
+        >>> deims_processor = NdviSeasonality(
+        ...     roi='deimsid/11696159-444f-4e06-b537-d4c5c0a4e97d',
+        ...     periods=8,  # 8 periods per year
+        ...     sat='MODIS',
+        ...     index='evi'
+        ... )
+    
+    Raises
+    ------
+    ValueError
+        If satellite not supported, index not available for satellite,
+        orbit parameter invalid, or ROI cannot be processed.
+    ImportError
+        If required dependencies missing (e.g., deims package).
+    
+    See Also
+    --------
+    get_available_indices : Query available indices for satellites
+    get_year_composite : Generate temporal composite images
+    get_gif : Create animated visualization
+    get_export : Export composites to GeoTIFF files
+    
+    Notes
+    -----
+    The class automatically validates index-satellite compatibility during
+    initialization. Default ROI covers part of Andalusia, Spain for testing.
+    Temporal periods are generated dynamically to support flexible analysis.
+    
+    References
+    ----------
+    .. [1] Gorelick et al. (2017). Google Earth Engine: Planetary-scale 
+           geospatial analysis for everyone. Remote Sensing of Environment.
     """
     
     def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, 
                  sat='S2', key='max', index='ndvi', percentile=90, orbit='BOTH', normalize_sar=False,
                  use_sar_ard=True, sar_speckle_filter='REFINED_LEE', sar_terrain_correction=True,
-                sar_terrain_model='VOLUME'):
+                sar_terrain_model='VOLUME', cloud_filter=True, max_cloud_cover=20):
         """
         Initialize NdviSeasonality object for temporal remote sensing analysis.
         
@@ -312,6 +575,15 @@ class NdviSeasonality:
             
             Only used when sat='S1', use_sar_ard=True, and sar_terrain_correction=True.
             Default is 'VOLUME'.
+
+        cloud_filter : bool, optional
+            If True, applies cloud filtering to optical sensors (S2, Landsat).
+            No effect on SAR or other sensors. Default is True.
+        
+        max_cloud_cover : int, optional
+            Maximum cloud cover percentage (0-100) for initial filtering.
+            Only used when cloud_filter=True. Default is 20.
+            Lower values = stricter filtering but less data.
             
         Raises
         ------
@@ -472,6 +744,10 @@ class NdviSeasonality:
         self.sar_speckle_filter = sar_speckle_filter
         self.sar_terrain_correction = sar_terrain_correction
         self.sar_terrain_model = sar_terrain_model
+
+        # Store cloud filtering parameters
+        self.cloud_filter = cloud_filter
+        self.max_cloud_cover = max_cloud_cover
         
         # Validate orbit parameter
         valid_orbits = ['BOTH', 'ASCENDING', 'DESCENDING']
@@ -581,99 +857,65 @@ class NdviSeasonality:
     
     def _generate_periods(self, n_periods):
         """
-        Dynamically generate period dates and names based on the number of periods.
+        Dynamically generate period dates and names based on number of periods.
         
-        Creates temporal divisions of the year based on the specified number of periods.
-        Handles common cases (4, 12, 24) with meaningful names and provides generic
-        equal division for custom period counts. This method replaces all hardcoded
-        period definitions and enables flexible temporal analysis.
+        Creates temporal divisions of the year for composite generation. Handles
+        common cases (seasonal, monthly, bi-monthly) with meaningful names and
+        provides generic equal division for custom period counts.
         
         Parameters
         ----------
         n_periods : int
-            Number of periods to divide the year into. Common values:
-            - 4: Traditional seasons with meaningful names
-            - 12: Monthly periods with month names
-            - 24: Bi-monthly periods (~15 days each)
-            - Other: Custom equal division using day-of-year approach
+            Number of periods to divide the year into:
+            
+            * ``4`` : Traditional seasons
+            * ``12`` : Calendar months
+            * ``24`` : Bi-monthly (~15 days)
+            * Other : Equal day-of-year division
         
         Returns
         -------
-        tuple
-            (period_dates, period_names) where:
+        period_dates : list of list
+            Date ranges as [start, end] pairs in '-MM-DD' format.
+            Example: ``[['-01-01', '-03-31'], ['-04-01', '-06-30'], ...]``
             
-            period_dates : list of list
-                List of [start_date, end_date] pairs in format ['-MM-DD', '-MM-DD'].
-                Each sublist contains two strings representing the start and end
-                dates for a period. Dates are in format '-MM-DD' to be appended
-                to year strings.
-                
-            period_names : list of str
-                List of descriptive period names. For seasons: ['winter', 'spring', ...],
-                for months: ['january', 'february', ...], for custom: ['p1', 'p2', ...].
-                
+        period_names : list of str
+            Descriptive names for each period.
+            Example: ``['winter', 'spring', 'summer', 'autumn']``
+        
         Notes
         -----
-        **Seasonal Periods (n_periods=4):**
-        - Winter: January 1 - March 31
-        - Spring: April 1 - June 30  
-        - Summer: July 1 - September 30
-        - Autumn: October 1 - December 31
-        
-        **Monthly Periods (n_periods=12):**
-        - Each calendar month as separate period
-        - February always ends on 28th to avoid leap year complications
-        - Full month names in lowercase
-        
-        **Bi-monthly Periods (n_periods=24):**
-        - Each month divided into two ~15-day periods
-        - February second period always ends on 28th
-        - Generic names: p1, p2, ..., p24
-        
-        **Custom Periods (other values):**
-        - Year divided equally using day-of-year calculation
-        - 365 days divided by n_periods (last period gets remainder)
-        - Generic names: p1, p2, ..., pN
-        - Uses non-leap year (2021) for consistent day-to-date conversion
+        Date formats are designed to be prepended with year strings.
+        February always uses 28 days to avoid leap year complications.
+        Custom periods use day-of-year calculation with 365-day year.
         
         Examples
         --------
-        >>> # Seasonal periods
-        >>> dates, names = self._generate_periods(4)
-        >>> print(dates[0])  # Winter
-        ['-01-01', '-03-31']
-        >>> print(names[0])
-        'winter'
+        Generate seasonal periods::
         
-        >>> # Monthly periods
-        >>> dates, names = self._generate_periods(12)
-        >>> print(dates[1])  # February
-        ['-02-01', '-02-28']
-        >>> print(names[1])
-        'february'
+            >>> dates, names = self._generate_periods(4)
+            >>> print(dates[0])  # Winter period
+            ['-01-01', '-03-31']
+            >>> print(names[0])
+            'winter'
         
-        >>> # Custom 8-period division
-        >>> dates, names = self._generate_periods(8)
-        >>> print(len(dates))
-        8
-        >>> print(names[0])
-        'p1'
+        Generate custom 8-period division::
         
-        >>> # Usage in filtering
-        >>> year = 2020
-        >>> start_date = str(year) + dates[0][0]  # '2020-01-01'
-        >>> end_date = str(year) + dates[0][1]    # '2020-03-31'
+            >>> dates, names = self._generate_periods(8)
+            >>> len(dates)  # 8 equal periods
+            8
+            >>> names[0]  # Generic naming
+            'p1'
         
-        Raises
-        ------
-        None
-            This method handles all input values gracefully. For n_periods <= 0,
-            it will return empty lists. For very large n_periods, it creates
-            many short periods.
-            
+        Use in date filtering::
+        
+            >>> year = 2020
+            >>> start_date = str(year) + dates[0][0]  # '2020-01-01'
+            >>> end_date = str(year) + dates[0][1]    # '2020-03-31'
+        
         See Also
         --------
-        get_period_composite : Uses generated periods for data filtering
+        get_period_composite : Uses generated periods for filtering
         get_year_composite : Processes all periods for each year
         """
         if n_periods == 4:
@@ -751,165 +993,286 @@ class NdviSeasonality:
         
         return period_dates, period_names
     
+    # Clouds para que os quiero...
+    def mask_s2_clouds(self, image):
+        """
+        Mask clouds and shadows in Sentinel-2 images using QA60 band.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Sentinel-2 SR image with QA60 band
+            
+        Returns
+        -------
+        ee.Image
+            Cloud-masked image
+            
+        References
+        ----------
+        Sentinel-2 Cloud Masking with s2cloudless
+        https://developers.google.com/earth-engine/tutorials/community/sentinel-2-s2cloudless
+        """
+        # QA60 es la banda de calidad de Sentinel-2
+        qa = image.select('QA60')
+        
+        # Bits 10 y 11 son nubes y cirrus, respectivamente
+        cloud_bit_mask = 1 << 10
+        cirrus_bit_mask = 1 << 11
+        
+        # Crear máscara: 0 donde hay nubes/cirrus
+        mask = qa.bitwiseAnd(cloud_bit_mask).eq(0).And(
+            qa.bitwiseAnd(cirrus_bit_mask).eq(0))
+        
+        # Aplicar máscara y copiar propiedades
+        return image.updateMask(mask).copyProperties(
+            image, ['system:time_start', 'system:time_end', 'system:index'])
+
+    def mask_landsat_clouds(self, image):
+        """
+        Mask clouds and shadows in Landsat Collection 2 images using QA_PIXEL band.
+        
+        Parameters
+        ----------
+        image : ee.Image
+            Landsat Collection 2 Level-2 image with QA_PIXEL band
+            
+        Returns
+        -------
+        ee.Image
+            Cloud-masked image
+            
+        References
+        ----------
+        Landsat Collection 2 Level-2 Science Products
+        https://www.usgs.gov/landsat-missions/landsat-collection-2-level-2-science-products
+        """
+        # QA_PIXEL contiene información de calidad
+        qa = image.select('QA_PIXEL')
+        
+        # Bits para diferentes tipos de nubes/sombras en Collection 2
+        cloud_bit = 3           # Cloud
+        cloud_shadow_bit = 4    # Cloud Shadow
+        cirrus_bit = 2         # Cirrus (solo Landsat 8/9)
+        
+        # Crear máscaras para cada condición
+        cloud_mask = qa.bitwiseAnd(1 << cloud_bit).eq(0)
+        shadow_mask = qa.bitwiseAnd(1 << cloud_shadow_bit).eq(0)
+        
+        # Para Landsat 8/9, también filtrar cirrus
+        # Detectar si es L8/9 por la presencia de ST_B10
+        is_oli = image.bandNames().contains('ST_B10')
+        
+        mask = ee.Algorithms.If(
+            is_oli,
+            # Landsat 8/9: incluir máscara de cirrus
+            cloud_mask.And(shadow_mask).And(qa.bitwiseAnd(1 << cirrus_bit).eq(0)),
+            # Landsat 4/5/7: solo nubes y sombras
+            cloud_mask.And(shadow_mask)
+        )
+        
+        # Aplicar máscara y copiar propiedades
+        return image.updateMask(mask).copyProperties(
+        image, ['system:time_start', 'system:time_end', 'system:index'])
+    
     def _setup_satellite_collections(self):
         """
-        Set up satellite image collections based on the selected sensor.
+        Configure satellite image collections based on selected sensor.
         
-        Configures the appropriate Earth Engine ImageCollection for the selected
-        satellite sensor, applying necessary scaling, filtering, band selection,
-        and preprocessing. Each sensor requires specific handling due to different
-        band configurations, scaling factors, and data availability periods.
-        
-        The method sets the `self.ndvi_col` attribute with a properly configured
-        ImageCollection ready for temporal analysis.
+        Initializes the appropriate Earth Engine ImageCollection with necessary
+        preprocessing, band selection, scaling, and filtering. Each sensor
+        requires specific handling due to different band configurations,
+        scaling factors, and data characteristics.
         
         Notes
         -----
-        **Landsat Configuration:**
-        - Merges Landsat 4, 5, 7, 8, and 9 Collection 2 Level-2 Surface Reflectance
-        - Separates OLI/TIRS (L8-9) and ETM+/TM (L4-5-7) due to different band numbering
-        - Applies appropriate scaling functions (scale_OLI, scale_ETM)
-        - Coverage: 1982-present, 30m resolution
+        Collection configurations:
         
-        **Sentinel-2 Configuration:**
-        - Uses harmonized Surface Reflectance collection (COPERNICUS/S2_SR_HARMONIZED)
-        - Includes Red Edge bands (B5, B6, B7) for advanced vegetation indices
-        - Band selection: B2-B8, B11-B12 (excludes cirrus and coastal aerosol)
-        - Coverage: 2015-present, 10-20m resolution
-        
-        **MODIS Configuration:**
-        - Uses MOD09A1 8-day Surface Reflectance composite
-        - 500m resolution with daily global coverage
-        - Band selection focuses on optical bands suitable for vegetation analysis
-        - Coverage: 2000-present, 500m resolution
-        
-        **Sentinel-1 Configuration:**
-        - Uses Ground Range Detected (GRD) products in IW mode
-        - Filters for dual-polarization (VV+VH) acquisitions
-        - Applies orbit filtering based on user preference (ASCENDING/DESCENDING/BOTH)
-        - Includes speckle filtering using focal median (3x3 kernel)
-        - Coverage: 2014-present, 10m resolution
-        
-        **Sentinel-3 Configuration:**
-        - Uses OLCI (Ocean and Land Color Instrument) L1B radiance data
-        - Selects 16 key spectral bands from 400nm to 1020nm
-        - Specialized for ocean/coastal applications and water quality monitoring
-        - Coverage: 2016-present, 300m resolution
+        **Landsat (merged):**
+            * Collections: L4, L5, L7, L8, L9 Collection 2 Level-2
+            * Resolution: 30m
+            * Scaling: Applied via scale_OLI/scale_ETM functions
+            * Thermal bands: ST_B10 (L8/9), ST_B6 (L4/5/7)
+            * Cloud filtering: Optional using QA_PIXEL band
+            
+        **Sentinel-2:**
+            * Collection: COPERNICUS/S2_SR_HARMONIZED
+            * Resolution: 10-20m
+            * Bands: B2-B8, B11-B12 (includes Red Edge)
+            * Coverage: 2015-present
+            * Cloud filtering: Optional using QA60 band
+            
+        **MODIS:**
+            * Products: MOD09A1 (reflectance), MOD11A1/MYD11A1 (LST)
+            * Resolution: 500m (reflectance), 1km (LST)
+            * Temporal: 8-day composites
+            * Smart Terra/Aqua selection based on date range
+            
+        **Sentinel-1:**
+            * Product: GRD (Ground Range Detected)
+            * Mode: IW (Interferometric Wide)
+            * Polarization: VV+VH dual-pol
+            * Optional ARD preprocessing with terrain correction
+            
+        **Sentinel-3:**
+            * Instrument: OLCI (Ocean and Land Color)
+            * Bands: 16 spectral bands (400-1020nm)
+            * Resolution: 300m
+            * Focus: Ocean/coastal applications
         
         Raises
         ------
         ValueError
-            If satellite sensor is not recognized or supported.
-            
-        Examples
-        --------
-        >>> # After initialization, the collection is ready for use
-        >>> processor = NdviSeasonality(sat='S2', index='ndvi')
-        >>> # processor.ndvi_col now contains configured Sentinel-2 collection
-        >>> print(processor.ndvi_col.size().getInfo())  # Number of images
+            If satellite sensor is not recognized.
         
-        >>> # Different sensors create different collections
-        >>> sar_processor = NdviSeasonality(sat='S1', index='vh', orbit='DESCENDING')
-        >>> # sar_processor.ndvi_col contains filtered Sentinel-1 collection
+        Warnings
+        --------
+        * Landsat 7 has SLC-off gaps after May 2003
+        * MODIS Aqua only available after July 2002
+        * Sentinel-3 thermal bands not available in Earth Engine
         
         See Also
         --------
-        scale_OLI : Scaling function for Landsat 8-9
-        scale_ETM : Scaling function for Landsat 4-5-7
-        get_period_composite : Uses configured collection for temporal filtering
+        scale_OLI : Landsat 8-9 scaling
+        scale_ETM : Landsat 4-5-7 scaling
+        S1ARDProcessor : Advanced SAR preprocessing
+        mask_s2_clouds : Sentinel-2 cloud masking
+        mask_landsat_clouds : Landsat cloud masking
         """
-        # Landsat collections - comprehensive multi-mission setup
+        
+        # ============= LANDSAT CONFIGURATION =============
+        # Initialize Landsat collections
         LC09col = ee.ImageCollection("LANDSAT/LC09/C02/T1_L2").filterBounds(self.roi) 
         LC08col = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterBounds(self.roi) 
         LE07col = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2").filterBounds(self.roi) 
         LT05col = ee.ImageCollection("LANDSAT/LT05/C02/T1_L2").filterBounds(self.roi) 
         LT04col = ee.ImageCollection("LANDSAT/LT04/C02/T1_L2").filterBounds(self.roi) 
         
+        # Apply cloud cover metadata filter if enabled for Landsat
+        if self.sat == 'Landsat' and self.cloud_filter:
+            print(f"Applying cloud filter to Landsat: max {self.max_cloud_cover}% cloud cover")
+            LC09col = LC09col.filter(ee.Filter.lte('CLOUD_COVER', self.max_cloud_cover))
+            LC08col = LC08col.filter(ee.Filter.lte('CLOUD_COVER', self.max_cloud_cover))
+            LE07col = LE07col.filter(ee.Filter.lte('CLOUD_COVER', self.max_cloud_cover))
+            LT05col = LT05col.filter(ee.Filter.lte('CLOUD_COVER', self.max_cloud_cover))
+            LT04col = LT04col.filter(ee.Filter.lte('CLOUD_COVER', self.max_cloud_cover))
+        
+        # Merge Landsat collections
         OLI = LC09col.merge(LC08col)  # Landsat 8/9
         ETM = LE07col.merge(LT05col).merge(LT04col)  # Landsat 4/5/7
         
-        # Función de escalado para OLI (L8/9) - INCLUYE banda térmica ST_B10
+        # Scaling function for OLI (L8/9) with thermal band and optional cloud masking
         def scale_OLI_with_thermal(image):
             optical = image.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
-            # Mantener banda térmica original ST_B10 (ya está en formato correcto)
             thermal = image.select(['ST_B10'])
-            return image.addBands(optical).addBands(thermal)
+            scaled = image.addBands(optical, None, True).addBands(thermal, None, True)
+            
+            # Apply pixel-level cloud mask if enabled
+            if self.cloud_filter and self.sat == 'Landsat':
+                scaled = self.mask_landsat_clouds(scaled)
+            
+            return scaled
         
-        # Función de escalado para ETM/TM (L4/5/7) - INCLUYE banda térmica ST_B6  
+        # Scaling function for OLI (L8/9) with thermal band
+        def scale_OLI_with_thermal(image):
+            optical = image.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
+            thermal = image.select(['ST_B10'])
+            return image.addBands(optical, None, True).addBands(thermal, None, True)
+
+        # Scaling function for ETM/TM (L4/5/7) with thermal band
         def scale_ETM_with_thermal(image):
             optical = image.select(['SR_B1','SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
-            # Mantener banda térmica original ST_B6 (ya está en formato correcto)
             thermal = image.select(['ST_B6'])
-            return image.addBands(optical).addBands(thermal)
-        
-        OLI_ = OLI.map(scale_OLI_with_thermal) 
+            return image.addBands(optical, None, True).addBands(thermal, None, True)
+
+        OLI_ = OLI.map(scale_OLI_with_thermal)
         ETM_ = ETM.map(scale_ETM_with_thermal)
+
+        # Aplicar enmascaramiento de nubes DESPUÉS del escalado si está activado
+        if self.sat == 'Landsat' and hasattr(self, 'cloud_filter') and self.cloud_filter:
+            OLI_ = OLI_.map(self.mask_landsat_clouds)
+            ETM_ = ETM_.map(self.mask_landsat_clouds)
+
         Landsat = OLI_.merge(ETM_)
         
-        # Sentinel-2 (sin cambios - no tiene térmicas)
-        S2col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").select([
-            'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B11', 'B12'
-        ], [
-            'Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3', 
-            'Nir', 'Swir1', 'Swir2'
-        ]).filterBounds(self.roi)
+        # ============= SENTINEL-2 CONFIGURATION =============
+        if self.sat == 'S2' and self.cloud_filter:
+            print(f"Applying cloud filter to Sentinel-2: max {self.max_cloud_cover}% cloud cover")
+            # First filter by cloud cover metadata
+            S2col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(self.roi).filter(
+                ee.Filter.lte('CLOUDY_PIXEL_PERCENTAGE', self.max_cloud_cover)
+            )
+            # Then apply pixel-level cloud mask
+            S2col = S2col.map(self.mask_s2_clouds).select([
+                'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B11', 'B12'
+            ], [
+                'Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3', 
+                'Nir', 'Swir1', 'Swir2'
+            ])
+        else:
+            # No cloud filtering
+            S2col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").select([
+                'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B11', 'B12'
+            ], [
+                'Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3', 
+                'Nir', 'Swir1', 'Swir2'
+            ]).filterBounds(self.roi)
         
-        # MODIS Terra + Aqua - Configuración inteligente según período
-        # Fechas de disponibilidad:
-        # MOD11A1 (Terra): Feb 2000 - presente
-        # MYD11A1 (Aqua): Jul 2002 - presente
+        # ============= MODIS CONFIGURATION =============
+        # MODIS Terra + Aqua - Smart configuration based on time period
+        # MOD11A1 (Terra): Feb 2000 - present
+        # MYD11A1 (Aqua): Jul 2002 - present
         
-        # Detectar si el período incluye fechas anteriores a Aqua (jul 2002)
         aqua_start_date = ee.Date('2002-07-04')
         period_start = ee.Date(f'{self.start_year}-01-01')
         use_aqua = period_start.millis().gte(aqua_start_date.millis())
         
-        # Reflectancia Terra (siempre disponible)
+        # Terra reflectance (always available)
         MOD09A1 = ee.ImageCollection("MODIS/061/MOD09A1").select(
             ['sur_refl_b03', 'sur_refl_b04', 'sur_refl_b01', 'sur_refl_b02', 'sur_refl_b06', 'sur_refl_b07'], 
             ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']
         ).filterBounds(self.roi)
         
-        # LST Terra (siempre disponible desde 2000)
+        # Terra LST (always available since 2000)
         MOD11A1 = ee.ImageCollection("MODIS/061/MOD11A1").select(['LST_Day_1km']).filterBounds(self.roi)
         
-        # Configuración condicional basada en período
-        if self.start_year >= 2003:  # Período posterior a Aqua
+        # Conditional configuration based on time period
+        if self.start_year >= 2003:  # Period after Aqua availability
             print("Using MODIS Terra + Aqua LST (maximum coverage)")
             
-            # Reflectancia Aqua
+            # Aqua reflectance
             MYD09A1 = ee.ImageCollection("MODIS/061/MYD09A1").select(
                 ['sur_refl_b03', 'sur_refl_b04', 'sur_refl_b01', 'sur_refl_b02', 'sur_refl_b06', 'sur_refl_b07'], 
                 ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']
             ).filterBounds(self.roi)
             
-            # LST Aqua
+            # Aqua LST
             MYD11A1 = ee.ImageCollection("MODIS/061/MYD11A1").select(['LST_Day_1km']).filterBounds(self.roi)
             
-            # Combinar ambos satélites
+            # Combine both satellites
             MODIS_reflectance = MOD09A1.merge(MYD09A1)
             MODIS_LST = MOD11A1.merge(MYD11A1)
             
-        else:  # Período anterior a Aqua (2000-2002)
+        else:  # Period before Aqua (2000-2002)
             print("Using MODIS Terra LST only (Aqua not available before July 2002)")
             
-            # Solo Terra
+            # Only Terra
             MODIS_reflectance = MOD09A1
             MODIS_LST = MOD11A1
         
-        # Función para combinar reflectancia con LST del mismo día
+        # Function to merge reflectance with LST from same day
         def merge_modis_lst(ref_image):
             date = ref_image.date()
-            # Buscar LST del mismo día (±1 día de tolerancia)
+            # Find LST from same day (±1 day tolerance)
             lst_same_day = MODIS_LST.filterDate(
                 date.advance(-1, 'day'), 
                 date.advance(1, 'day')
             )
             
-            # Si hay múltiples observaciones LST el mismo día, tomar la media
+            # If multiple LST observations on same day, take mean
             lst_composite = lst_same_day.mean()
             
-            # Solo añadir LST si hay datos válidos
+            # Only add LST if valid data exists
             return ee.Algorithms.If(
                 lst_same_day.size().gt(0),
                 ref_image.addBands(lst_composite),
@@ -918,13 +1281,14 @@ class NdviSeasonality:
         
         MOD09A1_with_LST = MODIS_reflectance.map(merge_modis_lst)
         
-        # Sentinel-1 - SAR with advanced preprocessing options
+        # ============= SENTINEL-1 SAR CONFIGURATION =============
         s1 = ee.ImageCollection('COPERNICUS/S1_GRD').filter(
             ee.Filter.listContains('transmitterReceiverPolarisation', 'VH')
         ).filter(
             ee.Filter.listContains('transmitterReceiverPolarisation', 'VV')
         ).filter(ee.Filter.eq('instrumentMode', 'IW'))
 
+        # Apply orbit filter
         if self.orbit == 'ASCENDING':
             s1 = s1.filter(ee.Filter.eq('orbitProperties_pass', 'ASCENDING'))
             print("Using Sentinel-1 ascending orbits only.")
@@ -934,7 +1298,7 @@ class NdviSeasonality:
         else:
             print("Using all Sentinel-1 orbits (ascending + descending).")
 
-        # Filter by ROI first
+        # Filter by ROI
         s1 = s1.filterBounds(self.roi)
 
         # Define preprocessing function
@@ -970,21 +1334,8 @@ class NdviSeasonality:
 
         # Apply the selected preprocessing
         s1S1 = s1.select(selected_bands).map(apply_speckle_filter)
-
         
-        # Sentinel-3 - SLSTR para LST + OLCI para índices ópticos
-        S3col_OLCI = ee.ImageCollection("COPERNICUS/S3/OLCI").select([
-            'Oa01_radiance', 'Oa02_radiance', 'Oa03_radiance', 'Oa04_radiance', 
-            'Oa05_radiance', 'Oa06_radiance', 'Oa07_radiance', 'Oa08_radiance',
-            'Oa09_radiance', 'Oa10_radiance', 'Oa11_radiance', 'Oa12_radiance',
-            'Oa16_radiance', 'Oa17_radiance', 'Oa18_radiance', 'Oa21_radiance'
-        ], [
-            'Violet', 'Blue', 'Blue2', 'Blue_Green', 'Green', 'Green2',
-            'Red', 'Red2', 'Red3', 'Red_Edge1', 'Red_Edge2', 'NIR',
-            'NIR2', 'NIR3', 'NIR4', 'NIR5'
-        ]).filterBounds(self.roi)
-        
-        # Sentinel-3 - SOLO OLCI disponible en GEE (sin SLSTR térmicas)
+        # ============= SENTINEL-3 OLCI CONFIGURATION =============
         S3col = ee.ImageCollection("COPERNICUS/S3/OLCI").select([
             'Oa01_radiance', 'Oa02_radiance', 'Oa03_radiance', 'Oa04_radiance', 
             'Oa05_radiance', 'Oa06_radiance', 'Oa07_radiance', 'Oa08_radiance',
@@ -996,12 +1347,16 @@ class NdviSeasonality:
             'NIR2', 'NIR3', 'NIR4', 'NIR5'
         ]).filterBounds(self.roi)
         
-        # Asignar colecciones según el sensor seleccionado
+        # ============= ASSIGN COLLECTIONS BASED ON SENSOR =============
         if self.sat == 'S2':
             self.ndvi_col = S2col
+            if self.cloud_filter:
+                print("Sentinel-2 collection configured with cloud filtering")
         elif self.sat == 'Landsat':
             self.ndvi_col = Landsat
             print("Landsat collection includes thermal bands: ST_B10 (L8/9) and ST_B6 (L4/5/7)")
+            if self.cloud_filter:
+                print("Landsat collection configured with cloud filtering")
         elif self.sat == 'MODIS':
             self.ndvi_col = MOD09A1_with_LST
             print("MODIS collection includes LST_Day_1km from Terra and Aqua satellites")
@@ -1015,95 +1370,57 @@ class NdviSeasonality:
     
     def get_period_composite(self, year, period_idx):
         """
-        Generate a composite image for a specific temporal period within a year.
+        Generate composite image for a specific temporal period within a year.
         
-        Creates a single composite image by applying the specified statistical reducer
-        to all available satellite images within the defined temporal period. This method
-        is the core processing function that converts time series data into representative
-        composite values for each period.
-        
-        The method automatically handles different statistical reducers and applies
-        the pre-validated index calculation method to the filtered image collection.
+        Creates a single composite by applying the configured statistical reducer
+        to all satellite images within the defined temporal period. Core processing
+        function for temporal composite generation.
         
         Parameters
         ----------
         year : int
-            Target year for composite generation. Must be within the range of
-            satellite data availability for the selected sensor.
+            Target year for composite generation. Must be within satellite
+            data availability range.
             
         period_idx : int
-            Index of the temporal period within the year (0-based).
-            Must be less than self.periods. Corresponds to periods defined
-            in self.period_dates and self.period_names.
+            Zero-based index of temporal period within the year.
+            Must be less than self.periods.
             
         Returns
         -------
         ee.Image
-            Single-band composite image representing the specified period using
-            the configured statistical reducer and spectral/radar index.
-            Band name depends on reducer type and will be further renamed
-            in get_year_composite().
+            Single-band composite image with the selected index values.
+            Band name depends on reducer type.
             
         Notes
         -----
-        **Statistical Reducers Applied:**
-        - 'max': Maximum value across all images in period (ee.ImageCollection.max())
-        - 'median': Median value across all images in period (ee.ImageCollection.median())
-        - 'mean': Mean value across all images in period (ee.ImageCollection.mean())
-        - 'percentile': Custom percentile using ee.Reducer.percentile([self.percentile])
+        Processing workflow:
         
-        **Processing Workflow:**
-        1. Extract start and end dates from self.period_dates[period_idx]
-        2. Construct full date strings by prepending year
-        3. Filter self.ndvi_col to the specified date range
-        4. Apply index calculation method (self.d[self.index]) to each image
-        5. Apply statistical reducer to create final composite
+        1. Extract date range from ``self.period_dates[period_idx]``
+        2. Filter satellite collection to date range
+        3. Apply index calculation (``self.d[self.index]``)
+        4. Apply statistical reducer (max/median/mean/percentile)
+        5. Return composite image
         
-        **Index Calculation:**
-        The method uses self.d[self.index] to apply the appropriate index calculation
-        function, which was validated during initialization. No additional validation
-        is performed at runtime for efficiency.
-        
-        **Error Handling:**
-        This method assumes valid inputs as validation occurs in __init__().
-        However, it may return empty images if no satellite data is available
-        for the specified period, which is handled by the calling method.
+        The method assumes valid inputs as validation occurs during
+        initialization. Empty images may result if no data is available.
         
         Examples
         --------
-        >>> # Generate winter composite for 2020
-        >>> processor = NdviSeasonality(periods=4, start_year=2020, end_year=2021)
-        >>> winter_composite = processor.get_period_composite(2020, 0)  # 0 = winter
-        >>> print(winter_composite.bandNames().getInfo())
-        ['nd']  # or specific band name depending on index
+        Generate winter composite for 2020::
         
-        >>> # Generate July composite for monthly analysis
-        >>> monthly_processor = NdviSeasonality(periods=12, sat='S2', index='ndvi')
-        >>> july_composite = monthly_processor.get_period_composite(2021, 6)  # 6 = July (0-based)
+            >>> processor = NdviSeasonality(periods=4, start_year=2020)
+            >>> winter_2020 = processor.get_period_composite(2020, 0)  # 0=winter
         
-        >>> # Generate SAR composite with percentile reducer
-        >>> sar_processor = NdviSeasonality(sat='S1', index='vh', key='percentile', percentile=90)
-        >>> sar_composite = sar_processor.get_period_composite(2022, 2)  # 2 = summer
+        Generate July composite for monthly analysis::
         
-        Raises
-        ------
-        IndexError
-            If period_idx is greater than or equal to self.periods.
-            
-        ee.EEException
-            If Earth Engine encounters errors during processing (e.g., no data available,
-            computation limits exceeded, authentication issues).
-            
+            >>> monthly = NdviSeasonality(periods=12, sat='S2')
+            >>> july_2021 = monthly.get_period_composite(2021, 6)  # 6=July (0-based)
+        
         See Also
         --------
-        get_year_composite : Uses this method to generate composites for all periods
-        _generate_periods : Generates the period definitions used here
-        
-        References
-        ----------
-        The statistical reducers follow Earth Engine's standard reduction methods:
-        - https://developers.google.com/earth-engine/guides/reducers_intro
-        - https://developers.google.com/earth-engine/apidocs/ee-imagecollection-max
+        get_year_composite : Calls this method for all periods
+        _generate_periods : Defines period date ranges
         """
         # Extract temporal boundaries for the specified period
         start_date, end_date = self.period_dates[period_idx]
@@ -1130,88 +1447,31 @@ class NdviSeasonality:
     
     def get_available_indices(self, satellite=None):
         """
-        Get list of available spectral/radar indices for a specific satellite sensor.
-        
-        Returns a sorted list of index names that can be computed with the specified
-        satellite sensor. This method is useful for discovering available indices
-        before initializing a new NdviSeasonality instance or for validation purposes.
+        Get list of available spectral/radar indices for a specific satellite.
         
         Parameters
         ----------
         satellite : str or None, optional
-            Satellite sensor identifier. Available options:
-            - 'S2': Sentinel-2 MSI (optical with Red Edge bands)
-            - 'Landsat': Landsat 4-5-7-8-9 (optical, basic bands)
-            - 'MODIS': MODIS Terra/Aqua (optical, basic bands)
-            - 'S1': Sentinel-1 SAR (radar indices)
-            - 'S3': Sentinel-3 OLCI (ocean/land color with many bands)
-            
-            If None, uses the currently configured satellite (self.sat).
-            Default is None.
+            Satellite sensor: 'S2', 'S1', 'Landsat', 'MODIS', 'S3'.
+            If None, uses current satellite (self.sat).
             
         Returns
         -------
         list of str
-            Sorted list of available index names for the specified satellite.
-            Index names are lowercase strings (e.g., 'ndvi', 'evi', 'vh', 'rvi').
-            
-        Raises
-        ------
-        ValueError
-            If the specified satellite is not supported.
+            Sorted list of available index names.
             
         Examples
         --------
-        >>> # Check indices for current satellite
         >>> processor = NdviSeasonality(sat='S2')
         >>> indices = processor.get_available_indices()
-        >>> print(len(indices))
-        29  # S2 has both basic optical and Red Edge indices
-        >>> print('ndvi' in indices)
-        True
-        >>> print('ndre' in indices)  # Red Edge index
-        True
+        >>> print(len(indices))  # S2 has most indices 29
         
-        >>> # Check indices for different satellite
+        >>> # Check for different satellite
         >>> landsat_indices = processor.get_available_indices('Landsat')
-        >>> print('ndre' in landsat_indices)  # Red Edge not available on Landsat
-        False
-        >>> print('ndvi' in landsat_indices)  # Basic indices available
-        True
         
-        >>> # Check SAR indices
-        >>> sar_indices = processor.get_available_indices('S1')
-        >>> print(sar_indices)
-        ['dpsvi', 'rfdi', 'rvi', 'vsdi', 'vv', 'vv_vh_ratio', 'vh']
-        
-        >>> # Compare optical vs SAR capabilities
-        >>> optical_count = len(processor.get_available_indices('S2'))
-        >>> sar_count = len(processor.get_available_indices('S1'))
-        >>> print(f"S2: {optical_count} indices, S1: {sar_count} indices")
-        
-        Notes
-        -----
-        **Index Categories by Satellite:**
-        
-        - **Basic optical indices** (S2, Landsat, MODIS, S3): ndvi, evi, ndwi, 
-        mndwi, savi, gndvi, avi, nbri, ndsi, aweinsh, awei, ndmi, msi, nmi, 
-        ndti, cri1, cri2, lai, pri, wdrvi
-        
-        - **Red Edge indices** (S2 only): ireci, mcari, ndre, reip, psri, cire, 
-        mtci, s2rep, ndci
-        
-        - **SAR indices** (S1 only): vh, vv, rvi, vv_vh_ratio, dpsvi, rfdi, vsdi
-        
-        - **Ocean/coastal indices** (S3 only): oci, tsi, cdom, turbidity, spm, 
-        kd490, floating_algae, red_edge_position, fluorescence_height, 
-        water_leaving_reflectance
-        
-        The method performs no computation, only returns pre-defined mappings.
-            
         See Also
         --------
-        get_all_available_indices : Get indices for all satellites at once
-        __init__ : Index validation occurs during initialization
+        get_all_available_indices : Get indices for all satellites
         """
         # Use current satellite if none specified
         if satellite is None:
@@ -1316,175 +1576,182 @@ class NdviSeasonality:
             result[sensor] = sorted(list(indices))
         return result
     
-    def get_year_composite(self):
+    def get_year_composite(self, return_counts: bool = False, count_valid_pixels: bool = False,
+        scale_for_valid: int = 10, maxPixels_for_valid: float = 1e9,
+        count_mode: str = "granules",  # 'granules' | 'unique_dates'
+        return_df: bool = False, df_pivot: bool = False):
         """
-        Generate temporal composite images for each year in the specified time range.
-        
-        Creates multi-band images where each band represents a temporal period 
-        (seasons, months, etc.) using the specified statistical reducer and the 
-        selected spectral/radar index. This is the main processing method that 
-        orchestrates the entire temporal analysis workflow.
-        
-        The method automatically handles dynamic band naming, flexible temporal 
-        periods, multiple statistical reducers, proper naming for both optical 
-        and SAR indices, and data availability validation for each period.
-        
+        Generate temporal composite images for all years in the time range.
+            
+        Main processing method that creates multi-band images where each band
+        represents a temporal period (season, month, etc.) using the configured
+        statistical reducer and spectral/radar index.
+
+        Parameters
+        ----------
+        return_counts : bool, optional
+            If True, also return a list of dictionaries with image counts
+            per year and period. Default is False (only the ImageCollection).
+        count_valid_pixels : bool, optional
+            If True, counts only images that contain at least one valid (non-masked)
+            pixel within the ROI for each period. If False, simply counts the number
+            of images in the filtered ImageCollection, regardless of whether they
+            contribute valid pixels to the ROI. Default is False.
+        scale_for_valid : int, optional
+            Spatial resolution (meters) used when checking valid pixels with
+            ``reduceRegion`` (only applies if ``count_valid_pixels=True``).
+            Default is 10.
+        maxPixels_for_valid : float, optional
+            Maximum number of pixels allowed for the validity check
+            (only applies if ``count_valid_pixels=True``). Default is 1e9.
+        count_mode : {'granules', 'unique_dates'}, optional
+            How to count inputs per period when ``return_counts=True``:
+            - 'granules': count all scenes (granules) intersecting the ROI
+            after filters (dates, clouds, etc.).
+            - 'unique_dates': count unique acquisition dates (YYYY-MM-dd),
+            collapsing multiple tiles/orbits from the same day into one.
+            Default is 'granules'.
+
         Returns
         -------
         ee.ImageCollection
-            Collection of multi-band composite images, one per year. Each image
-            contains bands named after the temporal periods (e.g., 'winter', 'spring'
-            for seasonal composites, or 'january', 'february' for monthly composites).
-            The number of bands per image equals the number of successful periods
-            with available data.
-            
+            Collection of multi-band composite images, one per year.
+            Each image contains bands named after temporal periods.
+            Band count equals successful periods with available data.
+        (ee.ImageCollection, list of dict), optional
+            If ``return_counts=True``, returns a tuple containing the
+            ImageCollection and a list of dictionaries. Each dictionary
+            has the following keys:
+                * year : int
+                * period_idx : int
+                * period_name : str
+                * images_count : int
+                * cloud_filter : bool
+                * sat : str
+                * index : str
+                * key : str
+                * percentile : int or None
+                * count_mode : str
+
         Notes
         -----
-        **Processing Workflow:**
-        1. Generate dynamic band names based on satellite type and statistical reducer
-        2. Clear previous results (self.imagelist = [])
-        3. For each year in [start_year, end_year):
-        a. Process all temporal periods using get_period_composite()
-        b. Validate data availability for each period
-        c. Combine successful periods into multi-band image
-        d. Rename bands to meaningful period names
-        e. Add to results list
+        Processing workflow:
+
+        1. Generate dynamic band names based on satellite and reducer
+        2. Clear previous results (``self.imagelist = []``)
+        3. For each year in range:
+            
+            a. Process all periods using :meth:`get_period_composite`
+            b. Validate data availability
+            c. Optionally count images per period (granules or unique dates)
+            d. Combine into multi-band image
+            e. Rename bands to period names
+            
         4. Return ImageCollection from processed images
-        
-        **Band Naming Convention:**
-        
-        *Optical Satellites (S2, Landsat, MODIS, S3):*
-        - Standard reducers: ['nd', 'nd_1', 'nd_2', ...]
-        - Percentile reducer: ['nd_p90', 'nd_p90_1', 'nd_p90_2', ...] (example for 90th percentile)
-        
-        *SAR Satellite (S1):*
-        - VH index: ['VH', 'VH_1', 'VH_2', ...]
-        - VV index: ['VV', 'VV_1', 'VV_2', ...]  
-        - RVI index: ['RVI', 'RVI_1', 'RVI_2', ...]
-        - VV/VH ratio: ['RATIO', 'RATIO_1', 'RATIO_2', ...]
-        - DPSVI index: ['DPSVI', 'DPSVI_1', 'DPSVI_2', ...]
-        - RFDI index: ['RFDI', 'RFDI_1', 'RFDI_2', ...]
-        - VSDI index: ['VSDI', 'VSDI_1', 'VSDI_2', ...]
-        - Percentile versions: ['VH_p90', 'VH_p90_1', ...] etc.
-        
-        **Final Band Names:**
-        After processing, bands are renamed to period names from self.period_names:
-        - 4 periods: ['winter', 'spring', 'summer', 'autumn']
-        - 12 periods: ['january', 'february', ..., 'december']
-        - 24 periods: ['p1', 'p2', ..., 'p24']
-        - Custom: ['p1', 'p2', ..., 'pN']
-        
-        **Data Availability Handling:**
-        - Validates each period has actual data using bandNames().size()
-        - Skips years with no available periods
-        - Adjusts band naming for partial years
-        - Provides informative console output about processing status
-        
-        **Error Recovery:**
-        - Continues processing if individual periods fail
-        - Reports specific errors for debugging
-        - Maintains partial results when possible
-        
+        5. Optionally return image counts if ``return_counts=True``
+
+        Band naming conventions:
+
+        **Optical satellites** (S2, Landsat, MODIS, S3):
+            * Standard: ``['nd', 'nd_1', 'nd_2', ...]``
+            * Percentile: ``['nd_p90', 'nd_p90_1', ...]``
+            
+        **SAR satellite** (S1):
+            * Named by index: ``['VH', 'VH_1', ...]``, ``['RVI', 'RVI_1', ...]``
+            * Percentile: ``['VH_p90', 'VH_p90_1', ...]``
+
+        Final band names use period names:
+            * 4 periods: ``['winter', 'spring', 'summer', 'autumn']``
+            * 12 periods: ``['january', 'february', ..., 'december']``
+            * Custom: ``['p1', 'p2', ..., 'pN']``
+
         Examples
         --------
-        >>> # Seasonal NDVI composites from Sentinel-2
-        >>> processor = NdviSeasonality(
-        ...     sat='S2', 
-        ...     index='ndvi', 
-        ...     periods=4,
-        ...     start_year=2020, 
-        ...     end_year=2023
-        ... )
-        >>> collection = processor.get_year_composite()
-        >>> print(collection.size().getInfo())
-        3  # Three years: 2020, 2021, 2022
-        >>> 
-        >>> # Check band names of first image
-        >>> first_image = collection.first()
-        >>> print(first_image.bandNames().getInfo())
-        ['winter', 'spring', 'summer', 'autumn']
-        
-        >>> # Monthly SAR composites with 90th percentile
-        >>> sar_processor = NdviSeasonality(
-        ...     sat='S1', 
-        ...     index='vh', 
-        ...     periods=12,
-        ...     key='percentile', 
-        ...     percentile=90,
-        ...     start_year=2019,
-        ...     end_year=2021
-        ... )
-        >>> sar_collection = sar_processor.get_year_composite()
-        >>> monthly_image = sar_collection.first()
-        >>> print(monthly_image.bandNames().getInfo())
-        ['january', 'february', 'march', ..., 'december']
-        
-        >>> # Access individual bands
-        >>> winter_band = first_image.select('winter')
-        >>> july_band = monthly_image.select('july')
-        
-        >>> # Use in further analysis
-        >>> mean_composite = collection.mean()  # Multi-year average
-        >>> annual_range = collection.max().subtract(collection.min())  # Inter-annual variability
-        
+        Generate seasonal composites::
+
+            >>> collection = processor.get_year_composite()
+            >>> print(collection.size().getInfo())  # Number of years
+
+        Count input images per period (unique dates)::
+
+            >>> collection, counts = processor.get_year_composite(
+            ...     return_counts=True,
+            ...     count_valid_pixels=False,
+            ...     count_mode="unique_dates"
+            ... )
+            >>> print(counts[0])
+            {'year': 2020, 'period_idx': 0, 'period_name': 'january', 'images_count': 6, ...}
+
         Raises
         ------
         ee.EEException
-            If Earth Engine encounters computation errors, authentication issues,
-            or memory/timeout limits during processing.
-            
+            If Earth Engine computation fails.
         RuntimeError
-            If no valid data is found for any year in the specified range,
-            resulting in an empty ImageCollection.
-            
+            If no valid data found for any year.
+
         Warnings
         --------
-        - Years with insufficient data are automatically skipped with console warnings
-        - Individual period failures are reported but don't stop overall processing
-        - Large time ranges or high-resolution analyses may approach computation limits
-        
-        Performance Notes
-        ---------------
-        - Processing time scales with: (end_year - start_year) × periods × ROI size
-        - SAR data typically processes faster than optical due to simpler preprocessing
-        - Monthly periods (12) are optimal balance of temporal detail vs. computation time
-        - Consider using export methods for large analyses instead of interactive processing
-        
+        Years with insufficient data are skipped with console warnings.
+        Large time ranges may approach computation limits.
+
         See Also
         --------
-        get_period_composite : Core method for individual period processing
-        get_export : Export all composite images to files
-        get_gif : Create animated visualization from composites
-        _generate_periods : Defines temporal period structure
-        
-        Examples of Usage Patterns
-        --------------------------
-        >>> # Interactive analysis
-        >>> collection = processor.get_year_composite()
-        >>> Map.addLayer(collection.first().select(['summer', 'winter', 'spring']), 
-        ...              {'min': 0.2, 'max': 0.8}, 'RGB Composite')
-        
-        >>> # Statistical analysis
-        >>> temporal_mean = collection.mean()
-        >>> temporal_std = collection.reduce(ee.Reducer.stdDev())
-        >>> trend_analysis = collection.select('summer').reduce(ee.Reducer.linearFit())
-        
-        >>> # Multi-sensor comparison
-        >>> s2_collection = s2_processor.get_year_composite()
-        >>> landsat_collection = landsat_processor.get_year_composite()
-        >>> correlation = s2_collection.first().select('summer').addBands(
-        ...     landsat_collection.first().select('summer')).reduceRegion(
-        ...     ee.Reducer.pearsonsCorrelation(), geometry=roi, scale=30)
+        get_period_composite : Generates individual period composites
+        get_export : Export composites to files
+        get_gif : Create animated visualization
         """
-        # Generate dynamic band names based on satellite type and statistical reducer
+
+        # --- helpers internos ---
+        def _filtered_collection_for_period(year, period_idx):
+            start_date, end_date = self.period_dates[period_idx]
+            init = f"{year}{start_date}"
+            ends = f"{year}{end_date}"
+            # misma colección que se compone en get_period_composite
+            return self.ndvi_col.filterDate(init, ends).map(self.d[self.index])
+
+        def _count_images_for_period(year, period_idx):
+            ic = _filtered_collection_for_period(year, period_idx)
+
+            if count_mode == "granules":
+                # 1) contar escenas (granulitos)
+                if not count_valid_pixels:
+                    return ic.size()  # ee.Number
+                # versión "solo válidas" (más lenta)
+                def flag_has_valid(img):
+                    valid = img.reduceRegion(
+                        reducer=ee.Reducer.count(),
+                        geometry=self.roi,
+                        scale=scale_for_valid,
+                        maxPixels=maxPixels_for_valid
+                    ).values().get(0)
+                    return img.set('has_valid', ee.Number(valid).gt(0))
+                used = ic.map(flag_has_valid).filter(ee.Filter.eq('has_valid', True))
+                return used.size()
+
+            elif count_mode == "unique_dates":
+                # Usar la colección original (sin aplicar el índice) para no perder system:time_start
+                start_date, end_date = self.period_dates[period_idx]
+                init = f"{year}{start_date}"
+                ends = f"{year}{end_date}"
+                ic_raw = self.ndvi_col.filterDate(init, ends)  # sin .map(self.d[self.index])
+
+                ts = ic_raw.aggregate_array('system:time_start')  # ee.List de timestamps (ms)
+                unique_days = ee.List(ts).map(
+                    lambda t: ee.Date(t).format('YYYY-MM-dd')  # server-side
+                ).distinct()
+                return ee.Number(ee.List(unique_days).size())
+
+            else:
+                # fallback
+                return ic.size()
+
+        # --- nombres de bandas como en tu versión original ---
         if self.sat != 'S1':
-            # Optical satellites use generic 'nd' prefix
             if self.key == 'percentile':
                 base_bands = [f'nd_p{self.percentile}'] + [f'nd_p{self.percentile}_{i}' for i in range(1, self.periods)]
             else:
                 base_bands = ['nd'] + [f'nd_{i}' for i in range(1, self.periods)]
         else:
-            # SAR satellite - specific prefixes for each index type
             if self.index == 'vv':
                 band_prefix = 'VV'
             elif self.index == 'vh':
@@ -1500,69 +1767,101 @@ class NdviSeasonality:
             elif self.index == 'vsdi':
                 band_prefix = 'VSDI'
             else:
-                # Fallback for backward compatibility
                 band_prefix = 'VH'
                 print(f"Warning: Unknown SAR index '{self.index}', using VH as fallback")
-            
-            # Generate band names with appropriate prefix
+
             if self.key == 'percentile':
                 base_bands = [f'{band_prefix}_p{self.percentile}'] + [f'{band_prefix}_p{self.percentile}_{i}' for i in range(1, self.periods)]
             else:
                 base_bands = [band_prefix] + [f'{band_prefix}_{i}' for i in range(1, self.periods)]
-        
-        # Clear previous results to ensure clean processing
+
+        # limpiar resultados previos
         self.imagelist = []
-        
-        # Process each year in the specified time range
+        rows = []
+
+        # recorrer años (end_year EXCLUSIVO)
         for year in range(self.start_year, self.end_year):
-            # Initialize containers for current year processing
             period_images = []
-            successful_periods = 0  # Track how many periods actually have data
-            
-            # Process each temporal period within the current year
+            successful_periods = 0
+
             for period_idx in range(self.periods):
                 try:
-                    # Generate composite for current period
+                    # composite del periodo
                     period_composite = self.get_period_composite(year, period_idx)
-                    
-                    # Validate that the period has actual data
-                    # This prevents issues with empty composites
+
+                    # contar SIEMPRE (aunque luego el composite no tenga datos)
+                    if return_counts:
+                        n = _count_images_for_period(year, period_idx).getInfo()
+                        rows.append({
+                            'year': year,
+                            'period_idx': period_idx,
+                            'period_name': self.period_names[period_idx],
+                            'images_count': int(n),
+                            'cloud_filter': bool(self.cloud_filter),
+                            'sat': self.sat,
+                            'index': self.index,
+                            'key': self.key,
+                            'percentile': self.percentile if self.key == 'percentile' else None,
+                            'count_mode': count_mode
+                        })
+
+                    # verificar datos en el composite
                     band_count = period_composite.bandNames().size()
-                    
-                    # Only include periods with valid data
                     if band_count.getInfo() > 0:
                         period_images.append(period_composite)
                         successful_periods += 1
                     else:
                         print(f"No data for period {period_idx + 1} in year {year}")
-                        break  # Stop processing remaining periods for this year
-                        
+                        continue
+
                 except Exception as e:
                     print(f"Error processing period {period_idx + 1} in year {year}: {str(e)}")
-                    break  # Stop processing remaining periods for this year
-            
-            # Only proceed if we have at least one successful period
+                    continue
+
             if successful_periods > 0:
-                # Combine all successful periods into a single multi-band image
                 composite = ee.Image.cat(period_images).clip(self.roi)
-                
-                # Adjust band names and period names to match actual available data
                 actual_base_bands = base_bands[:successful_periods]
                 actual_period_names = self.period_names[:successful_periods]
-                
-                # Rename bands from technical names to meaningful period names
                 compositer = composite.select(actual_base_bands, actual_period_names)
-                
-                # Add to results list
                 self.imagelist.append(compositer)
-                
-                # Provide informative feedback about processing success
                 print(f"Year {year}: Successfully processed {successful_periods} periods using {self.index} index")
             else:
                 print(f"Year {year}: No data available, skipping")
-        
-        # Convert list of images to Earth Engine ImageCollection
-        return ee.ImageCollection.fromImages(self.imagelist)
+
+        collection = ee.ImageCollection.fromImages(self.imagelist)
+
+        if not return_counts:
+            return collection
+
+        # return_counts=True a partir de aquí
+        if not return_df:
+            # Comportamiento anterior: lista de dicts
+            return collection, rows
+
+        # Intentar devolver un DataFrame
+        try:
+            import pandas as pd
+        except Exception as e:
+            print("Warning: pandas is not available; returning list of dicts instead.")
+            return collection, rows
+
+        df = pd.DataFrame(rows)
+
+        if df_pivot:
+            # Ancho: filas = year, columnas = period_name, valores = images_count
+            if not df.empty:
+                df = df.pivot_table(
+                    index="year",
+                    columns="period_name",
+                    values="images_count",
+                    aggfunc="first"
+                ).sort_index(axis=1)
+            else:
+                # DataFrame vacío pero con la forma correcta
+                df = pd.DataFrame()
+
+        return collection, df
+
     
     # Index calculation methods (same as original - keeping all of them)
     def get_ndvi(self, image):
@@ -2458,9 +2757,8 @@ class NdviSeasonality:
             'Red': image.select('Red')         # Oa07 - 620nm
         }).rename(['nd'])
         
-    # Nuevos métodos para índices SAR
+    #### New methods for SAR indices with normalization option ####
 
-    # Función auxiliar para normalización
     def _normalize_to_01(self, image):
         """
         Normalize SAR image values using Z-score standardization (mean=0, std=1).
@@ -2872,7 +3170,7 @@ class NdviSeasonality:
         Notes
         -----
         **Automatic Filename Generation:**
-        Filenames follow the pattern: `{index}_{statistic}_{year}.tif`
+        Filenames follow the pattern: `{sat}_{index}_{statistic}_{year}.tif`
         
         Examples:
         - 'ndvi_max_2020.tif' (NDVI with maximum reducer)
@@ -3050,207 +3348,266 @@ class NdviSeasonality:
         # Provide completion summary
         print('All the images in the collection have been exported')
 
+    def _default_scale_for_sat(self) -> int:
+        """
+        Return a sensible default pixel scale (meters) based on the configured sensor.
+        """
+        sat = (self.sat or "").upper()
+        if sat.startswith("S2") or sat.startswith("S1"):
+            return 10
+        if sat.startswith("L"):   # Landsat 5/7/8/9
+            return 30
+        if sat.startswith("MOD"):
+            return 250
+        if sat.startswith("S3"):
+            return 300
+        return 30
+    
+    def export_to_drive(
+        self,
+        image,
+        description: str,
+        *,
+        region=None,
+        scale: Optional[int] = None,
+        crs: str = "EPSG:4326",
+        folder: Optional[str] = None,
+        file_format: str = "GeoTIFF",
+        format_options: Optional[dict] = None,
+        max_pixels: int = int(1e13),
+        file_dimensions: Optional[int] = None,
+        clip_region: bool = True):
+        """
+        Export an ee.Image to Google Drive as a GeoTIFF (batch task).
+
+        Parameters
+        ----------
+        image : ee.Image
+            Earth Engine image to export (e.g., a classified map or a composite).
+        description : str
+            Export task name shown in the Earth Engine Tasks panel.
+        region : ee.Geometry, optional
+            Export region. If None, uses ``self.roi``.
+        scale : int, optional
+            Pixel resolution in meters. If None, inferred from the sensor via
+            :meth:`_default_scale_for_sat`.
+        crs : str, optional
+            Target projection (e.g., ``"EPSG:4326"``). Default is WGS84.
+        folder : str, optional
+            Google Drive folder name. If None, uses the Drive root.
+        file_format : str, optional
+            Output format (e.g., ``"GeoTIFF"``). Default ``"GeoTIFF"``.
+        format_options : dict, optional
+            Additional format options for the exporter (e.g., compression).
+            Example: ``{"cloudOptimized": True, "compression": "LZW"}``.
+        max_pixels : int, optional
+            Maximum number of pixels allowed by Earth Engine. Default ``1e13``.
+        file_dimensions : int, optional
+            Maximum pixel dimension per side for each output tile. If provided,
+            large exports are split into multiple files (e.g., 8192 or 10000).
+        clip_region : bool, optional
+            If True, ``image`` is clipped to ``region`` before exporting.
+
+        Returns
+        -------
+        ee.batch.Task
+            The started Earth Engine export task.
+
+        Raises
+        ------
+        ValueError
+            If `image` is not provided.
+        ee.EEException
+            If Earth Engine fails to create the export task.
+
+        Notes
+        -----
+        - This is a batch export: monitor progress in the Earth Engine Tasks panel.
+        - Use ``clip_region=True`` and/or ``file_dimensions`` to keep file sizes manageable.
+        - For large regions, consider compression via ``format_options``.
+        """
+        if image is None:
+            raise ValueError("`image` must be an ee.Image.")
+
+        if scale is None:
+            scale = self._default_scale_for_sat()
+
+        if region is None:
+            region = self.roi
+
+        # Optionally clip to reduce processing/size
+        if clip_region and region is not None:
+            image = image.clip(region)
+
+        kwargs = {
+            "image": image,
+            "description": description,
+            "region": region,
+            "scale": scale,
+            "maxPixels": max_pixels,
+            "fileFormat": file_format,
+            "crs": crs,
+        }
+
+        if folder:
+            kwargs["folder"] = folder
+        if format_options:
+            kwargs["formatOptions"] = format_options
+        if file_dimensions:
+            kwargs["fileDimensions"] = file_dimensions
+
+        task = ee.batch.Export.image.toDrive(**kwargs)
+        task.start()
+        return task
+    
+    def export_to_asset(
+        self,
+        image,
+        asset_id: str,
+        *,
+        description: Optional[str] = None,
+        region=None,
+        scale: Optional[int] = None,
+        crs: Optional[str] = None,
+        crs_transform: Optional[list] = None,   # <-- NUEVO (opcional)
+        pyramiding_policy: Optional[dict] = None,
+        max_pixels: int = int(1e13),
+        overwrite: bool = False,
+        clip_region: bool = True):
+        """
+        Export an ee.Image to an Earth Engine Asset (batch task).
+
+        Parameters
+        ----------
+        image : ee.Image
+            Earth Engine image to export.
+        asset_id : str
+            Full asset path, e.g., "users/yourname/ndvi2gif/landcover_2022".
+        description : str, optional
+            Task name. If None, a name is derived from `asset_id`.
+        region : ee.Geometry, optional
+            Export region. If None, uses ``self.roi``.
+        scale : int, optional
+            Pixel resolution in meters. If None, inferred from the sensor via
+            :meth:`_default_scale_for_sat`.
+        crs : str, optional
+            Target projection. If None, uses the image's default.
+        crs_transform : list, optional
+            Affine transform (6 or 9 numbers) instead of `scale`. Mutually
+            exclusive with `scale`.
+        pyramiding_policy : dict, optional
+            Dict mapping band name to policy (e.g., {"class": "mode"}).
+        max_pixels : int, optional
+            Maximum number of pixels allowed by Earth Engine. Default 1e13.
+        overwrite : bool, optional
+            If True, tries to delete any existing asset with the same ID first.
+        clip_region : bool, optional
+            If True, the image is clipped to `region` (or self.roi) before export.
+
+        Returns
+        -------
+        ee.batch.Task
+            The started Earth Engine export task.
+        """
+        if image is None or not asset_id:
+            raise ValueError("`image` and `asset_id` are required.")
+
+        if scale is None and crs_transform is None:
+            scale = self._default_scale_for_sat()
+
+        if region is None:
+            region = self.roi
+
+        if description is None:
+            description = asset_id.split("/")[-1]
+
+        # Recorta para reducir tamaño y evitar procesar fuera del ROI
+        if clip_region and region is not None:
+            image = image.clip(region)
+
+        if overwrite:
+            try:
+                ee.data.deleteAsset(asset_id)
+            except Exception:
+                # ok si no existía
+                pass
+
+        kwargs = {
+            "image": image,
+            "description": description,
+            "assetId": asset_id,
+            "region": region,
+            "maxPixels": max_pixels,
+        }
+        if scale is not None:
+            kwargs["scale"] = scale
+        if crs is not None:
+            kwargs["crs"] = crs
+        if crs_transform is not None:
+            kwargs["crsTransform"] = crs_transform
+        if pyramiding_policy:
+            kwargs["pyramidingPolicy"] = pyramiding_policy
+
+        task = ee.batch.Export.image.toAsset(**kwargs)
+        task.start()
+        return task
+
     def get_gif(self, name='mygif.gif', bands=None):
         """
-        Create an animated GIF from temporal composite images.
-        
-        Generates an animated visualization showing temporal changes across the
-        specified time range. Each frame represents one year, with RGB bands
-        composed from selected temporal periods (e.g., summer-autumn-winter as RGB).
-        The animation provides an intuitive way to visualize multi-year trends,
-        seasonal patterns, and temporal dynamics.
-        
+        Create an animated GIF showing the temporal evolution of period composites.
+
+        Generates a video animation (downloaded as GIF) where each frame corresponds
+        to one year and each RGB image uses selected period composites (e.g.,
+        winter-spring-summer). Internally calls :meth:`get_year_composite` and
+        exports the video using :func:`geemap.download_ee_video`. Optionally, an
+        annotated version is created with year labels and a progress bar using
+        :func:`geemap.add_text_to_gif`.
+
         Parameters
         ----------
         name : str, optional
-            Output filename for the animated GIF. Should include '.gif' extension.
-            Two versions are created:
-            - Original: {name}
-            - Annotated: {name}_texted.gif (with year labels and progress indicators)
-            Default is 'mygif.gif'.
-            
+            Name of the output file (``.gif``). Saved in the current working
+            directory. Default: ``'mygif.gif'``.
         bands : list of str or None, optional
-            List of 3 band names to use as RGB channels for visualization.
-            Band names must match period names from self.period_names.
-            
-            If None (default), uses first 3 periods:
-            - 4 periods: ['winter', 'spring', 'summer'] 
-            - 12 periods: ['january', 'february', 'march']
-            - 24 periods: ['p1', 'p2', 'p3']
-            - Custom: First 3 available periods
-            
-            Common RGB combinations:
-            - Seasonal: ['summer', 'autumn', 'winter'] (growing season emphasis)
-            - Phenological: ['spring', 'summer', 'autumn'] (crop cycle)
-            - Monthly: ['july', 'october', 'january'] (representative seasons)
-            
-        Returns
-        -------
-        None
-            Creates two GIF files in the current working directory:
-            1. {name}: Basic animated GIF
-            2. {name_texted}.gif: Annotated version with year labels
-            
+            Band names to use as ``[R, G, B]`` in the animation. Must be valid
+            periods (e.g., ``'winter'``, ``'spring'`` or ``'p1'``, ``'p2'``).
+            If ``None``, the first three period names are used
+            (``self.period_names[:3]``).
+
         Notes
         -----
-        **Animation Specifications:**
-        - Dimensions: 768×768 pixels (fixed for consistent quality)
-        - Frame rate: 10 frames per second
-        - Duration: 300ms per frame in annotated version
-        - Region: Clipped to self.roi extent
-        - Gamma correction: [1, 1, 1] (linear scaling)
-        
-        **Color Scaling:**
-        
-        *Optical Sensors (S2, Landsat, MODIS, S3):*
-        - Min value: 0.15 (dark areas)
-        - Max value: 0.85 (bright areas)  
-        - Suitable for vegetation indices (NDVI, EVI, etc.)
-        
-        *SAR Sensor (S1):*
-        - Min value: -25 dB (low backscatter)
-        - Max value: 0 dB (high backscatter)
-        - Appropriate for radar backscatter values
-        
-        **Temporal Representation:**
-        Each frame shows one year with RGB bands representing different
-        temporal periods within that year, allowing visualization of:
-        - Inter-annual variability (frame-to-frame changes)
-        - Intra-annual patterns (RGB color variations)
-        - Long-term trends (progressive changes across animation)
-        - Anomalous years (unusual color patterns)
-        
-        Examples
-        --------
-        >>> # Basic seasonal animation with default bands
-        >>> processor = NdviSeasonality(
-        ...     sat='S2', 
-        ...     index='ndvi',
-        ...     periods=4,
-        ...     start_year=2018,
-        ...     end_year=2023
-        ... )
-        >>> processor.get_gif('ndvi_seasonal_trend.gif')
-        # Creates RGB from winter-spring-summer bands
-        
-        >>> # Custom band selection for crop monitoring
-        >>> processor.get_gif(
-        ...     name='crop_phenology.gif',
-        ...     bands=['spring', 'summer', 'autumn']
-        ... )
-        # Emphasizes growing season dynamics
-        
-        >>> # Monthly analysis with specific months
-        >>> monthly_processor = NdviSeasonality(
-        ...     periods=12,
-        ...     sat='Landsat',
-        ...     index='evi'
-        ... )
-        >>> monthly_processor.get_gif(
-        ...     name='monthly_evi_dynamics.gif',
-        ...     bands=['april', 'july', 'october']  # Spring, summer, autumn representatives
-        ... )
-        
-        >>> # SAR vegetation monitoring
-        >>> sar_processor = NdviSeasonality(
-        ...     sat='S1',
-        ...     index='vh',
-        ...     key='median'
-        ... )
-        >>> sar_processor.get_gif('sar_vegetation_changes.gif')
-        # Uses SAR-appropriate scaling (-25 to 0 dB)
-        
-        >>> # Multi-period comparison
-        >>> processor_24 = NdviSeasonality(periods=24, sat='S2', index='ndvi')
-        >>> processor_24.get_gif(
-        ...     name='biweekly_dynamics.gif',
-        ...     bands=['p6', 'p12', 'p18']  # Early, mid, late growing season
-        ... )
-        
-        **Interpretation Guidelines:**
-        
-        *Color Patterns:*
-        - Green dominant: High vegetation activity in first band period
-        - Red dominant: High activity in second band period  
-        - Blue dominant: High activity in third band period
-        - Yellow (red+green): High activity in first two periods
-        - White/bright: High activity across all periods
-        - Dark: Low activity across all periods
-        
-        *Temporal Changes:*
-        - Gradual color shifts: Progressive trends (climate change, land use)
-        - Abrupt changes: Disturbances (fire, deforestation, development)
-        - Cyclical patterns: Regular variability (drought cycles, management)
-        - Static colors: Stable conditions or persistent land cover
-        
-        Use Cases
-        ---------
-        **Scientific Applications:**
-        - Climate change impact visualization
-        - Vegetation phenology studies
-        - Agricultural monitoring and crop cycle analysis
-        - Forest disturbance and recovery tracking
-        - Urban expansion documentation
-        - Water body dynamics (with water indices)
-        
-        **Communication and Outreach:**
-        - Stakeholder presentations and reports
-        - Environmental education materials
-        - Social media and web content
-        - Policy briefings and documentation
-        - Research publication supplements
-        
-        Technical Considerations
-        ------------------------
-        **Performance:**
-        - Processing time: ~1-5 minutes for typical time series
-        - File size: ~1-10 MB depending on spatial complexity and duration
-        - Memory usage: Moderate (streams data rather than loading all frames)
-        
-        **Limitations:**
-        - Fixed 768×768 resolution (cannot be customized)
-        - RGB visualization only (3 bands maximum)
-        - Automatic scaling may not suit all indices
-        - Large ROIs may appear pixelated at fixed resolution
-        
-        **Quality Optimization:**
-        - Choose bands with good contrast for clearer visualization
-        - Ensure sufficient temporal coverage (minimum 3-4 years)
-        - Consider seasonal timing for phenological applications
-        - Test different band combinations for optimal interpretation
-        
+        * **SAR sensors (S1):** a typical dB scale is applied (``min=-25``,
+        ``max=0``).  
+        * **Optical sensors:** a typical vegetation index range is applied
+        (``min=0.15``, ``max=0.85``).  
+        * Output video is set to ``dimensions=768`` pixels and
+        ``framesPerSecond=10`` for a balance between clarity and file size.
+
         Raises
         ------
         ee.EEException
-            If Earth Engine processing fails during composite generation
-            or video export (memory limits, timeout, authentication issues).
-            
+            If processing or export fails (memory limits, runtime errors,
+            authentication issues).
         ValueError
-            If specified bands are not available in the temporal periods
-            or if fewer than 3 bands can be created.
-            
+            If `bands` does not contain exactly 3 valid periods present in
+            ``self.period_names``.
         OSError
-            If local file system issues occur during GIF creation
-            (disk space, permissions, etc.).
-            
-        KeyError
-            If band names in 'bands' parameter don't match available
-            period names from self.period_names.
-            
+            If a file system error occurs when writing the GIF locally.
+
         See Also
         --------
-        get_year_composite : Generates the temporal composites used for animation
-        get_export : Export static multi-band images instead of animation
-        geemap.download_ee_video : Underlying function for video generation
-        geemap.add_text_to_gif : Function that adds year annotations
-        
-        References
-        ----------
-        Earth Engine Video Export:
-        https://developers.google.com/earth-engine/guides/exporting_videos
-        
-        Geemap Animation Tutorial:
-        https://geemap.org/notebooks/
+        get_year_composite : Generates yearly composites used in the animation.
+        get_export : Exports static multi-band images instead of an animation.
+        geemap.download_ee_video : Handles Earth Engine video export.
+        geemap.add_text_to_gif : Adds annotations (year and progress bar).
+
+        Examples
+        --------
+        >>> # Seasonal composite with Sentinel-2 (RGB = winter, spring, summer)
+        >>> NdviSeasonality(sat='S2', index='ndvi', periods=4, start_year=2020, end_year=2023).get_gif('ndvi_seasons.gif')
+        >>> # Monthly SAR composite (using specific months as RGB)
+        >>> proc = NdviSeasonality(sat='S1', index='vh', periods=12)
+        >>> proc.get_gif('vh_monthly.gif', bands=['march', 'june', 'september'])
         """
         # Set default bands if none specified (first 3 periods)
         if bands is None:

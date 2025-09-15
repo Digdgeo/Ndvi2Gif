@@ -2,8 +2,27 @@
 """
 Sentinel-1 Analysis Ready Data (ARD) Processor for Google Earth Engine.
 
-Based on https://github.com/adugnag/gee_s1_ard and Vollrath et al. (2020).
-Provides advanced SAR preprocessing including terrain correction and speckle filtering.
+This module provides advanced SAR preprocessing capabilities including radiometric
+terrain correction and speckle filtering algorithms for Sentinel-1 GRD imagery.
+
+Based on Vollrath et al. (2020) and the gee_s1_ard implementation.
+Optimized for vegetation monitoring and land cover analysis in complex terrain.
+
+Classes
+-------
+S1ARDProcessor
+    Main processor class for Sentinel-1 ARD generation
+
+References
+----------
+Vollrath, A., Mullissa, A., & Reiche, J. (2020). Angular-based radiometric slope 
+correction for Sentinel-1 on google earth engine. Remote Sensing, 12(11), 1867.
+
+https://github.com/adugnag/gee_s1_ard
+
+Author: Diego García Díaz
+Date: 2024
+License: MIT
 """
 
 import ee
@@ -15,26 +34,36 @@ class S1ARDProcessor:
     Analysis Ready Data (ARD) processor for Sentinel-1 SAR imagery.
     
     Implements advanced preprocessing techniques for Sentinel-1 GRD data including
-    radiometric terrain correction and various speckle filtering algorithms. Designed
-    to reduce noise and heterogeneity in mountainous terrain while preserving
-    important backscatter information for vegetation and land cover analysis.
+    radiometric terrain correction and various speckle filtering algorithms.
+    
+    Parameters
+    ----------
+    speckle_filter : {'REFINED_LEE', 'LEE', 'GAMMA_MAP', 'LEE_SIGMA', 'BOXCAR', None}
+        Speckle filter algorithm. Default is 'REFINED_LEE'.
+    speckle_filter_kernel_size : int
+        Filter kernel size in pixels (must be odd). Default is 7.
+    terrain_correction : bool
+        Enable radiometric terrain correction. Default is True.
+    terrain_flattening_model : {'VOLUME', 'SURFACE'}
+        Scattering model for terrain correction. Default is 'VOLUME'.
+    dem : {'COPERNICUS_30', 'COPERNICUS_90', 'SRTM_30', 'SRTM_90'}
+        Digital Elevation Model. Default is 'COPERNICUS_30'.
+    format : {'LINEAR', 'DB'}
+        Output format. Default is 'LINEAR'.
     
     Attributes
     ----------
-    speckle_filter : str
-        Selected speckle filter algorithm
-    speckle_filter_kernel_size : int
-        Size of the filter kernel
-    terrain_correction : bool
-        Whether terrain correction is enabled
-    terrain_flattening_model : str
-        Model used for terrain flattening
-    dem : str
-        Digital Elevation Model identifier
-    format : str
-        Output format (LINEAR or DB)
     dem_ee : ee.Image
         Earth Engine DEM image object
+        
+    Examples
+    --------
+    >>> processor = S1ARDProcessor(
+    ...     speckle_filter='REFINED_LEE',
+    ...     terrain_correction=True
+    ... )
+    >>> collection = ee.ImageCollection('COPERNICUS/S1_GRD')
+    >>> processed = collection.map(processor.process_image)
     """
     
     def __init__(self, 
@@ -147,6 +176,11 @@ class S1ARDProcessor:
         -------
         ee.Image
             DEM image object from Earth Engine catalog.
+
+        Raises
+        ------
+        ee.EEException
+            If the DEM asset cannot be accessed or there is an Earth Engine catalog error.
             
         Notes
         -----
@@ -179,6 +213,13 @@ class S1ARDProcessor:
         -------
         ee.Image
             Terrain-corrected image with adjusted VV and VH bands.
+
+        Raises
+        ------
+        ee.EEException
+            If required bands or properties are missing (e.g., ``VV``, ``VH``, ``angle``,
+            or ``orbitProperties_pass``) or if Earth Engine operations fail during terrain
+            correction (projection/reprojection errors, invalid geometries).
             
         Notes
         -----
@@ -258,6 +299,11 @@ class S1ARDProcessor:
         -------
         ee.Image
             Filtered image with reduced speckle noise.
+
+        Raises
+        ------
+        ee.EEException
+            If underlying Earth Engine focal/statistical operations fail during filtering.
         """
         if self.speckle_filter == 'BOXCAR':
             return self._boxcar_filter(image)
@@ -287,6 +333,11 @@ class S1ARDProcessor:
         -------
         ee.Image
             Mean-filtered image.
+
+        Raises
+        ------
+        ee.EEException
+            If Earth Engine focal operations fail for the requested kernel size or geometry.
         """
         kernel_radius = int(self.speckle_filter_kernel_size / 2)
         vv = image.select('VV').focal_mean(
@@ -317,6 +368,11 @@ class S1ARDProcessor:
         -------
         ee.Image
             Lee-filtered image.
+
+        Raises
+        ------
+        ee.EEException
+            If neighborhood reducers or focal operations fail in Earth Engine.
             
         References
         ----------
@@ -368,6 +424,12 @@ class S1ARDProcessor:
         -------
         ee.Image
             Refined Lee filtered image.
+
+        Raises
+        ------
+        ee.EEException
+            If convolution or neighborhood reducers fail in Earth Engine during the
+            refined Lee processing steps.
 
         References
         ----------
@@ -441,6 +503,10 @@ class S1ARDProcessor:
         -------
         list of ee.Kernel
             List of directional convolution kernels.
+
+        Raises
+        ------
+        None
         """
         # Simplified 3x3 directional kernels
         kernels = [
@@ -467,6 +533,12 @@ class S1ARDProcessor:
         -------
         ee.Image
             Gamma MAP filtered image.
+
+        Raises
+        ------
+        ee.EEException
+            If neighborhood statistics or arithmetic operations fail in Earth Engine
+            while computing the MAP weights.
             
         References
         ----------
@@ -520,6 +592,11 @@ class S1ARDProcessor:
         -------
         ee.Image
             Lee Sigma filtered image.
+
+        Raises
+        ------
+        ee.EEException
+            If neighborhood standard deviation or masking operations fail in Earth Engine.
             
         References
         ----------
@@ -569,6 +646,12 @@ class S1ARDProcessor:
         -------
         ee.Image
             Image with bands converted to decibel scale (10*log10).
+
+        Raises
+        ------
+        ee.EEException
+            If required bands (``VV``, ``VH``) are missing or if Earth Engine evaluation
+            fails during the logarithmic conversion.
             
         Notes
         -----
@@ -597,6 +680,12 @@ class S1ARDProcessor:
         -------
         ee.Image
             Preprocessed ARD image ready for analysis.
+
+        Raises
+        ------
+        ee.EEException
+            If any step of the processing chain fails in Earth Engine (terrain correction,
+            speckle filtering, or format conversion).
             
         Examples
         --------

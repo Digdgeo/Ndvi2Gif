@@ -19,36 +19,49 @@ Built on top of [Google Earth Engine](https://github.com/google/earthengine-api)
 - Retrieve zonal statistics over user-defined geometries,
 - Monitor vegetation structure with advanced SAR indices,
 - Handle incomplete years automatically for real-time monitoring,
+- **NEW in v0.6.0:** Perform supervised and unsupervised land cover classification with integrated machine learning,
+- **NEW in v0.6.0:** Export directly to Google Drive and Earth Engine Assets,
 - And yes — also create colorful GIFs for easy visualization.
 
-Whether you're monitoring crop phenology, detecting harvest events, assessing drought trends, or preparing input layers for further ecological modeling, `ndvi2gif` makes it easier to extract reliable, multi-temporal remote sensing information at scale.
+Whether you're monitoring crop phenology, detecting harvest events, assessing drought trends, classifying land cover, or preparing input layers for further ecological modeling, `ndvi2gif` makes it easier to extract reliable, multi-temporal remote sensing information at scale.
 
 Ndvi2Gif was updated and extended as part of its integration into the eLTER and SUMHAL projects, which also enabled the use of eLTER site boundaries (via `deimsPy`) as one of its input sources.
 
 ![Interface Screenshot](https://i.imgur.com/Sv9LfYj.png)
 
-## ✨ What's New in v0.5.0
+## ✨ What's New in v0.6.0 - Machine Learning & Classification Release 🧠
 
-The **0.5.0 release** takes *Ndvi2Gif* from a seasonal compositing tool to a **full-featured remote sensing analysis suite**.  
-You still get everything you had before — effortless access to **Sentinel-1/2/3, Landsat, MODIS**, flexible statistics, and GIF/GeoTIFF exports — but now with a whole new layer of analytical power:
+The **0.6.0 release** transforms *Ndvi2Gif* into a **complete remote sensing analysis platform** with integrated machine learning capabilities, positioning it as a comprehensive solution for remote sensing workflows.
 
-### 🚀 All the classics, better than ever
+### 🚀 New Classification Capabilities
 
-- Seasonal & multi-annual composites of NDVI, NDWI, EVI, and 40+ indices  
-- Flexible statistics: mean, median, max, percentiles  
-- Multi-sensor support across optical and SAR missions  
-- Easy ROI handling from drawn geometries, shapefiles, DEIMS IDs, or tile codes  
-- Exports to **GeoTIFFs** and **GIF animations** for instant visualization  
+- 🧠 **LandCoverClassifier** – Complete supervised and unsupervised classification workflows
+- 🎯 **Multiple Algorithms** – Random Forest, SVM, CART, Naive Bayes, Gradient Tree Boost, K-means, LDA
+- 📊 **Accuracy Assessment** – Confusion matrices and comprehensive validation reports
+- 🔧 **Feature Engineering** – Multi-temporal stacks with automatic normalization
+- 📤 **Enhanced Exports** – Direct export to Google Drive and Earth Engine Assets
 
-### 🔥 Brand-new in 0.5.0
+### 📚 Documentation Overhaul
 
-- 🛰️ **Sentinel-1 ARD Processor** – professional SAR preprocessing with terrain correction and a suite of speckle filters  
-- 📈 **TimeSeriesAnalyzer** – extract robust time series, test for trends (Mann-Kendall, Sen’s slope, linear), and visualize dynamics with multi-panel dashboards  
-- 🌱 **Extended NdviSeasonality** – dynamic temporal periods (4, 12, 24, custom), smarter ROI handling, SAR normalization, and improved sensor-index validation  
-- 🎨 **Polished Visualizations** – publication-ready layouts with unified Seaborn/Matplotlib styling  
+- **95%+ Documentation Coverage** – Comprehensive Sphinx-style docstrings
+- **Scientific References** – All indices now include citations
+- **Complete Examples** – Every method includes usage examples
+- **Better Error Handling** – Informative messages with suggested solutions
 
-With this release, *Ndvi2Gif* is not just about generating composites — it’s about **understanding change**:  
-phenology cycles, long-term trends, vegetation structure, and water quality dynamics.
+### 🛰️ Enhanced Capabilities
+
+- **export_to_drive()** – Batch export with full parameter control
+- **export_to_asset()** – Direct Earth Engine Asset creation with pyramiding policies
+- **Automatic scale detection** – Sensor-specific resolution handling
+- **Improved SAR processing** – Enhanced error handling and documentation
+- **Feature importance analysis** – Understand which indices contribute most to classification
+
+### 🔥 All Previous Features, Better Than Ever
+
+- 🛰️ **Sentinel-1 ARD Processor** – Professional SAR preprocessing with terrain correction
+- 📈 **TimeSeriesAnalyzer** – Extract robust time series, test for trends, and visualize dynamics
+- 🌱 **Extended NdviSeasonality** – Dynamic temporal periods (4, 12, 24, custom)
+- 🎨 **Polished Visualizations** – Publication-ready layouts
 
 ## Why use Ndvi2Gif?
 
@@ -62,11 +75,17 @@ You can:
   - Example: *Monitor crop harvest timing with bi-monthly VV/VH ratio analysis using Sentinel-1.*  
   - Example: *Track daily algal blooms with Sentinel-3 OLCI turbidity indices.*  
 
+- **Perform advanced machine learning classification** (NEW in v0.6.0):
+  - Multi-temporal land cover mapping with Random Forest
+  - Crop type classification with SVM
+  - Unsupervised clustering with K-means
+  - Feature importance analysis for ecological insights
+
 - **Perform nested aggregations**:  
   First compute temporal summaries (e.g., per-season percentiles or means), then apply a second statistical reduction across years (e.g., median, min, max).
 
-- **Run advanced time series analysis** with the new `TimeSeriesAnalyzer`:  
-  - Trend detection (Mann-Kendall, Sen’s slope, linear regression)  
+- **Run advanced time series analysis** with the `TimeSeriesAnalyzer`:  
+  - Trend detection (Mann-Kendall, Sen's slope, linear regression)  
   - Multi-panel dashboards (seasonal patterns, autocorrelation, data quality)  
   - Phenology metrics such as Start/End of Season, Peak, Length, amplitude, and rates of change  
 
@@ -81,7 +100,7 @@ You can:
 
 - **Handle real-time monitoring** with automatic detection of available data periods for incomplete years.
 
-In other words: if you can describe a temporal range, a spatial region, an index, and a chain of statistics — `ndvi2gif` can not only generate it, but now also help you **analyze and interpret the changes over time**.
+In other words: if you can describe a temporal range, a spatial region, an index, and a chain of statistics — `ndvi2gif` can not only generate it, but now also help you **classify, analyze and interpret the changes over time**.
 
 Yes, it makes nice GIFs — but it's much more than that.
 ![GIF Example](https://i.imgur.com/xvrPYMH.gif)
@@ -164,17 +183,59 @@ Yes, it makes nice GIFs — but it's much more than that.
 - **RFDI** - Radar Forest Degradation Index (deforestation monitoring) 🆕
 - **VSDI** - Vegetation Scattering Diversity Index (structural diversity) 🆕
 
-*Sentinel-3 indices are particularly valuable for:*
-- 🌊 **Daily water quality monitoring** - Track algal blooms and water clarity
-- 🦠 **Cyanobacteria detection** - Early warning systems for harmful blooms
-- 🏞️ **Lake and coastal monitoring** - High-frequency aquatic ecosystem assessment
-- 🌱 **Rapid vegetation analysis** - Daily coverage for time-critical applications
+## 🧠 Machine Learning Classification (NEW in v0.6.0)
 
-*SAR indices are particularly valuable for:*
-- 🌾 **Crop harvest detection** - Identify exact timing of mowing/harvesting
-- 🌧️ **All-weather monitoring** - Works through clouds and rain
-- 🌱 **Structural vegetation analysis** - Monitor biomass and vegetation architecture
-- ⚡ **Real-time monitoring** - Frequent revisit times (6-day cycle)
+### Supervised Classification Algorithms
+- **Random Forest** - With feature importance analysis
+- **Support Vector Machine (SVM)** - For complex decision boundaries
+- **CART** - Classification and Regression Trees
+- **Naive Bayes** - Probabilistic classification
+- **Gradient Tree Boost** - Advanced ensemble method
+
+### Unsupervised Clustering
+- **K-means** - Classic clustering algorithm
+- **Cascade K-means** - Hierarchical clustering approach
+- **LDA** - Latent Dirichlet Allocation for pattern discovery
+
+### Classification Workflow
+```python
+from ndvi2gif import NdviSeasonality, LandCoverClassifier
+
+# Create multi-temporal features
+processor = NdviSeasonality(
+    roi='study_area.shp',
+    sat='S2',
+    periods=12,
+    start_year=2022,
+    end_year=2024
+)
+
+# Initialize classifier
+classifier = LandCoverClassifier(processor)
+
+# Create feature stack with multiple indices
+features = classifier.create_feature_stack(
+    indices=['ndvi', 'evi', 'ndwi', 'ndre'],
+    include_statistics=True,
+    normalize=True
+)
+
+# Add training data
+classifier.add_training_data('training_samples.shp')
+
+# Classify with Random Forest
+classification = classifier.classify_supervised('random_forest')
+
+# Assess accuracy
+classifier.assess_accuracy()
+
+# Export results
+processor.export_to_drive(
+    image=classification,
+    description="landcover_2024",
+    folder="classifications"
+)
+```
 
 ## Supported Datasets
 
@@ -208,6 +269,42 @@ Beyond creating a nice-looking animated GIF, this multi-seasonal compositing met
 
 You can also export seasonal composites as GeoTIFF files for further analysis. Multi-year composites are supported as well. For example, you can export median NDVI per season for all of Africa between 2001–2020, bi-monthly VV/VH ratios for crop monitoring, or daily Sentinel-3 turbidity indices for water quality assessment.
 
+## 📤 Enhanced Export Capabilities (NEW in v0.6.0)
+
+### Google Drive Export
+Export any image or classification directly to your Google Drive:
+
+```python
+processor.export_to_drive(
+    image=classified_map,
+    description="landcover_2023",
+    folder="ndvi2gif_results",
+    scale=30,
+    crs="EPSG:4326",
+    maxPixels=1e13
+)
+```
+
+### Earth Engine Asset Export
+Save results as Earth Engine Assets for further processing:
+
+```python
+processor.export_to_asset(
+    image=classification,
+    asset_id="users/yourname/landcover_2023",
+    pyramiding_policy={"class": "mode"},
+    overwrite=True
+)
+```
+
+### Automatic Scale Detection
+The library now automatically selects the appropriate scale based on the sensor:
+- Sentinel-2: 10m
+- Sentinel-3: 300m
+- Landsat: 30m
+- MODIS: 500m
+- Sentinel-1: 10m
+
 ---
 
 ## Installation
@@ -240,7 +337,7 @@ Check out our comprehensive examples:
 ```python
 import ee
 import geemap
-from ndvi2gif import NdviSeasonality, TimeSeriesAnalyzer, S1ARDProcessor
+from ndvi2gif import NdviSeasonality, TimeSeriesAnalyzer, LandCoverClassifier
 
 # Authenticate Earth Engine
 ee.Authenticate()
@@ -263,6 +360,30 @@ composite = ndvi_analysis.get_year_composite()
 
 # Create animated GIF
 ndvi_analysis.get_gif(name='ndvi_evolution.gif')
+
+# NEW in v0.6.0: Land Cover Classification
+classifier = LandCoverClassifier(ndvi_analysis)
+
+# Create multi-index feature stack
+features = classifier.create_feature_stack(
+    indices=['ndvi', 'evi', 'ndwi'],
+    normalize=True
+)
+
+# Add training data and classify
+classifier.add_training_data('training_points.shp')
+landcover = classifier.classify_supervised('random_forest')
+
+# Export to Drive
+ndvi_analysis.export_to_drive(
+    image=landcover,
+    description="classification_2024",
+    folder="results"
+)
+
+# Get feature importance
+importance = classifier.get_feature_importance()
+print(f"Most important features: {importance[:5]}")
 
 # NEW: Sentinel-3 water quality monitoring
 water_quality = NdviSeasonality(
@@ -362,38 +483,18 @@ For complete examples, see the [example notebooks](examples_notebooks/) folder.
 ```
 ---
 
-## Roadmap 🗺️ 
-
-**v0.5.0 ✅ Advanced SAR & Time Series Suite**  
-Status: **Released!**
-
-✅ **Sentinel-1 ARD Processor** – Terrain correction + multiple speckle filtering options  
-✅ **Time Series Analyzer** – Trend detection, seasonal dashboards, and phenology metrics  
-✅ **Extended NdviSeasonality** – Flexible periods (4, 12, 24, custom), ROI enhancements, SAR normalization  
-✅ **Improved Visualizations** – Publication-ready multi-panel dashboards  
-
-**v0.5.x 🎯 Cross-Annual Periods**  
-Status: **Planned (minor release before 0.6.0)**  
-
-📅 **Custom Year Start** – Agricultural seasons (Sep–Aug), hydrological years (Oct–Sep)  
-📅 **Cross-Calendar Logic** – Handle periods spanning multiple calendar years  
-📅 **Smart Period Naming** – Context-aware labels for non-standard years  
-📅 **Enhanced Date Handling** – More flexible `start_date`/`end_date`  
-
-**v0.6.0 🔮 Next-Gen Analytics**  
-Status: **In development / Planned**
-
-🌐 **Multi-sensor Fusion** – Combine multiple satellite platforms in unified workflows  
-🤖 **Machine Learning Classification** – Integrated classifiers (e.g., Random Forest, SVM, CART) for land cover mapping and supervised analysis  
-📊 **Expanded Time Series Analysis** – Interactive plots, anomaly detection, advanced statistical metrics  
-🎨 **Enhanced Visualizations** – Interactive and publication-ready charting options  
-⚡ **Performance Optimizations** – Faster processing for large temporal datasets  
-
-
 ## Use Cases
+
+**🤖 Land Cover Classification (NEW in v0.6.0)**
+- Multi-temporal crop type mapping
+- Urban expansion monitoring
+- Forest change detection
+- Wetland classification
+- Feature importance analysis for ecological studies
 
 **🌾 Agricultural Monitoring**
 - Crop phenology tracking with optical indices
+- Crop type classification with Random Forest
 - Harvest timing detection with SAR VV/VH ratios
 - Irrigation monitoring with NDWI
 - Yield prediction with multi-temporal NDVI
@@ -411,6 +512,7 @@ Status: **In development / Planned**
 - Vegetation change detection combining optical and SAR
 - Snow cover analysis with NDSI
 - Multi-sensor ecosystem monitoring
+- Land cover change with machine learning classification
 
 **📊 Operational Applications**
 - Real-time monitoring with incomplete year support
@@ -418,7 +520,27 @@ Status: **In development / Planned**
 - Automated reporting with GeoTIFF exports
 - Quality assessment with robust statistics
 - Geometric consistency with SAR orbit control
+- Direct export to Google Drive and Earth Engine Assets
 - Generate reference rasters for pseudo-invariant feature normalization ([ProtocoloV2](https://github.com/Digdgeo/ProtocoloV2))
+
+## Roadmap 🗺️ 
+
+**v0.6.0 ✅ Machine Learning & Classification Suite**  
+Status: **Released August 2025!**
+
+✅ **LandCoverClassifier** – Complete classification workflows  
+✅ **Multiple ML Algorithms** – RF, SVM, CART, K-means, and more  
+✅ **Enhanced Exports** – Google Drive and EE Assets  
+✅ **95%+ Documentation** – Comprehensive docstrings with examples  
+✅ **Feature Engineering** – Multi-temporal stacks with normalization  
+
+**v1.0.0 🎯 Complete Climate Analysis Platform**  
+Status: **Planned**
+
+📚 **Jupyter Book** – Interactive documentation and tutorials  
+🌡️ **Climate Datasets** – ERA5, CHIRPS, TerraClimate integration  
+🌍 **Climate Analysis** – Advanced climate change assessment tools  
+🔧 **API Stability** – Long-term support commitment  
 
 ## Contributing
 
@@ -434,18 +556,28 @@ We welcome contributions from the community! Whether you're a developer, researc
 
 ---
 
-## Citation
+## 📖 Citation
 
-If you use ndvi2gif in your research, please cite:
+JOSS Manuscript in preparation. For now, please cite this software as:
 
 ```bibtex
-@software{garcia_diaz_ndvi2gif,
+@software{garcia_diaz_ndvi2gif_2024,
   author = {García Díaz, Diego},
-  title = {ndvi2gif: Multi-Seasonal Remote Sensing Index Composites},
+  title = {ndvi2gif: Multi-Seasonal Remote Sensing Analysis Suite},
   url = {https://github.com/Digdgeo/Ndvi2Gif},
-  year = {2024}
+  version = {0.6.0},
+  year = {2025}
 }
-```
+
+## Project Statistics
+
+- **Current Version:** 0.6.0
+- **Supported Sensors:** 5 (S1, S2, S3, Landsat, MODIS)
+- **Available Indices:** 40+
+- **ML Algorithms:** 8 (5 supervised, 3 unsupervised)
+- **Lines of Code:** ~4,800
+- **Documentation Coverage:** 95%+
+- **Test Coverage:** Growing with each release
 
 ## License
 
@@ -454,3 +586,4 @@ This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.t
 ## Acknowledgments
 
 - Built on [Google Earth Engine](https://earthengine.google.com/) and [geemap](https://geemap.org/)
+- Special thanks to Qiusheng Wu and to the Google Earth Engine team and the open-source remote sensing community

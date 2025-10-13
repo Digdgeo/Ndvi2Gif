@@ -585,6 +585,7 @@ JOSS Manuscript in preparation. For now, please cite this software as:
   version = {0.6.0},
   year = {2025}
 }
+```
 
 ## Project Statistics
 

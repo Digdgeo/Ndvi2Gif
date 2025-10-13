@@ -1,0 +1,17 @@
+# Jupyter Book requirements
+jupyter-book>=0.15.1
+ghp-import
+sphinx>=5.0
+pydata-sphinx-theme>=0.13.0
+sphinx-copybutton
+myst-nb>=0.17.0
+sphinxcontrib-bibtex
+
+# Ndvi2Gif and dependencies (for API documentation)
+ndvi2gif>=0.6.0
+earthengine-api>=0.1.347
+geemap>=0.29.5
+numpy<2.0
+pandas
+matplotlib
+seaborn

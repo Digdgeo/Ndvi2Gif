@@ -1,0 +1,67 @@
+# Table of Contents
+# Learn more at https://jupyterbook.org/customize/toc.html
+
+format: jb-book
+root: intro
+title: Home
+
+parts:
+  - caption: Getting Started
+    chapters:
+      - file: getting_started/installation
+      - file: getting_started/authentication
+      - file: getting_started/quick_start
+      - file: getting_started/roi_options
+
+  - caption: Core Tutorials
+    chapters:
+      - file: tutorials/basic_ndvi
+        title: "1. Basic NDVI Analysis"
+      - file: tutorials/multi_sensor
+        title: "2. Multi-Sensor Comparison"
+      - file: tutorials/temporal_composites
+        title: "3. Temporal Composites"
+      - file: tutorials/statistical_methods
+        title: "4. Statistical Methods"
+      - file: tutorials/indices_overview
+        title: "5. Vegetation & Environmental Indices"
+
+  - caption: Advanced Features
+    chapters:
+      - file: advanced/sar_processing
+        title: "Sentinel-1 SAR Processing"
+      - file: advanced/time_series
+        title: "Time Series Analysis"
+      - file: advanced/classification
+        title: "Land Cover Classification"
+      - file: advanced/water_quality
+        title: "Water Quality Monitoring"
+      - file: advanced/export_options
+        title: "Export & Batch Processing"
+
+  - caption: Use Cases
+    chapters:
+      - file: use_cases/agriculture
+        title: "Agricultural Monitoring"
+      - file: use_cases/wetlands
+        title: "Wetland Dynamics"
+      - file: use_cases/drought
+        title: "Drought Assessment"
+      - file: use_cases/phenology
+        title: "Vegetation Phenology"
+
+  - caption: Notebooks
+    chapters:
+      - file: notebooks/01_basic_usage
+      - file: notebooks/02_landcover_classification
+      - file: notebooks/03_time_series_analysis
+      - file: notebooks/04_sar_vegetation
+
+  - caption: Reference
+    chapters:
+      - file: reference/api
+      - file: reference/indices
+      - file: reference/datasets
+      - file: reference/faq
+      - file: reference/changelog
+      - file: reference/contributing

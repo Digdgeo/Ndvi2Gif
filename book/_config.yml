@@ -1,0 +1,112 @@
+# Jupyter Book Configuration
+# Learn more at https://jupyterbook.org/customize/config.html
+
+title: Ndvi2Gif Tutorial
+author: Diego García Díaz
+copyright: "2025"
+logo: _static/logo.png
+
+# Force re-execution of notebooks on each build.
+# See https://jupyterbook.org/content/execute.html
+execute:
+  execute_notebooks: off  # Set to 'force' to re-run all notebooks
+  timeout: 300
+  allow_errors: false
+
+# Define the name of the latex output file for PDF builds
+latex:
+  latex_documents:
+    targetname: ndvi2gif_tutorial.tex
+
+# Add a bibtex file so that we can create citations
+bibtex_bibfiles:
+  - references.bib
+
+# Information about where the book exists on the web
+repository:
+  url: https://github.com/Digdgeo/Ndvi2Gif
+  path_to_book: book
+  branch: master
+
+# Add GitHub buttons to your book
+# See https://jupyterbook.org/customize/config.html#add-a-link-to-your-repository
+html:
+  favicon: _static/favicon.ico
+  use_edit_page_button: true
+  use_issues_button: true
+  use_repository_button: true
+  home_page_in_navbar: true
+  baseurl: https://digdgeo.github.io/Ndvi2Gif/
+  extra_footer: |
+    <p>
+    Built with <a href="https://jupyterbook.org">Jupyter Book</a>
+    </p>
+
+# Jupyter Book specific settings
+sphinx:
+  extra_extensions:
+    - sphinx_copybutton
+    - sphinx.ext.autodoc
+    - sphinx.ext.napoleon
+    - sphinx.ext.intersphinx
+  config:
+    html_theme: pydata_sphinx_theme
+    html_theme_options:
+      github_url: https://github.com/Digdgeo/Ndvi2Gif
+      repository_url: https://github.com/Digdgeo/Ndvi2Gif
+      repository_branch: master
+      use_repository_button: true
+      use_issues_button: true
+      use_edit_page_button: true
+      show_toc_level: 2
+      navbar_align: left
+      logo:
+        text: Ndvi2Gif
+      icon_links:
+        - name: PyPI
+          url: https://pypi.org/project/ndvi2gif/
+          icon: fas fa-box
+        - name: Conda
+          url: https://anaconda.org/conda-forge/ndvi2gif
+          icon: fas fa-cloud
+    intersphinx_mapping:
+      python:
+        - https://docs.python.org/3
+        - null
+      numpy:
+        - https://numpy.org/doc/stable/
+        - null
+      pandas:
+        - https://pandas.pydata.org/pandas-docs/stable/
+        - null
+      earthengine:
+        - https://developers.google.com/earth-engine/apidocs
+        - null
+    napoleon_google_docstring: false
+    napoleon_numpy_docstring: true
+    copybutton_prompt_text: ">>> |\\.\\.\\. |\\$ |In \\[\\d*\\]: | {2,5}\\.\\.\\.: | {5,8}: "
+    copybutton_prompt_is_regexp: true
+
+# Launch button settings
+launch_buttons:
+  colab_url: https://colab.research.google.com
+  binderhub_url: ""
+  notebook_interface: jupyterlab
+
+# Parse and render settings
+parse:
+  myst_enable_extensions:
+    - amsmath
+    - colon_fence
+    - deflist
+    - dollarmath
+    - html_admonition
+    - html_image
+    - linkify
+    - replacements
+    - smartquotes
+    - substitution
+    - tasklist
+
+# Advanced config
+only_build_toc_files: false

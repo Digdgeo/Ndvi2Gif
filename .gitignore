@@ -77,6 +77,9 @@ target/
 .DS_Store
 Thumbs.db
 
+# AI assistant files
+CLAUDE.md
+
 # Ejemplos:
 # docs/**/*.tif
 # data/**/*.tif

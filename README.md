@@ -323,9 +323,26 @@ pip install ndvi2gif
 conda install -c conda-forge ndvi2gif
 ```
 
-## 📚 Examples & Tutorials
+## 📚 Documentation & Tutorials
 
-Check out our comprehensive examples:
+### 📖 Interactive Tutorial (NEW!)
+
+We're building a comprehensive **Jupyter Book tutorial** with step-by-step guides:
+
+**🌐 [Visit the Tutorial Book](https://digdgeo.github.io/Ndvi2Gif/)** *(Work in Progress)*
+
+The tutorial includes:
+- Installation and setup guides
+- Basic to advanced workflows
+- Complete API reference
+- Real-world use cases
+- FAQ and troubleshooting
+
+*Note: The tutorial is actively being developed. Core sections (Getting Started, Basic NDVI, FAQ) are complete, with more content being added regularly.*
+
+### 📓 Example Notebooks
+
+Check out our example notebooks:
 
 - **[Comprehensive Example](https://github.com/Digdgeo/Ndvi2Gif/blob/master/examples_notebooks/ndvi2gif%20extended%20version.ipynb)** - Complete guide to all ndvi2gif features
 - **[Input Types Guide](https://github.com/Digdgeo/Ndvi2Gif/blob/master/examples_notebooks/NDVI2Gif_InputsTypes.ipynb)** - Different ways to specify your region of interest

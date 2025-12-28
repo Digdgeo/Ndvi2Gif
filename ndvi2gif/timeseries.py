@@ -70,7 +70,7 @@ class TimeSeriesAnalyzer:
     start_year : int
         Starting year of analysis
     end_year : int
-        Ending year (exclusive)
+        Ending year (inclusive)
     sat : str
         Satellite sensor
     index : str
@@ -177,8 +177,8 @@ class TimeSeriesAnalyzer:
         geometry_type = 'point'  # Default assumption
         
         if point is None:
-            # Use ROI centroid
-            extraction_geometry = self.roi.centroid()
+            # Use ROI centroid (with error margin for geodesic operations)
+            extraction_geometry = self.roi.centroid(maxError=1)
             coords_info = extraction_geometry.coordinates().getInfo()
             print(f"Using ROI centroid: {coords_info}")
             geometry_type = 'point'
@@ -215,20 +215,20 @@ class TimeSeriesAnalyzer:
         time_series_data = []
         
         # Progress tracking
-        total_periods = (self.end_year - self.start_year) * self.periods
+        total_periods = (self.end_year - self.start_year + 1) * self.periods
         current = 0
-        
+
         print(f"Extracting {total_periods} temporal periods...")
-        
+
         # Get reducer function
         try:
             reducer_func = getattr(ee.Reducer, reducer)()
         except AttributeError:
             print(f"Warning: Unknown reducer '{reducer}', using 'mean'")
             reducer_func = ee.Reducer.mean()
-        
+
         # Process each year and period
-        for year in range(self.start_year, self.end_year):
+        for year in range(self.start_year, self.end_year + 1):
             for period_idx in range(self.periods):
                 current += 1
                 
@@ -550,7 +550,7 @@ class TimeSeriesAnalyzer:
         
         # Main title
         title = f"{self.sat} {self.index.upper()} - Time Series Analysis"
-        subtitle = f"Period: {self.start_year}-{self.end_year-1} | " \
+        subtitle = f"Period: {self.start_year}-{self.end_year} | " \
                   f"Resolution: {self.periods} periods/year | " \
                   f"Total: {len(df)} observations"
         
@@ -1386,8 +1386,8 @@ class TimeSeriesAnalyzer:
         """
         Plot a compact text-based summary of phenological metrics.
 
-        Extracts phenology using the threshold method and displays
-        mean values for SOS, POS, EOS, LOS, and amplitude.
+        For vegetation indices: displays SOS, POS, EOS, LOS, and amplitude.
+        For climate data (ERA5): displays seasonal/monthly statistics instead.
 
         Parameters
         ----------
@@ -1396,17 +1396,50 @@ class TimeSeriesAnalyzer:
         ax : matplotlib.axes.Axes
             Axis object where the summary will be drawn.
         """
+        # Check if this is climate data (ERA5, CHIRPS) - skip phenology
+        if self.sat in ['ERA5', 'CHIRPS']:
+            try:
+                summary_text = []
+                summary_text.append("CLIMATE STATS")
+                summary_text.append("─" * 14)
+
+                # Seasonal statistics
+                if 'season' in df.columns:
+                    for season in ['winter', 'spring', 'summer', 'autumn']:
+                        season_data = df[df['season'] == season]['value']
+                        if len(season_data) > 0:
+                            mean_val = season_data.mean()
+                            summary_text.append(f"{season.capitalize()[:3]}: {mean_val:.2f}")
+
+                summary_text.append("")
+                summary_text.append(f"Annual: {df['value'].mean():.2f}")
+                summary_text.append(f"Range: {df['value'].max() - df['value'].min():.2f}")
+
+                ax.text(0.1, 0.95, '\n'.join(summary_text),
+                       transform=ax.transAxes, verticalalignment='top',
+                       fontsize=10, family='monospace',
+                       bbox=dict(boxstyle='round,pad=0.4',
+                                facecolor='lightblue', alpha=0.1))
+            except:
+                ax.text(0.5, 0.5, 'Climate stats\nnot available',
+                       transform=ax.transAxes, ha='center', va='center')
+
+            ax.set_title('Climate Summary', fontsize=12, fontweight='bold', pad=10)
+            ax.axis('off')
+            return
+
+        # Original phenology code for vegetation indices
         try:
             phenology_results = self.extract_phenology_metrics(df, method='threshold')
-            
+
             if phenology_results:
                 pheno_df = pd.DataFrame(phenology_results).T
-                
+
                 # Texto más compacto y organizado
                 summary_text = []
                 summary_text.append("PHENOLOGY")
                 summary_text.append("─" * 12)
-                
+
                 metrics = {
                     'sos': ('SOS', 'day'),
                     'pos': ('POS', 'day'),
@@ -1414,7 +1447,7 @@ class TimeSeriesAnalyzer:
                     'los': ('LOS', 'days'),
                     'amplitude': ('Ampl', 'val')
                 }
-                
+
                 for metric, (label, unit) in metrics.items():
                     if metric in pheno_df.columns:
                         values = pheno_df[metric].dropna()
@@ -1424,7 +1457,7 @@ class TimeSeriesAnalyzer:
                                 summary_text.append(f"{label}: {mean_val:.0f} {unit}")
                             else:
                                 summary_text.append(f"{label}: {mean_val:.3f}")
-                
+
                 ax.text(0.1, 0.95, '\n'.join(summary_text),
                        transform=ax.transAxes, verticalalignment='top',
                        fontsize=10, family='monospace',
@@ -1436,7 +1469,7 @@ class TimeSeriesAnalyzer:
         except:
             ax.text(0.5, 0.5, 'Phenology\nnot available',
                    transform=ax.transAxes, ha='center', va='center')
-        
+
         ax.set_title('Phenology Summary', fontsize=12, fontweight='bold', pad=10)
         ax.axis('off')
     

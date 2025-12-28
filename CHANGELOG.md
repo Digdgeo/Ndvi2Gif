@@ -9,6 +9,211 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-01-XX
+
+### 🌡️ **CLIMATE DATA INTEGRATION RELEASE**
+
+This release introduces comprehensive climate reanalysis data support (ERA5-Land and CHIRPS), expanding ndvi2gif beyond vegetation monitoring into climate analysis. The library now supports 88 variables across 7 different satellite/reanalysis platforms, with intelligent handling of climate vs. vegetation data in time series analysis.
+
+---
+
+## ✨ **New Features**
+
+### 🌡️ **ERA5-Land Climate Reanalysis Support** (NEW)
+
+- **NEW DATASET**: Complete integration with ECMWF ERA5-Land Daily Aggregated dataset
+- **NEW**: 47 climate variables spanning 1950-present at ~11km resolution:
+  - **Temperature (24 variables)**:
+    - Basic: `temperature_2m`, `dewpoint_temperature_2m`, `skin_temperature`, `soil_temperature_level_1`
+    - Daily min/max variants (8 variables with `_min` and `_max` suffixes)
+    - Celsius conversions (12 variables with `_celsius` suffix)
+  - **Precipitation & Water Balance (11 variables)**:
+    - Meters: `total_precipitation_sum`, `total_evaporation_sum`, `potential_evaporation_sum`, `runoff_sum`, `surface_runoff_sum`
+    - L/m² conversions (6 variables with `_lm2` suffix for intuitive units)
+  - **Soil Moisture (4 variables)**: `volumetric_soil_water_layer_1` through `layer_4`
+  - **Radiation (3 variables)**: Solar radiation and heat flux measurements
+  - **Wind & Pressure (3 variables)**: Wind components and surface pressure
+  - **Snow (2 variables)**: Snow depth and snowfall
+- **NEW**: Unit conversion functions for user-friendly values:
+  - Temperature: Kelvin to Celsius (K - 273.15)
+  - Precipitation: Meters to L/m² (m × 1000)
+- **NEW**: Support for daily aggregated statistics (mean, min, max, sum, median, percentile)
+
+### 🌧️ **CHIRPS Precipitation Dataset** (NEW)
+
+- **NEW DATASET**: Integration with UCSB Climate Hazards Group CHIRPS Daily precipitation
+- **NEW**: High-resolution precipitation monitoring (1981-present, ~5.5km resolution)
+- **NEW**: Global coverage from 50°S to 50°N latitude
+- **NEW**: Combines satellite imagery with in-situ station data for improved accuracy
+- **NEW**: Ideal for drought monitoring, precipitation climatology, and trend analysis
+
+### 📊 **Enhanced Statistical Methods**
+
+- **NEW**: `sum` statistic for temporal aggregation (essential for precipitation totals)
+- **NEW**: `min` statistic for minimum value extraction (temperature minimums, etc.)
+- **IMPROVED**: All statistical reducers now work with climate variables
+
+### 🔧 **Time Series Analysis Improvements**
+
+- **NEW**: Intelligent climate data detection in `TimeSeriesAnalyzer`
+- **NEW**: Climate-specific summary statistics panel (replaces vegetation phenology for ERA5/CHIRPS)
+- **NEW**: Seasonal climate statistics (winter, spring, summer, autumn averages)
+- **NEW**: Annual mean and range calculations for climate variables
+- **IMPROVED**: Dashboard automatically adapts display based on data type (vegetation vs. climate)
+
+---
+
+## 🐛 **Bug Fixes**
+
+### 📅 **Critical: Inclusive Year Range**
+
+- **FIXED**: `end_year` parameter is now **inclusive** instead of exclusive
+  - **Before**: `start_year=2023, end_year=2023` would return NO data
+  - **After**: `start_year=2023, end_year=2023` correctly includes all of 2023
+- **FIXED**: Updated all year range calculations throughout the codebase
+- **FIXED**: Corrected documentation to reflect inclusive behavior
+- **IMPACT**: This is a **breaking change** for users who worked around the old exclusive behavior
+
+### 🗺️ **Geometry Operations**
+
+- **FIXED**: ROI centroid calculation now includes `maxError=1` parameter to prevent geometry operation errors
+- **FIXED**: Improved error handling for centroid-based extractions in time series analysis
+
+### 🛰️ **Sentinel-3 Band Naming**
+
+- **FIXED**: Corrected uppercase/lowercase inconsistency in Sentinel-3 band names
+- **FIXED**: Changed `'NIR'` to `'Nir'` for consistency with index calculations
+- **IMPACT**: Sentinel-3 indices now work correctly without band selection errors
+
+---
+
+## 📚 **Documentation Updates**
+
+### 📖 **README Enhancements**
+
+- **ADDED**: Complete ERA5-Land variable documentation with units and descriptions
+- **ADDED**: CHIRPS dataset documentation with coverage and use cases
+- **ADDED**: Unit conversion examples (Celsius, L/m²)
+- **UPDATED**: Supported datasets section with climate reanalysis platforms
+- **UPDATED**: Project statistics reflecting 7 sensors and 88 total variables
+
+### 🧪 **Testing**
+
+- **ADDED**: Unit tests for ERA5 variable availability
+- **ADDED**: Unit tests for CHIRPS precipitation integration
+- **ADDED**: Tests for CHIRPS in satellite validation suite
+- **UPDATED**: Satellite options tests to include ERA5 and CHIRPS
+
+---
+
+## 📊 **Project Statistics (v0.7.0)**
+
+- **Supported Sensors**: 7 (S1, S2, S3, Landsat, MODIS, ERA5-Land, CHIRPS)
+- **Total Variables**: 88
+  - 40+ vegetation and environmental indices
+  - 47 ERA5-Land climate variables
+  - 1 CHIRPS precipitation variable
+- **Temporal Coverage**: 1950-present (ERA5) and 1981-present (CHIRPS)
+- **Spatial Resolutions**: 10m (S2) to ~11km (ERA5) to ~5.5km (CHIRPS)
+- **ML Algorithms**: 8 (5 supervised, 3 unsupervised)
+
+---
+
+## 🔄 **API Changes**
+
+### Breaking Changes
+
+⚠️ **BREAKING**: `end_year` parameter behavior changed from exclusive to inclusive
+```python
+# Before v0.7.0 (exclusive)
+NdviSeasonality(start_year=2020, end_year=2023)  # Processed 2020, 2021, 2022
+
+# After v0.7.0 (inclusive)
+NdviSeasonality(start_year=2020, end_year=2023)  # Processes 2020, 2021, 2022, 2023
+```
+
+### New Parameters
+
+```python
+# ERA5 climate data
+processor = NdviSeasonality(
+    sat='ERA5',
+    index='temperature_2m_celsius',  # or any of 47 ERA5 variables
+    key='mean',  # or 'min', 'max', 'sum', 'median', 'percentile'
+    start_year=2020,
+    end_year=2023  # Now inclusive!
+)
+
+# CHIRPS precipitation
+chirps = NdviSeasonality(
+    sat='CHIRPS',
+    index='precipitation',
+    key='sum',  # Monthly/seasonal totals
+    start_year=2020,
+    end_year=2023
+)
+```
+
+---
+
+## 🚀 **Example Use Cases**
+
+### Climate Analysis with ERA5
+
+```python
+import ee
+from ndvi2gif import NdviSeasonality
+from ndvi2gif.timeseries import TimeSeriesAnalyzer
+
+ee.Initialize()
+
+# Temperature analysis
+temp = NdviSeasonality(
+    roi=ee.Geometry.Point([-6.48, 37.13]).buffer(5000),
+    sat='ERA5',
+    index='temperature_2m_celsius',
+    periods=12,
+    start_year=2020,
+    end_year=2023,
+    key='mean'
+)
+
+# Extract time series and analyze trends
+analyzer = TimeSeriesAnalyzer(temp)
+df = analyzer.extract_time_series()
+trends = analyzer.analyze_trend(df=df)
+fig = analyzer.plot_comprehensive_analysis()  # Shows climate stats, not phenology
+```
+
+### Precipitation Monitoring with CHIRPS
+
+```python
+# Monthly precipitation totals
+precip = NdviSeasonality(
+    roi=roi,
+    sat='CHIRPS',
+    index='precipitation',
+    periods=12,
+    start_year=2020,
+    end_year=2023,
+    key='sum'  # Sum for monthly totals
+)
+
+# Analyze drought patterns
+analyzer = TimeSeriesAnalyzer(precip)
+df = analyzer.extract_time_series()
+trends = analyzer.analyze_trend(df=df, method='mann_kendall')
+```
+
+---
+
+## 🙏 **Acknowledgments**
+
+- **ERA5-Land**: ECMWF Climate Reanalysis ([dataset](https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_LAND_DAILY_AGGR))
+- **CHIRPS**: UCSB Climate Hazards Center ([Funk et al., 2015](https://doi.org/10.1038/sdata.2015.66))
+
+---
+
 ## [0.6.0] - 2025-09-15
 
 ### 🧠 **MACHINE LEARNING & CLASSIFICATION RELEASE**

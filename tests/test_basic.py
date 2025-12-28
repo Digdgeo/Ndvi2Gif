@@ -1,5 +1,5 @@
 """
-Basic tests for ndvi2gif package (v0.5.0)
+Basic tests for ndvi2gif package (v0.7.0)
 
 - Verifies public API imports
 - Smoke tests for NdviSeasonality defaults
@@ -49,7 +49,7 @@ def test_ndvi_seasonality_defaults():
 
     assert inst.periods >= 4
     assert inst.start_year <= inst.end_year
-    assert inst.sat in {"S2", "Landsat", "MODIS", "S1", "S3"}
+    assert inst.sat in {"S2", "Landsat", "MODIS", "S1", "S3", "ERA5"}
     assert inst.key in {"max", "median", "mean", "percentile"}
     assert isinstance(inst.index, str)
 
@@ -80,10 +80,10 @@ def test_ndvi_seasonality_custom_params():
 
 
 def test_valid_satellite_options_updated():
-    """Accept supported sats including S3; invalid falls back to default (S2)."""
+    """Accept supported sats including S3, ERA5, and CHIRPS; invalid falls back to default (S2)."""
     from ndvi2gif.ndvi2gif import NdviSeasonality
 
-    for sat in ["S2", "Landsat", "MODIS", "S1", "S3"]:
+    for sat in ["S2", "Landsat", "MODIS", "S1", "S3", "ERA5", "CHIRPS"]:
         assert NdviSeasonality(sat=sat).sat == sat
 
     assert NdviSeasonality(sat="InvalidSat").sat == "S2"
@@ -108,6 +108,45 @@ def test_core_indices_available():
     available = set(inst.d.keys())
     missing = expected - available
     assert not missing, f"Missing index methods: {missing}"
+
+
+def test_era5_variables_available():
+    """ERA5-Land climate variables should be available in dispatch dictionary."""
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+    inst = NdviSeasonality(sat="ERA5", index="temperature_2m")
+
+    # Check that ERA5 is in the sensor mapping
+    assert "ERA5" in inst.sensor_indices
+
+    # Check core ERA5 variables are in dispatch dict
+    era5_expected = {
+        "temperature_2m", "total_precipitation_sum", "total_evaporation_sum",
+        "volumetric_soil_water_layer_1", "surface_pressure"
+    }
+    available = set(inst.d.keys())
+    missing = era5_expected - available
+    assert not missing, f"Missing ERA5 variable methods: {missing}"
+
+    # Check that ERA5 variables are mapped to the satellite
+    era5_vars = inst.sensor_indices["ERA5"]
+    assert "temperature_2m" in era5_vars
+    assert "total_precipitation_sum" in era5_vars
+
+
+def test_chirps_precipitation_available():
+    """CHIRPS precipitation variable should be available."""
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+    inst = NdviSeasonality(sat="CHIRPS", index="precipitation")
+
+    # Check that CHIRPS is in the sensor mapping
+    assert "CHIRPS" in inst.sensor_indices
+
+    # Check precipitation variable is in dispatch dict
+    assert "precipitation" in inst.d
+
+    # Check that CHIRPS variables are mapped to the satellite
+    chirps_vars = inst.sensor_indices["CHIRPS"]
+    assert "precipitation" in chirps_vars
 
 
 # ---------------------------------------------------------------------

@@ -252,8 +252,8 @@ class NdviSeasonality:
         data availability. Default is 2016.
         
     end_year : int, optional
-        Ending year for analysis (exclusive). Analysis includes years
-        from start_year to end_year-1. Default is 2020.
+        Ending year for analysis (inclusive). Analysis includes years
+        from start_year to end_year. Default is 2020.
         
     sat : {'S2', 'S1', 'Landsat', 'MODIS', 'S3'}, optional
         Satellite sensor selection:
@@ -266,14 +266,15 @@ class NdviSeasonality:
         
         Default is 'S2'.
         
-    key : {'max', 'median', 'mean', 'percentile'}, optional
+    key : {'max', 'median', 'mean', 'sum', 'percentile'}, optional
         Statistical reducer for temporal aggregation:
-        
+
         * ``'max'`` : Maximum value (vegetation peak detection)
         * ``'median'`` : Median value (robust to outliers)
         * ``'mean'`` : Mean value (smooth temporal profiles)
+        * ``'sum'`` : Total sum (ideal for precipitation, accumulation)
         * ``'percentile'`` : Custom percentile (set with percentile param)
-        
+
         Default is 'max'.
         
     index : str, optional
@@ -350,7 +351,7 @@ class NdviSeasonality:
     start_year : int
         First year of analysis
     end_year : int
-        Last year of analysis (exclusive)
+        Last year of analysis (inclusive)
     sat : str
         Selected satellite sensor
     index : str
@@ -474,8 +475,8 @@ class NdviSeasonality:
             Default is 2016.
             
         end_year : int, optional
-            Ending year for temporal analysis (exclusive).
-            Analysis includes years from start_year to end_year-1.
+            Ending year for temporal analysis (inclusive).
+            Analysis includes years from start_year to end_year.
             Default is 2020.
             
         sat : str, optional
@@ -735,7 +736,7 @@ class NdviSeasonality:
         self.periods = periods
         self.start_year = start_year
         self.end_year = end_year
-        self.key = key if key in ['max', 'median', 'percentile', 'mean'] else 'max'
+        self.key = key if key in ['max', 'min', 'median', 'percentile', 'mean', 'sum'] else 'max'
         self.percentile = percentile
         self.imagelist = []
         self.index = index
@@ -785,13 +786,57 @@ class NdviSeasonality:
             'rvi', 'vv', 'vh', 'vv_vh_ratio', 'dpsvi', 'rfdi', 'vsdi'
         }
 
+        # ERA5-Land climate reanalysis variables
+        self.era5_variables = {
+            # Temperature (Kelvin)
+            'temperature_2m', 'dewpoint_temperature_2m', 'skin_temperature',
+            'soil_temperature_level_1',
+            # Temperature min/max (Kelvin)
+            'temperature_2m_min', 'temperature_2m_max',
+            'dewpoint_temperature_2m_min', 'dewpoint_temperature_2m_max',
+            'skin_temperature_min', 'skin_temperature_max',
+            'soil_temperature_level_1_min', 'soil_temperature_level_1_max',
+            # Temperature (Celsius) - converted versions
+            'temperature_2m_celsius', 'dewpoint_temperature_2m_celsius',
+            'skin_temperature_celsius', 'soil_temperature_level_1_celsius',
+            # Temperature min/max (Celsius) - converted versions
+            'temperature_2m_min_celsius', 'temperature_2m_max_celsius',
+            'dewpoint_temperature_2m_min_celsius', 'dewpoint_temperature_2m_max_celsius',
+            'skin_temperature_min_celsius', 'skin_temperature_max_celsius',
+            'soil_temperature_level_1_min_celsius', 'soil_temperature_level_1_max_celsius',
+            # Precipitation & water balance (meters)
+            'total_precipitation_sum', 'total_evaporation_sum', 'potential_evaporation_sum',
+            'runoff_sum', 'surface_runoff_sum',
+            # Precipitation & water balance (L/m²) - converted versions
+            'total_precipitation_sum_lm2', 'total_evaporation_sum_lm2',
+            'potential_evaporation_sum_lm2', 'runoff_sum_lm2', 'surface_runoff_sum_lm2',
+            'snowfall_sum_lm2',
+            # Soil moisture
+            'volumetric_soil_water_layer_1', 'volumetric_soil_water_layer_2',
+            'volumetric_soil_water_layer_3', 'volumetric_soil_water_layer_4',
+            # Radiation
+            'surface_solar_radiation_downwards_sum', 'surface_net_solar_radiation_sum',
+            'surface_latent_heat_flux_sum',
+            # Wind & pressure
+            'u_component_of_wind_10m', 'v_component_of_wind_10m', 'surface_pressure',
+            # Snow
+            'snow_depth_water_equivalent', 'snowfall_sum'
+        }
+
+        # CHIRPS precipitation dataset variables
+        self.chirps_variables = {
+            'precipitation'  # Daily precipitation in mm
+        }
+
         # Final sensor-to-indices mapping
         self.sensor_indices = {
             'S2': self.optical_indices | self.s2_exclusive_indices,
             'Landsat': self.optical_indices,
             'MODIS': self.optical_indices,
             'S1': self.s1_indices,
-            'S3': self.optical_indices | self.s3_exclusive_indices
+            'S3': self.optical_indices | self.s3_exclusive_indices,
+            'ERA5': self.era5_variables,
+            'CHIRPS': self.chirps_variables
         }
         
         # Validate satellite
@@ -846,9 +891,70 @@ class NdviSeasonality:
             'vv_vh_ratio': lambda image: self.get_vv_vh_ratio(image, normalize=self.normalize_sar),
             'dpsvi': lambda image: self.get_dpsvi(image, normalize=self.normalize_sar),
             'rfdi': lambda image: self.get_rfdi(image, normalize=self.normalize_sar),
-            'vsdi': lambda image: self.get_vsdi(image, normalize=self.normalize_sar)
+            'vsdi': lambda image: self.get_vsdi(image, normalize=self.normalize_sar),
+
+            # ERA5-Land climate reanalysis variables
+            # Temperature
+            'temperature_2m': self.get_era5_temperature_2m,
+            'dewpoint_temperature_2m': self.get_era5_dewpoint_temperature_2m,
+            'skin_temperature': self.get_era5_skin_temperature,
+            'soil_temperature_level_1': self.get_era5_soil_temperature_level_1,
+            # Precipitation & water balance
+            'total_precipitation_sum': self.get_era5_total_precipitation_sum,
+            'total_evaporation_sum': self.get_era5_total_evaporation_sum,
+            'potential_evaporation_sum': self.get_era5_potential_evaporation_sum,
+            'runoff_sum': self.get_era5_runoff_sum,
+            'surface_runoff_sum': self.get_era5_surface_runoff_sum,
+            # Soil moisture
+            'volumetric_soil_water_layer_1': self.get_era5_volumetric_soil_water_layer_1,
+            'volumetric_soil_water_layer_2': self.get_era5_volumetric_soil_water_layer_2,
+            'volumetric_soil_water_layer_3': self.get_era5_volumetric_soil_water_layer_3,
+            'volumetric_soil_water_layer_4': self.get_era5_volumetric_soil_water_layer_4,
+            # Radiation
+            'surface_solar_radiation_downwards_sum': self.get_era5_surface_solar_radiation_downwards_sum,
+            'surface_net_solar_radiation_sum': self.get_era5_surface_net_solar_radiation_sum,
+            'surface_latent_heat_flux_sum': self.get_era5_surface_latent_heat_flux_sum,
+            # Wind & pressure
+            'u_component_of_wind_10m': self.get_era5_u_component_of_wind_10m,
+            'v_component_of_wind_10m': self.get_era5_v_component_of_wind_10m,
+            'surface_pressure': self.get_era5_surface_pressure,
+            # Snow
+            'snow_depth_water_equivalent': self.get_era5_snow_depth_water_equivalent,
+            'snowfall_sum': self.get_era5_snowfall_sum,
+            # Temperature in Celsius (converted)
+            'temperature_2m_celsius': self.get_era5_temperature_2m_celsius,
+            'dewpoint_temperature_2m_celsius': self.get_era5_dewpoint_temperature_2m_celsius,
+            'skin_temperature_celsius': self.get_era5_skin_temperature_celsius,
+            'soil_temperature_level_1_celsius': self.get_era5_soil_temperature_level_1_celsius,
+            # Temperature min/max (Kelvin)
+            'temperature_2m_min': self.get_era5_temperature_2m_min,
+            'temperature_2m_max': self.get_era5_temperature_2m_max,
+            'dewpoint_temperature_2m_min': self.get_era5_dewpoint_temperature_2m_min,
+            'dewpoint_temperature_2m_max': self.get_era5_dewpoint_temperature_2m_max,
+            'skin_temperature_min': self.get_era5_skin_temperature_min,
+            'skin_temperature_max': self.get_era5_skin_temperature_max,
+            'soil_temperature_level_1_min': self.get_era5_soil_temperature_level_1_min,
+            'soil_temperature_level_1_max': self.get_era5_soil_temperature_level_1_max,
+            # Temperature min/max (Celsius)
+            'temperature_2m_min_celsius': self.get_era5_temperature_2m_min_celsius,
+            'temperature_2m_max_celsius': self.get_era5_temperature_2m_max_celsius,
+            'dewpoint_temperature_2m_min_celsius': self.get_era5_dewpoint_temperature_2m_min_celsius,
+            'dewpoint_temperature_2m_max_celsius': self.get_era5_dewpoint_temperature_2m_max_celsius,
+            'skin_temperature_min_celsius': self.get_era5_skin_temperature_min_celsius,
+            'skin_temperature_max_celsius': self.get_era5_skin_temperature_max_celsius,
+            'soil_temperature_level_1_min_celsius': self.get_era5_soil_temperature_level_1_min_celsius,
+            'soil_temperature_level_1_max_celsius': self.get_era5_soil_temperature_level_1_max_celsius,
+            # Precipitation in L/m² (converted)
+            'total_precipitation_sum_lm2': self.get_era5_total_precipitation_sum_lm2,
+            'total_evaporation_sum_lm2': self.get_era5_total_evaporation_sum_lm2,
+            'potential_evaporation_sum_lm2': self.get_era5_potential_evaporation_sum_lm2,
+            'runoff_sum_lm2': self.get_era5_runoff_sum_lm2,
+            'surface_runoff_sum_lm2': self.get_era5_surface_runoff_sum_lm2,
+            'snowfall_sum_lm2': self.get_era5_snowfall_sum_lm2,
+            # CHIRPS precipitation
+            'precipitation': self.get_chirps_precipitation
         }
-        
+
         # Generate dynamic temporal periods - replaces all hardcoded periods
         self.period_dates, self.period_names = self._generate_periods(periods)
         
@@ -1337,16 +1443,24 @@ class NdviSeasonality:
         
         # ============= SENTINEL-3 OLCI CONFIGURATION =============
         S3col = ee.ImageCollection("COPERNICUS/S3/OLCI").select([
-            'Oa01_radiance', 'Oa02_radiance', 'Oa03_radiance', 'Oa04_radiance', 
+            'Oa01_radiance', 'Oa02_radiance', 'Oa03_radiance', 'Oa04_radiance',
             'Oa05_radiance', 'Oa06_radiance', 'Oa07_radiance', 'Oa08_radiance',
             'Oa09_radiance', 'Oa10_radiance', 'Oa11_radiance', 'Oa12_radiance',
             'Oa16_radiance', 'Oa17_radiance', 'Oa18_radiance', 'Oa21_radiance'
         ], [
             'Violet', 'Blue', 'Blue2', 'Blue_Green', 'Green', 'Green2',
-            'Red', 'Red2', 'Red3', 'Red_Edge1', 'Red_Edge2', 'NIR',
-            'NIR2', 'NIR3', 'NIR4', 'NIR5'
+            'Red', 'Red2', 'Red3', 'Red_Edge1', 'Red_Edge2', 'Nir',
+            'Nir2', 'Nir3', 'Nir4', 'Nir5'
         ]).filterBounds(self.roi)
-        
+
+        # ============= ERA5-LAND CLIMATE REANALYSIS CONFIGURATION =============
+        # ERA5-Land daily aggregated climate variables (1950-present, ~11km resolution)
+        ERA5col = ee.ImageCollection("ECMWF/ERA5_LAND/DAILY_AGGR").filterBounds(self.roi)
+
+        # ============= CHIRPS PRECIPITATION CONFIGURATION =============
+        # CHIRPS daily precipitation dataset (1981-present, ~5.5km resolution)
+        CHIRPScol = ee.ImageCollection("UCSB-CHG/CHIRPS/DAILY").filterBounds(self.roi)
+
         # ============= ASSIGN COLLECTIONS BASED ON SENSOR =============
         if self.sat == 'S2':
             self.ndvi_col = S2col
@@ -1365,7 +1479,13 @@ class NdviSeasonality:
         elif self.sat == 'S3':
             self.ndvi_col = S3col
             print("Sentinel-3 collection uses OLCI data only. LST not available (requires SLSTR).")
-        else: 
+        elif self.sat == 'ERA5':
+            self.ndvi_col = ERA5col
+            print("ERA5-Land daily climate reanalysis (1950-present, ~11km resolution)")
+        elif self.sat == 'CHIRPS':
+            self.ndvi_col = CHIRPScol
+            print("CHIRPS daily precipitation (1981-present, ~5.5km resolution, 50°S-50°N)")
+        else:
             print('Not a valid satellite')
     
     def get_period_composite(self, year, period_idx):
@@ -1438,10 +1558,12 @@ class NdviSeasonality:
         
         # Apply all statistical reducers to the filtered and processed collection
         period_stats['max'] = filtered_collection.max()
+        period_stats['min'] = filtered_collection.min()
         period_stats['median'] = filtered_collection.median()
         period_stats['mean'] = filtered_collection.mean()
+        period_stats['sum'] = filtered_collection.sum()
         period_stats['percentile'] = filtered_collection.reduce(ee.Reducer.percentile([self.percentile]))
-        
+
         # Return the composite corresponding to the user-specified statistical method
         return period_stats[self.key]
     
@@ -1779,8 +1901,8 @@ class NdviSeasonality:
         self.imagelist = []
         rows = []
 
-        # recorrer años (end_year EXCLUSIVO)
-        for year in range(self.start_year, self.end_year):
+        # recorrer años (end_year INCLUSIVO)
+        for year in range(self.start_year, self.end_year + 1):
             period_images = []
             successful_periods = 0
 
@@ -2756,7 +2878,658 @@ class NdviSeasonality:
             'Green': image.select('Green'),    # Oa05 - 510nm
             'Red': image.select('Red')         # Oa07 - 620nm
         }).rename(['nd'])
-        
+
+    #### ERA5-Land Climate Reanalysis Variables ####
+
+    # Temperature variables
+    def get_era5_temperature_2m(self, image):
+        """
+        Air temperature at 2 meters height.
+
+        Returns temperature in Kelvin. For Celsius: subtract 273.15
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_LAND_DAILY_AGGR
+        """
+        return image.select('temperature_2m').rename('nd')
+
+    def get_era5_dewpoint_temperature_2m(self, image):
+        """
+        Dewpoint temperature at 2 meters height.
+
+        Temperature at which air becomes saturated with water vapor.
+        Units: Kelvin
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('dewpoint_temperature_2m').rename('nd')
+
+    def get_era5_skin_temperature(self, image):
+        """
+        Skin temperature - Earth surface temperature.
+
+        Temperature of the Earth's surface (land or water).
+        Units: Kelvin
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('skin_temperature').rename('nd')
+
+    def get_era5_soil_temperature_level_1(self, image):
+        """
+        Soil temperature at level 1 (0-7 cm depth).
+
+        Temperature in the topmost soil layer.
+        Units: Kelvin
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('soil_temperature_level_1').rename('nd')
+
+    # Precipitation and water balance variables
+    def get_era5_total_precipitation_sum(self, image):
+        """
+        Total daily precipitation (rain + snow combined).
+
+        Units: meters of water equivalent
+        Note: Flow band - accumulated daily sum
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('total_precipitation_sum').rename('nd')
+
+    def get_era5_total_evaporation_sum(self, image):
+        """
+        Total evapotranspiration from land surface.
+
+        Includes evaporation from soil, vegetation, and water bodies.
+        Units: meters of water equivalent
+        Note: Flow band - accumulated daily sum
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('total_evaporation_sum').rename('nd')
+
+    def get_era5_potential_evaporation_sum(self, image):
+        """
+        Potential evapotranspiration.
+
+        Maximum evaporation that would occur with unlimited water availability.
+        Units: meters
+        Note: Flow band - accumulated daily sum
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('potential_evaporation_sum').rename('nd')
+
+    def get_era5_runoff_sum(self, image):
+        """
+        Total runoff (surface + sub-surface).
+
+        Units: meters
+        Note: Flow band - accumulated daily sum
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('runoff_sum').rename('nd')
+
+    def get_era5_surface_runoff_sum(self, image):
+        """
+        Surface runoff only.
+
+        Water that flows over the land surface.
+        Units: meters
+        Note: Flow band - accumulated daily sum
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('surface_runoff_sum').rename('nd')
+
+    # Soil moisture variables
+    def get_era5_volumetric_soil_water_layer_1(self, image):
+        """
+        Volumetric soil water content at layer 1 (0-7 cm depth).
+
+        Volume fraction of water in soil (0-1).
+        Units: m³/m³
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('volumetric_soil_water_layer_1').rename('nd')
+
+    def get_era5_volumetric_soil_water_layer_2(self, image):
+        """
+        Volumetric soil water content at layer 2 (7-28 cm depth).
+
+        Volume fraction of water in soil (0-1).
+        Units: m³/m³
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('volumetric_soil_water_layer_2').rename('nd')
+
+    def get_era5_volumetric_soil_water_layer_3(self, image):
+        """
+        Volumetric soil water content at layer 3 (28-100 cm depth).
+
+        Volume fraction of water in soil (0-1).
+        Units: m³/m³
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('volumetric_soil_water_layer_3').rename('nd')
+
+    def get_era5_volumetric_soil_water_layer_4(self, image):
+        """
+        Volumetric soil water content at layer 4 (100-289 cm depth).
+
+        Volume fraction of water in soil (0-1).
+        Units: m³/m³
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('volumetric_soil_water_layer_4').rename('nd')
+
+    # Radiation variables
+    def get_era5_surface_solar_radiation_downwards_sum(self, image):
+        """
+        Downward solar radiation at the surface.
+
+        Total incoming shortwave radiation.
+        Units: J/m²
+        Note: Flow band - accumulated daily sum
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('surface_solar_radiation_downwards_sum').rename('nd')
+
+    def get_era5_surface_net_solar_radiation_sum(self, image):
+        """
+        Net solar radiation at the surface.
+
+        Incoming minus reflected solar radiation.
+        Units: J/m²
+        Note: Flow band - accumulated daily sum
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('surface_net_solar_radiation_sum').rename('nd')
+
+    def get_era5_surface_latent_heat_flux_sum(self, image):
+        """
+        Surface latent heat flux.
+
+        Energy used for evaporation/condensation.
+        Units: J/m²
+        Note: Flow band - accumulated daily sum
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('surface_latent_heat_flux_sum').rename('nd')
+
+    # Wind and pressure variables
+    def get_era5_u_component_of_wind_10m(self, image):
+        """
+        Eastward wind component at 10 meters height.
+
+        Positive values indicate wind from west to east.
+        Units: m/s
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('u_component_of_wind_10m').rename('nd')
+
+    def get_era5_v_component_of_wind_10m(self, image):
+        """
+        Northward wind component at 10 meters height.
+
+        Positive values indicate wind from south to north.
+        Units: m/s
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('v_component_of_wind_10m').rename('nd')
+
+    def get_era5_surface_pressure(self, image):
+        """
+        Atmospheric pressure at the surface.
+
+        Units: Pascals (Pa)
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('surface_pressure').rename('nd')
+
+    # Snow variables
+    def get_era5_snow_depth_water_equivalent(self, image):
+        """
+        Snow depth in water equivalent.
+
+        Amount of water that would result from melting the snow.
+        Units: meters of water equivalent
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('snow_depth_water_equivalent').rename('nd')
+
+    def get_era5_snowfall_sum(self, image):
+        """
+        Snowfall amount.
+
+        Units: meters of water equivalent
+        Note: Flow band - accumulated daily sum
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('snowfall_sum').rename('nd')
+
+    #### ERA5-Land Converted Units (Celsius and L/m²) ####
+
+    # Temperature conversions to Celsius
+    def get_era5_temperature_2m_celsius(self, image):
+        """
+        Air temperature at 2 meters height in Celsius.
+
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_LAND_DAILY_AGGR
+        """
+        return image.select('temperature_2m').subtract(273.15).rename('nd')
+
+    def get_era5_dewpoint_temperature_2m_celsius(self, image):
+        """
+        Dewpoint temperature at 2 meters height in Celsius.
+
+        Temperature at which air becomes saturated with water vapor.
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('dewpoint_temperature_2m').subtract(273.15).rename('nd')
+
+    def get_era5_skin_temperature_celsius(self, image):
+        """
+        Skin temperature (Earth surface) in Celsius.
+
+        Temperature of the Earth's surface (land or water).
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('skin_temperature').subtract(273.15).rename('nd')
+
+    def get_era5_soil_temperature_level_1_celsius(self, image):
+        """
+        Soil temperature at level 1 (0-7 cm depth) in Celsius.
+
+        Temperature in the topmost soil layer.
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('soil_temperature_level_1').subtract(273.15).rename('nd')
+
+    # Temperature min/max (Kelvin)
+    def get_era5_temperature_2m_min(self, image):
+        """
+        Daily minimum air temperature at 2 meters height.
+
+        Units: Kelvin (K)
+        For Celsius use temperature_2m_min_celsius
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('temperature_2m_min').rename('nd')
+
+    def get_era5_temperature_2m_max(self, image):
+        """
+        Daily maximum air temperature at 2 meters height.
+
+        Units: Kelvin (K)
+        For Celsius use temperature_2m_max_celsius
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('temperature_2m_max').rename('nd')
+
+    def get_era5_dewpoint_temperature_2m_min(self, image):
+        """
+        Daily minimum dewpoint temperature at 2 meters height.
+
+        Units: Kelvin (K)
+        For Celsius use dewpoint_temperature_2m_min_celsius
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('dewpoint_temperature_2m_min').rename('nd')
+
+    def get_era5_dewpoint_temperature_2m_max(self, image):
+        """
+        Daily maximum dewpoint temperature at 2 meters height.
+
+        Units: Kelvin (K)
+        For Celsius use dewpoint_temperature_2m_max_celsius
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('dewpoint_temperature_2m_max').rename('nd')
+
+    def get_era5_skin_temperature_min(self, image):
+        """
+        Daily minimum skin temperature (Earth surface).
+
+        Units: Kelvin (K)
+        For Celsius use skin_temperature_min_celsius
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('skin_temperature_min').rename('nd')
+
+    def get_era5_skin_temperature_max(self, image):
+        """
+        Daily maximum skin temperature (Earth surface).
+
+        Units: Kelvin (K)
+        For Celsius use skin_temperature_max_celsius
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('skin_temperature_max').rename('nd')
+
+    def get_era5_soil_temperature_level_1_min(self, image):
+        """
+        Daily minimum soil temperature at level 1 (0-7 cm depth).
+
+        Units: Kelvin (K)
+        For Celsius use soil_temperature_level_1_min_celsius
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('soil_temperature_level_1_min').rename('nd')
+
+    def get_era5_soil_temperature_level_1_max(self, image):
+        """
+        Daily maximum soil temperature at level 1 (0-7 cm depth).
+
+        Units: Kelvin (K)
+        For Celsius use soil_temperature_level_1_max_celsius
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('soil_temperature_level_1_max').rename('nd')
+
+    # Temperature min/max conversions to Celsius
+    def get_era5_temperature_2m_min_celsius(self, image):
+        """
+        Daily minimum air temperature at 2 meters height in Celsius.
+
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('temperature_2m_min').subtract(273.15).rename('nd')
+
+    def get_era5_temperature_2m_max_celsius(self, image):
+        """
+        Daily maximum air temperature at 2 meters height in Celsius.
+
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('temperature_2m_max').subtract(273.15).rename('nd')
+
+    def get_era5_dewpoint_temperature_2m_min_celsius(self, image):
+        """
+        Daily minimum dewpoint temperature at 2 meters height in Celsius.
+
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('dewpoint_temperature_2m_min').subtract(273.15).rename('nd')
+
+    def get_era5_dewpoint_temperature_2m_max_celsius(self, image):
+        """
+        Daily maximum dewpoint temperature at 2 meters height in Celsius.
+
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('dewpoint_temperature_2m_max').subtract(273.15).rename('nd')
+
+    def get_era5_skin_temperature_min_celsius(self, image):
+        """
+        Daily minimum skin temperature (Earth surface) in Celsius.
+
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('skin_temperature_min').subtract(273.15).rename('nd')
+
+    def get_era5_skin_temperature_max_celsius(self, image):
+        """
+        Daily maximum skin temperature (Earth surface) in Celsius.
+
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('skin_temperature_max').subtract(273.15).rename('nd')
+
+    def get_era5_soil_temperature_level_1_min_celsius(self, image):
+        """
+        Daily minimum soil temperature at level 1 (0-7 cm depth) in Celsius.
+
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('soil_temperature_level_1_min').subtract(273.15).rename('nd')
+
+    def get_era5_soil_temperature_level_1_max_celsius(self, image):
+        """
+        Daily maximum soil temperature at level 1 (0-7 cm depth) in Celsius.
+
+        Converted from Kelvin to Celsius (K - 273.15).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('soil_temperature_level_1_max').subtract(273.15).rename('nd')
+
+    # Precipitation and water balance conversions to L/m²
+    def get_era5_total_precipitation_sum_lm2(self, image):
+        """
+        Total daily precipitation in liters per square meter (L/m²).
+
+        Rain + snow combined.
+        Converted from meters to L/m² (m × 1000).
+        Note: 1 mm = 1 L/m²
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('total_precipitation_sum').multiply(1000).rename('nd')
+
+    def get_era5_total_evaporation_sum_lm2(self, image):
+        """
+        Total evapotranspiration in liters per square meter (L/m²).
+
+        Includes evaporation from soil, vegetation, and water bodies.
+        Converted from meters to L/m² (m × 1000).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('total_evaporation_sum').multiply(1000).rename('nd')
+
+    def get_era5_potential_evaporation_sum_lm2(self, image):
+        """
+        Potential evapotranspiration in liters per square meter (L/m²).
+
+        Maximum evaporation with unlimited water availability.
+        Converted from meters to L/m² (m × 1000).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('potential_evaporation_sum').multiply(1000).rename('nd')
+
+    def get_era5_runoff_sum_lm2(self, image):
+        """
+        Total runoff (surface + sub-surface) in liters per square meter (L/m²).
+
+        Converted from meters to L/m² (m × 1000).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('runoff_sum').multiply(1000).rename('nd')
+
+    def get_era5_surface_runoff_sum_lm2(self, image):
+        """
+        Surface runoff in liters per square meter (L/m²).
+
+        Water that flows over the land surface.
+        Converted from meters to L/m² (m × 1000).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('surface_runoff_sum').multiply(1000).rename('nd')
+
+    def get_era5_snowfall_sum_lm2(self, image):
+        """
+        Snowfall amount in liters per square meter (L/m²).
+
+        Converted from meters of water equivalent to L/m² (m × 1000).
+
+        References
+        ----------
+        ERA5-Land: ECMWF Climate Reanalysis
+        """
+        return image.select('snowfall_sum').multiply(1000).rename('nd')
+
+    #### CHIRPS Precipitation Dataset ####
+
+    def get_chirps_precipitation(self, image):
+        """
+        Daily precipitation from CHIRPS dataset.
+
+        Climate Hazards Group InfraRed Precipitation with Station data (CHIRPS)
+        is a quasi-global rainfall dataset combining satellite imagery with
+        in-situ station data.
+
+        Units: millimeters per day (mm/d)
+        Temporal resolution: Daily (1981-present)
+        Spatial resolution: ~5.5 km (0.05°)
+        Coverage: 50°S to 50°N latitude
+
+        Use with key='sum' for monthly/seasonal precipitation totals.
+        Use with key='mean' for average daily precipitation rates.
+
+        References
+        ----------
+        Funk, C., Peterson, P., Landsfeld, M. et al. (2015).
+        The climate hazards infrared precipitation with stations—a new
+        environmental record for monitoring extremes.
+        Scientific Data, 2, 150066. https://doi.org/10.1038/sdata.2015.66
+
+        UCSB Climate Hazards Center
+        https://developers.google.com/earth-engine/datasets/catalog/UCSB-CHG_CHIRPS_DAILY
+        """
+        return image.select('precipitation').rename('nd')
+
     #### New methods for SAR indices with normalization option ####
 
     def _normalize_to_01(self, image):
@@ -3244,7 +4017,7 @@ class NdviSeasonality:
         Performance Notes
         -----------------
         **Processing Time Factors:**
-        - Time range: (end_year - start_year) × periods
+        - Time range: (end_year - start_year + 1) × periods
         - Spatial extent: ROI area × scale resolution
         - Sensor complexity: SAR < Optical (due to preprocessing)
         - Statistical method: max ≈ median < mean < percentile

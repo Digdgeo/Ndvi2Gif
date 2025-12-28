@@ -29,9 +29,23 @@ Ndvi2Gif was updated and extended as part of its integration into the eLTER and 
 
 ![Interface Screenshot](https://i.imgur.com/Sv9LfYj.png)
 
-## ✨ What's New in v0.6.0 - Machine Learning & Classification Release 🧠
+## ✨ What's New in v0.7.0 - Climate Data Integration Release 🌡️
 
-The **0.6.0 release** transforms *Ndvi2Gif* into a **complete remote sensing analysis platform** with integrated machine learning capabilities, positioning it as a comprehensive solution for remote sensing workflows.
+The **0.7.0 release** expands *Ndvi2Gif* beyond vegetation monitoring into comprehensive **climate analysis** with ERA5-Land reanalysis (47 variables, 1950-present) and CHIRPS precipitation (1981-present). The library now supports **88 variables across 7 platforms** with intelligent handling of climate vs. vegetation data in time series analysis.
+
+### 🌡️ Key Features in v0.7.0
+
+- **ERA5-Land Climate Reanalysis**: 47 variables including temperature (with min/max/Celsius variants), precipitation (meters and L/m²), soil moisture, radiation, wind, and snow
+- **CHIRPS Precipitation**: High-resolution daily rainfall (1981-present, ~5.5km) combining satellite + station data
+- **Enhanced Statistics**: New `sum` and `min` aggregators for climate data
+- **Smart Time Series**: Climate-specific dashboards with seasonal statistics (replaces phenology for non-vegetation data)
+- **Bug Fixes**: `end_year` now inclusive, Sentinel-3 band naming fixed, ROI centroid error resolved
+
+---
+
+## 🧠 Previous Release: v0.6.0 - Machine Learning & Classification
+
+The **0.6.0 release** transformed *Ndvi2Gif* into a **complete remote sensing analysis platform** with integrated machine learning capabilities.
 
 ### 🚀 New Classification Capabilities
 
@@ -122,6 +136,7 @@ Yes, it makes nice GIFs — but it's much more than that.
 - **Maximum** - Peak values for cloud-free compositing
 - **Mean** - Average values across time period
 - **Median** - Robust central tendency, excellent for noisy data
+- **Sum** - Total accumulation (ideal for precipitation, runoff, radiation)
 - **Flexible Percentiles** - Any percentile from 1 to 99
   - Custom percentiles like 75th, 85th, or 99th for specific applications
   - Perfect for handling varying cloud contamination levels
@@ -182,6 +197,52 @@ Yes, it makes nice GIFs — but it's much more than that.
 - **DPSVI** - Dual-pol SAR Vegetation Index (optimized for dense vegetation)
 - **RFDI** - Radar Forest Degradation Index (deforestation monitoring) 🆕
 - **VSDI** - Vegetation Scattering Diversity Index (structural diversity) 🆕
+
+### 🌡️ Climate Reanalysis Datasets 🆕
+
+#### ERA5-Land Climate Variables (ECMWF)
+**Temperature:**
+- **temperature_2m** - Air temperature at 2m height (K)
+- **dewpoint_temperature_2m** - Dewpoint temperature (K)
+- **skin_temperature** - Earth surface temperature (K)
+- **soil_temperature_level_1** - Soil temperature 0-7cm depth (K)
+
+**Precipitation & Water Balance:**
+- **total_precipitation_sum** - Daily precipitation (m)
+- **total_evaporation_sum** - Total evapotranspiration (m)
+- **potential_evaporation_sum** - Potential ET (m)
+- **runoff_sum** - Total runoff (m)
+- **surface_runoff_sum** - Surface runoff only (m)
+
+**Soil Moisture:**
+- **volumetric_soil_water_layer_1-4** - Soil water content at 4 depth layers (m³/m³)
+
+**Radiation & Energy:**
+- **surface_solar_radiation_downwards_sum** - Incoming solar radiation (J/m²)
+- **surface_net_solar_radiation_sum** - Net solar radiation (J/m²)
+- **surface_latent_heat_flux_sum** - Latent heat flux (J/m²)
+
+**Wind & Pressure:**
+- **u_component_of_wind_10m** - Eastward wind at 10m (m/s)
+- **v_component_of_wind_10m** - Northward wind at 10m (m/s)
+- **surface_pressure** - Atmospheric pressure (Pa)
+
+**Snow:**
+- **snow_depth_water_equivalent** - Snow water equivalent (m)
+- **snowfall_sum** - Daily snowfall (m)
+
+_Note: All temperature variables also available in Celsius (add `_celsius` suffix). Precipitation variables available in L/m² (add `_lm2` suffix). Daily min/max available for temperature variables (add `_min` or `_max` suffix)._
+
+#### CHIRPS Precipitation (UCSB Climate Hazards Center)
+**Daily Precipitation:**
+- **precipitation** - Daily rainfall from satellite + station data (mm/day)
+  - Temporal coverage: 1981-present
+  - Spatial resolution: ~5.5 km (0.05°)
+  - Geographic extent: 50°S to 50°N
+  - Use `key='sum'` for monthly/seasonal totals
+  - Use `key='mean'` for average daily rates
+
+_Ideal for drought monitoring, trend analysis, and precipitation climatology in tropical/subtropical regions._
 
 ## 🧠 Machine Learning Classification (NEW in v0.6.0)
 
@@ -256,6 +317,11 @@ processor.export_to_drive(
 **MODIS (Surface Reflectance):**
 
 - [MOD09A1 (SR)](https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD09A1)
+
+**Climate Reanalysis:**
+
+- **[ERA5-Land (Daily Aggregated)](https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_LAND_DAILY_AGGR)** - ECMWF climate reanalysis with 47 variables (temperature, precipitation, evapotranspiration, soil moisture, radiation, wind, pressure, snow) from 1950-present at ~11km resolution 🆕
+- **[CHIRPS (Daily)](https://developers.google.com/earth-engine/datasets/catalog/UCSB-CHG_CHIRPS_DAILY)** - High-resolution daily precipitation combining satellite imagery with station data (1981-present, ~5.5km, 50°S-50°N) 🆕
 
 You can combine any of the supported indices, datasets, and statistical methods. By default, the tool uses NDVI with the **maximum** statistic to avoid cloud contamination. However, **median** and **custom percentiles** are often visually better for Landsat datasets and specific applications.
 
@@ -582,16 +648,16 @@ JOSS Manuscript in preparation. For now, please cite this software as:
   author = {García Díaz, Diego},
   title = {ndvi2gif: Multi-Seasonal Remote Sensing Analysis Suite},
   url = {https://github.com/Digdgeo/Ndvi2Gif},
-  version = {0.6.0},
+  version = {0.7.0},
   year = {2025}
 }
 ```
 
 ## Project Statistics
 
-- **Current Version:** 0.6.0
-- **Supported Sensors:** 5 (S1, S2, S3, Landsat, MODIS)
-- **Available Indices:** 40+
+- **Current Version:** 0.7.0
+- **Supported Sensors:** 7 (S1, S2, S3, Landsat, MODIS, ERA5-Land, CHIRPS)
+- **Available Indices/Variables:** 88 (40+ vegetation indices + 47 ERA5 climate variables + 1 CHIRPS precipitation)
 - **ML Algorithms:** 8 (5 supervised, 3 unsupervised)
 - **Lines of Code:** ~4,800
 - **Documentation Coverage:** 95%+

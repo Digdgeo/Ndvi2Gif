@@ -2,7 +2,7 @@
 
 Welcome to the comprehensive tutorial for **Ndvi2Gif**, a Python library for multi-seasonal remote sensing analysis with Google Earth Engine.
 
-```{image} https://i.imgur.com/Y5dOWIk.jpeg
+```{image} ../pics/n2g.png
 :alt: Ndvi2Gif Banner
 :width: 800px
 :align: center

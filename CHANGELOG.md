@@ -9,11 +9,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.0] - 2025-01-XX
+## [1.0.0] - 2025-12-28
 
-### 🌡️ **CLIMATE DATA INTEGRATION RELEASE**
+### 🎉 **FIRST STABLE RELEASE - JOSS PUBLICATION**
 
-This release introduces comprehensive climate reanalysis data support (ERA5-Land and CHIRPS), expanding ndvi2gif beyond vegetation monitoring into climate analysis. The library now supports 88 variables across 7 different satellite/reanalysis platforms, with intelligent handling of climate vs. vegetation data in time series analysis.
+This milestone release marks ndvi2gif as production-ready with comprehensive climate reanalysis data support (ERA5-Land and CHIRPS), expanding the library beyond vegetation monitoring into integrated climate-vegetation analysis. The library now supports 88 variables across 7 different satellite/reanalysis platforms, with intelligent handling of climate vs. vegetation data in time series analysis.
+
+**NEW in 1.0.0**: Complete Jupyter Book documentation for JOSS (Journal of Open Source Software) submission, including comprehensive API reference, dataset guides, and usage tutorials.
 
 ---
 
@@ -106,7 +108,7 @@ This release introduces comprehensive climate reanalysis data support (ERA5-Land
 
 ---
 
-## 📊 **Project Statistics (v0.7.0)**
+## 📊 **Project Statistics (v1.0.0)**
 
 - **Supported Sensors**: 7 (S1, S2, S3, Landsat, MODIS, ERA5-Land, CHIRPS)
 - **Total Variables**: 88
@@ -125,10 +127,10 @@ This release introduces comprehensive climate reanalysis data support (ERA5-Land
 
 ⚠️ **BREAKING**: `end_year` parameter behavior changed from exclusive to inclusive
 ```python
-# Before v0.7.0 (exclusive)
+# Before v1.0.0 (exclusive)
 NdviSeasonality(start_year=2020, end_year=2023)  # Processed 2020, 2021, 2022
 
-# After v0.7.0 (inclusive)
+# After v1.0.0 (inclusive)
 NdviSeasonality(start_year=2020, end_year=2023)  # Processes 2020, 2021, 2022, 2023
 ```
 

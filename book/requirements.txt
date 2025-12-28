@@ -1,5 +1,5 @@
 # Jupyter Book requirements
-jupyter-book>=0.15.1
+jupyter-book>=0.15.1,<2.0  # Pin to 1.x to avoid EISDIR errors in 2.x
 ghp-import
 sphinx>=5.0
 pydata-sphinx-theme>=0.13.0

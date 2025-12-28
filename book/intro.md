@@ -14,13 +14,14 @@ Welcome to the comprehensive tutorial for **Ndvi2Gif**, a Python library for mul
 
 ### Key Features
 
-- 🛰️ **Multi-Sensor Support**: Sentinel-1/2/3, Landsat 4-9, MODIS
-- 📊 **40+ Indices**: Vegetation, water, SAR, and specialized indices
-- 🤖 **Machine Learning**: Supervised and unsupervised land cover classification
-- 📈 **Time Series Analysis**: Trend detection, phenology metrics
-- 🌍 **Global Coverage**: Process any region on Earth
+- 🛰️ **Multi-Sensor Support**: Sentinel-1/2/3, Landsat 4-9, MODIS, ERA5-Land, CHIRPS (7 platforms)
+- 📊 **88 Variables**: 40+ vegetation indices + 47 ERA5 climate variables + CHIRPS precipitation
+- 🌡️ **Climate Analysis**: Temperature, precipitation, soil moisture, radiation, wind (1950-present)
+- 🤖 **Machine Learning**: Supervised and unsupervised land cover classification (8 algorithms)
+- 📈 **Time Series Analysis**: Trend detection, phenology metrics, climate statistics
+- 🌍 **Global Coverage**: Process any region on Earth with intelligent data type handling
 - 📤 **Flexible Export**: GeoTIFF, Google Drive, Earth Engine Assets
-- 🎨 **Visualization**: Automated GIF generation
+- 🎨 **Visualization**: Automated GIF generation and interactive dashboards
 
 ### What You'll Learn
 
@@ -85,7 +86,7 @@ If you use Ndvi2Gif in your research, please cite:
   author = {García Díaz, Diego},
   title = {ndvi2gif: Multi-Seasonal Remote Sensing Analysis Suite},
   url = {https://github.com/Digdgeo/Ndvi2Gif},
-  version = {0.6.0},
+  version = {1.0.0},
   year = {2025}
 }
 ```

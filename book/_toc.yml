@@ -25,6 +25,8 @@ parts:
         title: "4. Statistical Methods"
       - file: tutorials/indices_overview
         title: "5. Vegetation & Environmental Indices"
+      - file: tutorials/climate_analysis
+        title: "6. Climate Data Analysis (ERA5 & CHIRPS)"
 
   - caption: Advanced Features
     chapters:

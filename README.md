@@ -29,11 +29,27 @@ Ndvi2Gif was updated and extended as part of its integration into the eLTER and 
 
 ![Interface Screenshot](https://i.imgur.com/Sv9LfYj.png)
 
-## ✨ What's New in v0.7.0 - Climate Data Integration Release 🌡️
+## 📚 Documentation
 
-The **0.7.0 release** expands *Ndvi2Gif* beyond vegetation monitoring into comprehensive **climate analysis** with ERA5-Land reanalysis (47 variables, 1950-present) and CHIRPS precipitation (1981-present). The library now supports **88 variables across 7 platforms** with intelligent handling of climate vs. vegetation data in time series analysis.
+**Complete documentation is now available as an interactive Jupyter Book:**
 
-### 🌡️ Key Features in v0.7.0
+🔗 **https://digdgeo.github.io/Ndvi2Gif/**
+
+- [Getting Started Guide](https://digdgeo.github.io/Ndvi2Gif/getting_started/installation.html) - Installation and authentication
+- [API Reference](https://digdgeo.github.io/Ndvi2Gif/reference/api.html) - Complete class and method documentation
+- [Datasets Guide](https://digdgeo.github.io/Ndvi2Gif/reference/datasets.html) - Detailed specs for all 7 platforms
+- [Indices Catalog](https://digdgeo.github.io/Ndvi2Gif/reference/indices.html) - Reference for all 88 variables
+- [Climate Analysis Tutorial](https://digdgeo.github.io/Ndvi2Gif/tutorials/climate_analysis.html) - ERA5 & CHIRPS workflows
+
+---
+
+## ✨ What's New in v1.0.0 - First Stable Release 🎉
+
+The **1.0.0 release** marks *Ndvi2Gif* as production-ready, expanding beyond vegetation monitoring into comprehensive **climate analysis** with ERA5-Land reanalysis (47 variables, 1950-present) and CHIRPS precipitation (1981-present). The library now supports **88 variables across 7 platforms** with intelligent handling of climate vs. vegetation data in time series analysis.
+
+**NEW in v1.0.0:** Complete Jupyter Book documentation for JOSS (Journal of Open Source Software) submission.
+
+### 🌡️ Key Features in v1.0.0
 
 - **ERA5-Land Climate Reanalysis**: 47 variables including temperature (with min/max/Celsius variants), precipitation (meters and L/m²), soil moisture, radiation, wind, and snow
 - **CHIRPS Precipitation**: High-resolution daily rainfall (1981-present, ~5.5km) combining satellite + station data

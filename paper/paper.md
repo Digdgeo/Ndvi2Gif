@@ -1,5 +1,5 @@
 ---
-title: 'Ndvi2Gif: A Python package for multi-temporal remote sensing analysis with Google Earth Engine'
+title: 'Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis via Google Earth Engine'
 tags:
   - Python
   - remote sensing

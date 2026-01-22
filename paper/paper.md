@@ -87,7 +87,9 @@ ndvi = NdviSeasonality(roi=roi, start_year=2013, end_year=2013,
 collection = ndvi.get_year_composite()  # ImageCollection: 1 image × 4 bands
 ```
 
-This simplification extends across 7 satellite platforms, 88 spectral and climate variables, multiple temporal aggregation methods, and flexible region of interest specifications—all through a unified API that inherits geemap's interactive mapping capabilities. The architectural decisions and design philosophy that enable this simplification, along with how Ndvi2Gif differentiates from other GEE Python packages, are detailed in the Software Design section below.
+This simplification extends across 7 satellite platforms, 88 spectral and climate variables, multiple temporal aggregation methods, and flexible region of interest specifications—all through a unified API that inherits geemap's interactive mapping capabilities. The architectural decisions and design philosophy that enable this simplification, along with how Ndvi2Gif differentiates from other GEE Python packages, are detailed in the Software Design section below. \autoref{fig:workflow} provides an overview of the package's workflow and capabilities.
+
+![Ndvi2Gif workflow architecture and capabilities. Color coding: **Blue** — input data sources and ROI specification; **Green** — processing operations (reducers and spectral indices); **Purple** — main analysis classes (NdviSeasonality for temporal aggregation, TimeSeriesAnalyzer, LandCoverClassifier, S1ARDProcessor); **Orange** — final outputs.\label{fig:workflow}](ndvi2gif_workflow.svg)
 
 # Key features
 

@@ -89,7 +89,7 @@ collection = ndvi.get_year_composite()  # ImageCollection: 1 image × 4 bands
 
 This simplification extends across 7 satellite platforms, 88 spectral and climate variables, multiple temporal aggregation methods, and flexible region of interest specifications—all through a unified API that inherits geemap's interactive mapping capabilities. The architectural decisions and design philosophy that enable this simplification, along with how Ndvi2Gif differentiates from other GEE Python packages, are detailed in the Software Design section below. \autoref{fig:workflow} provides an overview of the package's workflow and capabilities.
 
-![Ndvi2Gif workflow architecture and capabilities. Color coding: **Blue** — input data sources and ROI specification; **Green** — processing operations (reducers and spectral indices); **Purple** — main analysis classes (NdviSeasonality for temporal aggregation, TimeSeriesAnalyzer, LandCoverClassifier, S1ARDProcessor); **Orange** — final outputs.\label{fig:workflow}](ndvi2gif_workflow.svg)
+![Ndvi2Gif workflow architecture and capabilities. Color coding: **Blue** — input data sources and ROI specification; **Green** — processing operations (reducers and spectral indices); **Purple** — main analysis classes (NdviSeasonality for temporal aggregation, TimeSeriesAnalyzer, LandCoverClassifier, S1ARDProcessor); **Orange** — final outputs.\label{fig:workflow}](ndvi2gif_workflow.png){ width=95% }
 
 # Key features
 
@@ -167,7 +167,7 @@ The package currently serves as a core analytical tool in two ongoing research p
 
 # AI Usage Disclosure
 
-Ndvi2Gif was initially developed in May 2020 and underwent sustained development through 2024 before current-generation AI coding assistants became widely available. The core scientific methodology, architectural design decisions, and algorithmic implementations represent the author's original intellectual contributions. Nowadays, the author uses AI tools frequently in daily development work for code refactoring, documentation generation, debugging support, and test implementation. This AI assistance functions as a productivity tool—analogous to an advanced code editor or linting system—while all strategic decisions regarding software architecture, scientific approach, API design, and feature prioritization remain entirely under the author's direction and expertise. The use of AI tools has not altered the fundamental nature of the software or its scientific contributions.
+Ndvi2Gif was initially developed in May 2020 and underwent sustained development through 2024 before current-generation AI coding assistants became widely available. The core scientific methodology, architectural design decisions, and algorithmic implementations represent the author's original intellectual contributions. Nowadays, the author uses AI tools frequently in daily development work for code refactoring, documentation generation, debugging support, and test implementation. But all strategic decisions regarding software architecture, scientific approach, API design, and feature prioritization remain entirely under the author's direction and expertise. The use of AI tools has not altered the fundamental nature of the software or its scientific contributions.
 
 # Acknowledgements
 

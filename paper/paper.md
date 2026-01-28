@@ -1,26 +1,23 @@
 ---
-
 title: 'Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis via Google Earth Engine'
 tags:
-
-* Python
-* remote sensing
-* Google Earth Engine
-* time series analysis
-* vegetation monitoring
-* SAR processing
-* phenology
-* NDVI
-  authors:
-* name: Diego García Díaz
-  orcid: 0000-0002-2757-7112
-  affiliation: 1
-  affiliations:
-* name: Estación Biológica de Doñana (EBD-CSIC), Spain
-  index: 1
-  date: 28 December 2025
-  bibliography: paper.bib
-
+  - Python
+  - remote sensing
+  - Google Earth Engine
+  - time series analysis
+  - vegetation monitoring
+  - SAR processing
+  - phenology
+  - NDVI
+authors:
+  - name: Diego García Díaz
+    orcid: 0000-0002-2757-7112
+    affiliation: 1
+affiliations:
+  - name: Estación Biológica de Doñana (EBD-CSIC), Spain
+    index: 1
+date: 28 December 2025
+bibliography: paper.bib
 ---
 
 # Summary
@@ -156,7 +153,7 @@ The `TimeSeriesAnalyzer` module provides a comprehensive framework for extractin
 
 The module supports:
 
-* **Trend detection and significance testing**, including non-parametric Mann–Kendall tests, Sen’s slope estimation, and linear regression with confidence intervals.
+* **Trend detection and significance testing**, including non-parametric Mann–Kendall tests, Sen's slope estimation, and linear regression with confidence intervals.
 * **Phenological metrics extraction**, such as Start of Season (SOS), End of Season (EOS), Peak of Season (POS), season length, amplitude, and growth and senescence rates, derived from smoothed seasonal trajectories.
 * **Seasonal and interannual comparison**, enabling direct assessment of variability and long-term change across fixed temporal windows.
 * **Integrated visual diagnostics**, producing multi-panel dashboards that combine time series plots, seasonal distributions, trend summaries, autocorrelation, and data quality indicators.
@@ -200,4 +197,3 @@ Ndvi2Gif was initially developed in May 2020 and underwent sustained development
 The author thanks the Google Earth Engine team and community, and especially acknowledges Qiusheng Wu for geemap, which serves as the primary foundation of Ndvi2Gif, and for his continued contributions to open-source geospatial software.
 
 # References
-

@@ -1944,7 +1944,9 @@ class NdviSeasonality:
                 composite = ee.Image.cat(period_images).clip(self.roi)
                 actual_base_bands = base_bands[:successful_periods]
                 actual_period_names = self.period_names[:successful_periods]
-                compositer = composite.select(actual_base_bands, actual_period_names)
+                compositer = composite.select(actual_base_bands, actual_period_names).set(
+                    'system:time_start', ee.Date(str(year)).millis()
+                )
                 self.imagelist.append(compositer)
                 print(f"Year {year}: Successfully processed {successful_periods} periods using {self.index} index")
             else:

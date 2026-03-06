@@ -43,6 +43,16 @@ Ndvi2Gif was updated and extended as part of its integration into the eLTER and 
 
 ---
 
+## ✨ What's New in v1.1.0
+
+The **1.1.0 release** adds the **Floating Algae Index (FAI)** for multi-sensor cyanobacterial bloom and floating algae detection, with sensor-specific band wavelength calibration.
+
+### 🌊 Key Features in v1.1.0
+
+- **FAI (Floating Algae Index)**: Original Hu (2009) formulation using surface reflectance. Detects floating algae and cyanobacterial bloom accumulations in water bodies. Available for Sentinel-2, Landsat (4–9), and MODIS with sensor-specific NIR baseline wavelength factors.
+
+---
+
 ## ✨ What's New in v1.0.0 - First Stable Release 🎉
 
 The **1.0.0 release** marks *Ndvi2Gif* as production-ready, expanding beyond vegetation monitoring into comprehensive **climate analysis** with ERA5-Land reanalysis (47 variables, 1950-present) and CHIRPS precipitation (1981-present). The library now supports **88 variables across 7 platforms** with intelligent handling of climate vs. vegetation data in time series analysis.
@@ -193,6 +203,9 @@ Yes, it makes nice GIFs — but it's much more than that.
 - **NDCI** - Normalized Difference Chlorophyll Index (cyanobacteria/water quality) 🆕
 - **CIG** - Chlorophyll Index Green
 
+### 💧 Water Quality Indices (S2, Landsat, MODIS)
+- **FAI** - Floating Algae Index (Hu 2009) — cyanobacterial bloom and floating algae detection using NIR baseline interpolation with sensor-specific wavelengths 🆕
+
 ### 🌊 Sentinel-3 Exclusive (OLCI 21-band)
 - **OCI** - OLCI Chlorophyll Index (optimized for S3)
 - **TSI** - Trophic State Index (water quality assessment)
@@ -200,7 +213,7 @@ Yes, it makes nice GIFs — but it's much more than that.
 - **Turbidity** - Water Turbidity Index (sediment monitoring)
 - **SPM** - Suspended Particulate Matter Index
 - **KD490** - Diffuse Attenuation Coefficient at 490nm
-- **Floating Algae** - Floating Algae Index (bloom detection)
+- **Floating Algae** - Floating Algae Index variant for OLCI (NIR-based, no SWIR)
 - **Red Edge Position** - OLCI-optimized red edge position
 - **Fluorescence Height** - Chlorophyll fluorescence detection
 - **Water Leaving Reflectance** - Aquatic reflectance analysis
@@ -671,9 +684,9 @@ JOSS Manuscript in preparation. For now, please cite this software as:
 
 ## Project Statistics
 
-- **Current Version:** 0.7.0
+- **Current Version:** 1.1.0
 - **Supported Sensors:** 7 (S1, S2, S3, Landsat, MODIS, ERA5-Land, CHIRPS)
-- **Available Indices/Variables:** 88 (40+ vegetation indices + 47 ERA5 climate variables + 1 CHIRPS precipitation)
+- **Available Indices/Variables:** 89 (40+ vegetation/water indices + 47 ERA5 climate variables + 1 CHIRPS precipitation)
 - **ML Algorithms:** 8 (5 supervised, 3 unsupervised)
 - **Lines of Code:** ~4,800
 - **Documentation Coverage:** 95%+

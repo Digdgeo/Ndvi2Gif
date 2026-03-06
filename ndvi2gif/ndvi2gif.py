@@ -777,8 +777,13 @@ class NdviSeasonality:
 
         # Sentinel-3 OLCI exclusive indices
         self.s3_exclusive_indices = {
-            'oci', 'tsi', 'cdom', 'turbidity', 'spm', 'kd490', 'floating_algae', 
+            'oci', 'tsi', 'cdom', 'turbidity', 'spm', 'kd490', 'floating_algae',
             'red_edge_position', 'fluorescence_height', 'water_leaving_reflectance'
+        }
+
+        # Indices requiring SWIR2 band (~2100-2200nm) - not available in Sentinel-3 OLCI
+        self.swir_optical_indices = {
+            'fai'
         }
 
         # SAR indices (Sentinel-1)
@@ -830,9 +835,9 @@ class NdviSeasonality:
 
         # Final sensor-to-indices mapping
         self.sensor_indices = {
-            'S2': self.optical_indices | self.s2_exclusive_indices,
-            'Landsat': self.optical_indices,
-            'MODIS': self.optical_indices,
+            'S2': self.optical_indices | self.s2_exclusive_indices | self.swir_optical_indices,
+            'Landsat': self.optical_indices | self.swir_optical_indices,
+            'MODIS': self.optical_indices | self.swir_optical_indices,
             'S1': self.s1_indices,
             'S3': self.optical_indices | self.s3_exclusive_indices,
             'ERA5': self.era5_variables,
@@ -877,7 +882,10 @@ class NdviSeasonality:
             'cire': self.get_cire, 'mtci': self.get_mtci, 's2rep': self.get_s2rep,
             'ndci': self.get_ndci,
 
-            # Sentinel-3 OLCI specific indices 
+            # FAI - Floating Algae Index (S2, Landsat, MODIS)
+            'fai': self.get_fai,
+
+            # Sentinel-3 OLCI specific indices
             'oci': self.get_oci, 'tsi': self.get_tsi, 'cdom': self.get_cdom,
             'turbidity': self.get_turbidity, 'spm': self.get_spm, 'kd490': self.get_kd490,
             'floating_algae': self.get_floating_algae, 'red_edge_position': self.get_red_edge_position,
@@ -2711,6 +2719,54 @@ class NdviSeasonality:
         """
         return image.normalizedDifference(['Red_Edge1', 'Red'])
     
+    def get_fai(self, image):
+        """
+        Floating Algae Index (FAI) - Detection of floating algae and cyanobacterial blooms in water bodies.
+
+        Computes a NIR baseline by linear interpolation between the Red and SWIR2 bands
+        at the NIR wavelength, then subtracts it from the observed NIR reflectance.
+        Positive FAI values indicate floating algae or cyanobacterial surface accumulations;
+        negative values correspond to open water.
+
+        Works with surface reflectance (SR) data. Compatible with Sentinel-2, Landsat,
+        and MODIS. Not applicable to Sentinel-3 OLCI (no SWIR band available).
+
+        Formula
+        -------
+        FAI = NIR - NIR_baseline
+        NIR_baseline = Red + (SWIR2 - Red) * (lambda_NIR - lambda_red) / (lambda_SWIR2 - lambda_red)
+
+        Sensor-specific center wavelengths (nm) and resulting interpolation factors:
+            Sentinel-2 MSI     : lambda_NIR=835.1, lambda_red=664.5, lambda_SWIR2=2202.4 -> factor=0.1109
+            Landsat 8/9 OLI    : lambda_NIR=864.7, lambda_red=654.6, lambda_SWIR2=2201.2 -> factor=0.1359
+            MODIS Terra/Aqua   : lambda_NIR=858.5, lambda_red=645.0, lambda_SWIR2=2130.0 -> factor=0.1438
+
+        Note: The Landsat collection in ndvi2gif merges OLI (L8/9) and TM/ETM+ (L4-7).
+        OLI wavelengths are used as representative values. The interpolation factor for
+        TM/ETM+ (~0.113) differs slightly but the impact on FAI is minor.
+
+        References
+        ----------
+        Hu, C. (2009).
+        A novel ocean color index to detect floating algae in the global oceans.
+        Remote Sensing of Environment, 113(10), 2118-2129.
+        https://doi.org/10.1016/j.rse.2009.05.012
+        """
+        wavelength_factors = {
+            'S2':      (835.1 - 664.5) / (2202.4 - 664.5),  # 0.1109
+            'Landsat': (864.7 - 654.6) / (2201.2 - 654.6),  # 0.1359
+            'MODIS':   (858.5 - 645.0) / (2130.0 - 645.0),  # 0.1438
+        }
+        factor = wavelength_factors.get(self.sat, 0.1359)
+
+        return image.expression(
+            'NIR - (Red + (Swir2 - Red) * factor)', {
+            'NIR':   image.select('Nir'),
+            'Red':   image.select('Red'),
+            'Swir2': image.select('Swir2'),
+            'factor': factor
+        }).rename(['nd'])
+
     # =================================================================
     # ÍNDICES S3 IMPLEMENTADOS (todos basados en radiancia L1B)
     # =================================================================

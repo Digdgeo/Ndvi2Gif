@@ -43,65 +43,13 @@ Ndvi2Gif was updated and extended as part of its integration into the eLTER and 
 
 ---
 
-## ✨ What's New in v1.1.0
+## ✨ What's New in v1.0.0 / v1.1.0
 
-The **1.1.0 release** adds the **Floating Algae Index (FAI)** for multi-sensor cyanobacterial bloom and floating algae detection, with sensor-specific band wavelength calibration.
-
-### 🌊 Key Features in v1.1.0
-
-- **FAI (Floating Algae Index)**: Original Hu (2009) formulation using surface reflectance. Detects floating algae and cyanobacterial bloom accumulations in water bodies. Available for Sentinel-2, Landsat (4–9), and MODIS with sensor-specific NIR baseline wavelength factors.
-
----
-
-## ✨ What's New in v1.0.0 - First Stable Release 🎉
-
-The **1.0.0 release** marks *Ndvi2Gif* as production-ready, expanding beyond vegetation monitoring into comprehensive **climate analysis** with ERA5-Land reanalysis (47 variables, 1950-present) and CHIRPS precipitation (1981-present). The library now supports **88 variables across 7 platforms** with intelligent handling of climate vs. vegetation data in time series analysis.
-
-**NEW in v1.0.0:** Complete Jupyter Book documentation for JOSS (Journal of Open Source Software) submission.
-
-### 🌡️ Key Features in v1.0.0
-
-- **ERA5-Land Climate Reanalysis**: 47 variables including temperature (with min/max/Celsius variants), precipitation (meters and L/m²), soil moisture, radiation, wind, and snow
-- **CHIRPS Precipitation**: High-resolution daily rainfall (1981-present, ~5.5km) combining satellite + station data
-- **Enhanced Statistics**: New `sum` and `min` aggregators for climate data
-- **Smart Time Series**: Climate-specific dashboards with seasonal statistics (replaces phenology for non-vegetation data)
-- **Bug Fixes**: `end_year` now inclusive, Sentinel-3 band naming fixed, ROI centroid error resolved
-
----
-
-## 🧠 Previous Release: v0.6.0 - Machine Learning & Classification
-
-The **0.6.0 release** transformed *Ndvi2Gif* into a **complete remote sensing analysis platform** with integrated machine learning capabilities.
-
-### 🚀 New Classification Capabilities
-
-- 🧠 **LandCoverClassifier** – Complete supervised and unsupervised classification workflows
-- 🎯 **Multiple Algorithms** – Random Forest, SVM, CART, Naive Bayes, Gradient Tree Boost, K-means, LDA
-- 📊 **Accuracy Assessment** – Confusion matrices and comprehensive validation reports
-- 🔧 **Feature Engineering** – Multi-temporal stacks with automatic normalization
-- 📤 **Enhanced Exports** – Direct export to Google Drive and Earth Engine Assets
-
-### 📚 Documentation Overhaul
-
-- **95%+ Documentation Coverage** – Comprehensive Sphinx-style docstrings
-- **Scientific References** – All indices now include citations
-- **Complete Examples** – Every method includes usage examples
-- **Better Error Handling** – Informative messages with suggested solutions
-
-### 🛰️ Enhanced Capabilities
-
-- **export_to_drive()** – Batch export with full parameter control
-- **export_to_asset()** – Direct Earth Engine Asset creation with pyramiding policies
-- **Automatic scale detection** – Sensor-specific resolution handling
-- **Improved SAR processing** – Enhanced error handling and documentation
-- **Feature importance analysis** – Understand which indices contribute most to classification
-
-### 🔥 All Previous Features, Better Than Ever
-
-- 🛰️ **Sentinel-1 ARD Processor** – Professional SAR preprocessing with terrain correction
-- 📈 **TimeSeriesAnalyzer** – Extract robust time series, test for trends, and visualize dynamics
-- 🌱 **Extended NdviSeasonality** – Dynamic temporal periods (4, 12, 24, custom)
-- 🎨 **Polished Visualizations** – Publication-ready layouts
+- **FAI** (Floating Algae Index) — multi-sensor cyanobacterial bloom detection (Sentinel-2, Landsat, MODIS)
+- **ERA5-Land & CHIRPS** climate reanalysis support (47 variables + precipitation, 1950–present)
+- **LandCoverClassifier** — supervised and unsupervised land cover classification (RF, SVM, K-means…)
+- Enhanced statistics (`sum`, `min`), direct export to Google Drive and Earth Engine Assets
+- Complete [Jupyter Book documentation](https://digdgeo.github.io/Ndvi2Gif/)
 
 ## Why use Ndvi2Gif?
 
@@ -418,181 +366,32 @@ pip install ndvi2gif
 conda install -c conda-forge ndvi2gif
 ```
 
-## 📚 Documentation & Tutorials
-
-### 📖 Interactive Tutorial (NEW!)
-
-We're building a comprehensive **Jupyter Book tutorial** with step-by-step guides:
-
-**🌐 [Visit the Tutorial Book](https://digdgeo.github.io/Ndvi2Gif/)** *(Work in Progress)*
-
-The tutorial includes:
-- Installation and setup guides
-- Basic to advanced workflows
-- Complete API reference
-- Real-world use cases
-- FAQ and troubleshooting
-
-*Note: The tutorial is actively being developed. Core sections (Getting Started, Basic NDVI, FAQ) are complete, with more content being added regularly.*
-
-### 📓 Example Notebooks
-
-Check out our example notebooks:
-
-- **[Comprehensive Example](https://github.com/Digdgeo/Ndvi2Gif/blob/master/examples_notebooks/ndvi2gif%20extended%20version.ipynb)** - Complete guide to all ndvi2gif features
-- **[Input Types Guide](https://github.com/Digdgeo/Ndvi2Gif/blob/master/examples_notebooks/NDVI2Gif_InputsTypes.ipynb)** - Different ways to specify your region of interest
-
-*More examples are regularly added to showcase new capabilities and use cases.*
-
 ## Quick Usage Example
 
 ```python
 import ee
-import geemap
-from ndvi2gif import NdviSeasonality, TimeSeriesAnalyzer, LandCoverClassifier
+from ndvi2gif import NdviSeasonality, TimeSeriesAnalyzer
 
-# Authenticate Earth Engine
 ee.Authenticate()
 ee.Initialize()
 
-# Basic NDVI analysis
-ndvi_analysis = NdviSeasonality(
-    roi=your_roi,           # Your region of interest
-    periods=12,             # Monthly analysis
-    start_year=2023,
-    end_year=2024,
-    sat='S2',               # Sentinel-2
-    key='percentile',       # Use percentile statistic
-    percentile=85,          # 85th percentile (flexible!)
-    index='ndvi'
-)
-
-# Generate composite
-composite = ndvi_analysis.get_year_composite()
-
-# Create animated GIF
-ndvi_analysis.get_gif(name='ndvi_evolution.gif')
-
-# NEW in v0.6.0: Land Cover Classification
-classifier = LandCoverClassifier(ndvi_analysis)
-
-# Create multi-index feature stack
-features = classifier.create_feature_stack(
-    indices=['ndvi', 'evi', 'ndwi'],
-    normalize=True
-)
-
-# Add training data and classify
-classifier.add_training_data('training_points.shp')
-landcover = classifier.classify_supervised('random_forest')
-
-# Export to Drive
-ndvi_analysis.export_to_drive(
-    image=landcover,
-    description="classification_2024",
-    folder="results"
-)
-
-# Get feature importance
-importance = classifier.get_feature_importance()
-print(f"Most important features: {importance[:5]}")
-
-# NEW: Sentinel-3 water quality monitoring
-water_quality = NdviSeasonality(
-    roi=your_lake,
-    periods=24,             # Bi-monthly for detailed monitoring  
-    start_year=2023,
-    end_year=2024,
-    sat='S3',               # Sentinel-3 OLCI
-    key='median',
-    index='turbidity'       # Water turbidity assessment
-)
-
-# NEW: Daily algal bloom detection
-algae_monitor = NdviSeasonality(
-    roi=your_water_body,
-    periods=12,             # Monthly analysis
-    sat='S3',               # Daily coverage with S3
-    index='floating_algae', # Specialized for bloom detection
-    key='mean',
-    start_year=2024,
-    end_year=2024
-)
-
-# Advanced: Sentinel-2 Red Edge analysis for precision agriculture
-chlorophyll_analysis = NdviSeasonality(
-    roi=your_agricultural_field,
-    periods=24,             # Bi-monthly for detailed monitoring
-    sat='S2',               # Only S2 has Red Edge bands
-    index='ireci',          # Highly sensitive to chlorophyll
-    key='median',
-    start_year=2023,
-    end_year=2024
-)
-
-# SAR-based crop monitoring with orbit control
-sar_analysis = NdviSeasonality(
-    roi=your_roi,
-    periods=24,             # Bi-monthly for detailed monitoring
-    start_year=2023,
-    end_year=2024,
-    sat='S1',               # Sentinel-1 SAR
-    key='mean',
-    index='vv_vh_ratio',    # Excellent for harvest detection
-    orbit='DESCENDING'      # Use only descending orbits for consistency
-)
-
-# Cyanobacteria detection with NDCI
-cyano_detection = NdviSeasonality(
-    roi=your_lake,
-    periods=12,             # Monthly monitoring
-    sat='S2',               # NDCI requires Red Edge
-    index='ndci',           # Cyanobacteria detection
-    key='percentile',
-    percentile=75,
-    start_year=2023,
-    end_year=2024
-)
-
-#### TimeSeriesAnalyzer – trend and phenology ####
-# Seasonal NDVI composites
+# Monthly NDVI composites (2018–2024) from Sentinel-2
 ndvi = NdviSeasonality(
-    roi=your_roi,
-    sat='S2',
-    periods=12,   # monthly
-    start_year=2018,
-    end_year=2024,
-    index='ndvi'
+    roi=your_roi, sat='S2', periods=12,
+    start_year=2018, end_year=2024,
+    key='percentile', percentile=85, index='ndvi'
 )
+composite = ndvi.get_year_composite()
+ndvi.get_gif(name='ndvi_evolution.gif')
 
-# Analyze temporal trends and phenology
+# Trend detection and phenology analysis
 ts = TimeSeriesAnalyzer(ndvi)
 df = ts.extract_time_series()
-trend = ts.analyze_trend(df)
+ts.analyze_trend(df)
 ts.plot_comprehensive_analysis()
-
-#### SAR Analysis ####
-
-from ndvi2gif import S1ARDProcessor
-import ee
-
-ee.Initialize()
-
-# Configure ARD processor with terrain correction + Refined Lee filter
-s1 = S1ARDProcessor(
-    speckle_filter='REFINED_LEE',
-    terrain_correction=True,
-    terrain_flattening_model='VOLUME',
-    dem='COPERNICUS_30'
-)
-
-# Apply corrections to a Sentinel-1 image
-image = ee.Image("COPERNICUS/S1_GRD/...")  # replace with your image ID
-processed = s1.apply_speckle_filter(s1.apply_terrain_correction(image))
-
-
-For complete examples, see the [example notebooks](examples_notebooks/) folder.
 ```
+
+For more examples see the [example notebooks](examples_notebooks/) or the [documentation](https://digdgeo.github.io/Ndvi2Gif/).
 ---
 
 ## Use Cases
@@ -634,25 +433,6 @@ For complete examples, see the [example notebooks](examples_notebooks/) folder.
 - Geometric consistency with SAR orbit control
 - Direct export to Google Drive and Earth Engine Assets
 - Generate reference rasters for pseudo-invariant feature normalization ([ProtocoloV2](https://github.com/Digdgeo/ProtocoloV2))
-
-## Roadmap 🗺️ 
-
-**v0.6.0 ✅ Machine Learning & Classification Suite**  
-Status: **Released August 2025!**
-
-✅ **LandCoverClassifier** – Complete classification workflows  
-✅ **Multiple ML Algorithms** – RF, SVM, CART, K-means, and more  
-✅ **Enhanced Exports** – Google Drive and EE Assets  
-✅ **95%+ Documentation** – Comprehensive docstrings with examples  
-✅ **Feature Engineering** – Multi-temporal stacks with normalization  
-
-**v1.0.0 🎯 Complete Climate Analysis Platform**  
-Status: **Planned**
-
-📚 **Jupyter Book** – Interactive documentation and tutorials  
-🌡️ **Climate Datasets** – ERA5, CHIRPS, TerraClimate integration  
-🌍 **Climate Analysis** – Advanced climate change assessment tools  
-🔧 **API Stability** – Long-term support commitment  
 
 ## Contributing
 

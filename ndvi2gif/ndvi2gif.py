@@ -431,10 +431,10 @@ class NdviSeasonality:
            geospatial analysis for everyone. Remote Sensing of Environment.
     """
     
-    def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020, 
+    def __init__(self, roi=None, periods=4, start_year=2016, end_year=2020,
                  sat='S2', key='max', index='ndvi', percentile=90, orbit='BOTH', normalize_sar=False,
                  use_sar_ard=True, sar_speckle_filter='REFINED_LEE', sar_terrain_correction=True,
-                sar_terrain_model='VOLUME', cloud_filter=True, max_cloud_cover=20):
+                sar_terrain_model='VOLUME', cloud_filter=True, max_cloud_cover=20, scl_mask=True):
         """
         Initialize NdviSeasonality object for temporal remote sensing analysis.
         
@@ -749,6 +749,7 @@ class NdviSeasonality:
         # Store cloud filtering parameters
         self.cloud_filter = cloud_filter
         self.max_cloud_cover = max_cloud_cover
+        self.scl_mask = scl_mask
         
         # Validate orbit parameter
         valid_orbits = ['BOTH', 'ASCENDING', 'DESCENDING']
@@ -1142,6 +1143,46 @@ class NdviSeasonality:
         return image.updateMask(mask).copyProperties(
             image, ['system:time_start', 'system:time_end', 'system:index'])
 
+    def mask_s2_scl(self, image):
+        """
+        Mask clouds, cloud shadows and cirrus in Sentinel-2 images using the
+        Scene Classification Layer (SCL band).
+
+        SCL provides per-pixel classification at 20m resolution, offering
+        more accurate cloud/shadow detection than the QA60 band (which is
+        coarser and misses thin clouds and shadows).
+
+        Masked classes:
+        - 1: Saturated / defective pixels
+        - 3: Cloud shadows
+        - 8: Medium probability cloud
+        - 9: High probability cloud
+        - 10: Thin cirrus
+
+        Parameters
+        ----------
+        image : ee.Image
+            Sentinel-2 SR image with SCL band (S2_SR_HARMONIZED collection).
+
+        Returns
+        -------
+        ee.Image
+            Cloud/shadow-masked image with SCL band removed.
+
+        References
+        ----------
+        European Space Agency (2021). Sentinel-2 MSI Level-2A Algorithm
+        Theoretical Basis Document. ESA-EOPG-GSCB-TN-0001.
+        """
+        scl = image.select('SCL')
+        mask = (scl.neq(1)    # saturated/defective
+                .And(scl.neq(3))   # cloud shadows
+                .And(scl.neq(8))   # medium probability cloud
+                .And(scl.neq(9))   # high probability cloud
+                .And(scl.neq(10))) # thin cirrus
+        return image.updateMask(mask).copyProperties(
+            image, ['system:time_start', 'system:time_end', 'system:index'])
+
     def mask_landsat_clouds(self, image):
         """
         Mask clouds and shadows in Landsat Collection 2 images using QA_PIXEL band.
@@ -1312,23 +1353,33 @@ class NdviSeasonality:
         # ============= SENTINEL-2 CONFIGURATION =============
         if self.sat == 'S2' and self.cloud_filter:
             print(f"Applying cloud filter to Sentinel-2: max {self.max_cloud_cover}% cloud cover")
-            # First filter by cloud cover metadata
+            # First filter by scene-level cloud cover metadata
             S2col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(self.roi).filter(
                 ee.Filter.lte('CLOUDY_PIXEL_PERCENTAGE', self.max_cloud_cover)
             )
-            # Then apply pixel-level cloud mask
-            S2col = S2col.map(self.mask_s2_clouds).select([
-                'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B11', 'B12'
-            ], [
-                'Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3', 
-                'Nir', 'Swir1', 'Swir2'
-            ])
+            # Then apply pixel-level cloud mask (SCL preferred, QA60 as fallback)
+            if self.scl_mask:
+                print("Applying pixel-level cloud/shadow mask using SCL band")
+                S2col = S2col.map(self.mask_s2_scl).select([
+                    'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B11', 'B12'
+                ], [
+                    'Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3',
+                    'Nir', 'Swir1', 'Swir2'
+                ])
+            else:
+                print("Applying pixel-level cloud mask using QA60 band")
+                S2col = S2col.map(self.mask_s2_clouds).select([
+                    'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B11', 'B12'
+                ], [
+                    'Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3',
+                    'Nir', 'Swir1', 'Swir2'
+                ])
         else:
             # No cloud filtering
             S2col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").select([
                 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B11', 'B12'
             ], [
-                'Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3', 
+                'Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3',
                 'Nir', 'Swir1', 'Swir2'
             ]).filterBounds(self.roi)
         

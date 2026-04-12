@@ -7,7 +7,7 @@ with Google Earth Engine.
 
 __author__ = "Diego García Díaz"
 __email__ = "diegogarcia@ebd.csic.es"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 from .ndvi2gif import NdviSeasonality, scale_OLI, scale_ETM
 from .s1_ard import S1ARDProcessor

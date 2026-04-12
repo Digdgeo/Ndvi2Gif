@@ -1,5 +1,5 @@
 {% set name = "ndvi2gif" %}
-{% set version = "0.2.0" %}
+{% set version = "1.2.0" %}
 
 package:
   name: {{ name }}
@@ -16,28 +16,39 @@ requirements:
   host:
     - python >=3.8
     - pip
-    - setuptools  # <<-- Esta línea es necesaria
+    - setuptools
   run:
-    - python >=3.8  # <-- Cambiar de 3.7 a 3.8 (coherente con setup.cfg)
-    - numpy <2.0
+    - python >=3.8
+    - numpy >=1.24
+    - pandas
+    - scipy
     - matplotlib
+    - seaborn
     - pillow
     - imageio
     - tqdm
-    - geemap >=0.29.5  # <-- Cambiar de == a >= (más flexible)
+    - requests
+    - geemap >=0.29.5
     - earthengine-api >=0.1.347
     - geopandas
     - fiona
+    - pycrs
+    - deims >=4.0
+    - statsmodels >=0.13
+    - scikit-learn >=1.0
 
 about:
   home: https://github.com/Digdgeo/Ndvi2Gif
   license: MIT
   license_file: ../LICENSE
-  summary: Generate seasonal composites and extract statistical summaries from any remote sensing index using Google Earth Engine and geemap
+  summary: Multi-seasonal remote sensing analysis suite with Google Earth Engine
   description: |
-    NDVI2GIF allows researchers to generate seasonal composites and extract summaries from any GEE-compatible index. Output includes animations and statistical summaries useful for vegetation monitoring.
-  author: Diego García Díaz
-  author_email: diegogarcia@ebd.csic.es
+    Ndvi2Gif is a Python library for multi-temporal remote sensing analysis with
+    Google Earth Engine. It provides seasonal compositing, 40+ vegetation and
+    environmental indices, SAR preprocessing, time series analytics, land cover
+    classification, and hydroperiod analysis — all server-side.
+  doc_url: https://digdgeo.github.io/Ndvi2Gif/
+  dev_url: https://github.com/Digdgeo/Ndvi2Gif
 
 extra:
   recipe-maintainers:

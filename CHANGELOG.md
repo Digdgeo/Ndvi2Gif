@@ -9,6 +9,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-12
+
+### Added
+
+- **💧 HydroperiodAnalyzer**: New GEE-native module for wetland and floodplain hydroperiod analysis.
+  - Computes flood duration per pixel (days/year) entirely server-side using the midpoint temporal weighting method, based on the methodology of [phydroperiod](https://github.com/hectocore/phydroperiod).
+  - Output bands: `hydroperiod`, `valid_days`, `normalized`, `first_flood_doy`, `last_flood_doy`.
+  - Multi-year support: `compute_all_cycles()` and `compute_anomalies()`.
+  - IRT (Irreplaceable Resource Taxonomy) metrics: global (`compute_irt_global()`) and per-pixel (`compute_irt_image()`).
+  - Export to Google Drive and Earth Engine Assets.
+- **SCL cloud masking for Sentinel-2**: New `scl_mask=True` parameter in `NdviSeasonality` and `mask_s2_scl()` method. Uses the Scene Classification Layer for more accurate cloud, shadow and cirrus detection. Set `scl_mask=False` to restore legacy QA60 behaviour.
+
+### Fixed
+
+- Removed `numpy<2.0` pin — numpy 2.x is now fully supported (`numpy>=1.24`).
+
+### No Breaking Changes
+
+Full backward compatibility with v1.1.0. `scl_mask=True` is the new default for Sentinel-2 cloud masking; set `scl_mask=False` to restore previous behaviour.
+
+---
+
 ## [1.0.0] - 2025-12-28
 
 ### 🎉 **FIRST STABLE RELEASE - JOSS PUBLICATION**

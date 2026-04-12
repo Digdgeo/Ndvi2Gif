@@ -43,7 +43,13 @@ Ndvi2Gif was updated and extended as part of its integration into the eLTER and 
 
 ---
 
-## ✨ What's New in v1.0.0 / v1.1.0
+## ✨ What's New in v1.2.0
+
+- **HydroperiodAnalyzer** — GEE-native hydroperiod analysis: computes flood duration per pixel using midpoint temporal weighting, entirely server-side. Logic and methodology based on [phydroperiod](https://github.com/hectocore/phydroperiod).
+- **SCL-based cloud masking** for Sentinel-2 — more accurate cloud/shadow detection using the Scene Classification Layer (`scl_mask=True` by default, replaces legacy QA60)
+- **numpy 2.x support** — removed `numpy<2.0` pin; numpy>=1.24 (including 2.x) is now fully supported
+
+### Previous highlights
 
 - **FAI** (Floating Algae Index) — multi-sensor cyanobacterial bloom detection (Sentinel-2, Landsat, MODIS)
 - **ERA5-Land & CHIRPS** climate reanalysis support (47 variables + precipitation, 1950–present)
@@ -220,6 +226,30 @@ _Note: All temperature variables also available in Celsius (add `_celsius` suffi
   - Use `key='mean'` for average daily rates
 
 _Ideal for drought monitoring, trend analysis, and precipitation climatology in tropical/subtropical regions._
+
+## 💧 Hydroperiod Analysis (NEW in v1.2.0)
+
+`HydroperiodAnalyzer` computes flood duration (days/year) for wetlands and floodplains entirely in Google Earth Engine — no downloads required.
+
+The methodology is based on the **midpoint temporal weighting** approach from [phydroperiod](https://github.com/hectocore/phydroperiod): each scene is assigned a temporal "territory" proportional to the interval between consecutive acquisition dates, distributing 365 days among available observations server-side.
+
+```python
+from ndvi2gif import NdviSeasonality, HydroperiodAnalyzer
+
+ndvi = NdviSeasonality(roi='wetland.shp', sat='S2', start_year=2019, end_year=2023)
+hydro = HydroperiodAnalyzer(ndvi)
+
+# Compute hydroperiod for a single hydrological year
+result = hydro.compute_hydroperiod(hyd_year=2022)
+# Bands: hydroperiod (days), valid_days, normalized, first_flood_doy, last_flood_doy
+
+# Multi-year analysis + anomalies
+cycles = hydro.compute_all_cycles()
+anomalies = hydro.compute_anomalies(cycles)
+
+# Export to Drive
+hydro.export_to_drive(result, description="hydroperiod_2022")
+```
 
 ## 🧠 Machine Learning Classification (NEW in v0.6.0)
 

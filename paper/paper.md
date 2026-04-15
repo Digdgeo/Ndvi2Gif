@@ -24,7 +24,7 @@ bibliography: paper.bib
 
 Google Earth Engine (GEE) is a cloud-based platform for planetary-scale geospatial analysis [@Gorelick2017]. Ndvi2Gif is a Python package built on top of GEE and geemap [@Wu2020] that simplifies the generation and analysis of multi-temporal composite images from satellite and climate reanalysis data. The package provides unified access to 7 satellite platforms (Sentinel-1/2/3, Landsat 4–9, MODIS) and climate reanalysis data (ERA5-Land, CHIRPS), with 52 predefined spectral and radar indices plus 48 climate variables. Beyond compositing, the package includes modules for SAR preprocessing, time series and phenology analysis, machine learning land cover classification, and hydroperiod analysis of surface water dynamics.
 
-The core concept of Ndvi2Gif is the creation of **multi-seasonal statistical composites**. The `get_year_composite()` method returns an `ee.ImageCollection` where each image represents one year, with bands for each temporal period (e.g., `periods=12` generates bands named `january`, `february`, ..., `december`). This band-based temporal organization enables queries such as: *What was the maximum flood extent detected in January across 40 years of Landsat (1984–2024)?* by simply calling `collection.select('january').max()`. Built-in zonal statistics extraction via `get_stats()` allows direct computation of statistics per polygon without external GIS processing.
+The core concept of Ndvi2Gif is the creation of **multi-seasonal statistical composites**. The `get_year_composite()` method returns an `ee.ImageCollection` where each image represents one year, with bands for each temporal period (e.g., `periods=12` generates bands named `january`, `february`, ..., `december`). This band-based temporal organization enables queries such as: *What was the maximum flood extent detected in January across 40 years of Landsat (1982–2024)?* by simply calling `collection.select('january').max()`. Built-in zonal statistics extraction via `get_stats()` allows direct computation of statistics per polygon without external GIS processing.
 
 # Statement of need
 
@@ -63,7 +63,7 @@ Ndvi2Gif provides unified access to optical, SAR, and climate reanalysis dataset
 | Platform   | Collection       | Resolution | Coverage     | Variables        |
 | :--------- | :--------------- | :--------- | :----------- | :--------------- |
 | Sentinel-2 | S2 SR HARMONIZED | 10/20m     | 2015–present | 40+ optical      |
-| Sentinel-3 | OLCI             | 300m       | 2016–present | 10 water quality |
+| Sentinel-3 | OLCI             | 300m       | 2016–present | 36 optical       |
 | Landsat    | L4–L9 Col. 2     | 30m        | 1982–present | 40+ optical      |
 | MODIS      | Terra/Aqua       | 500m       | 2000–present | 40+ optical      |
 | Sentinel-1 | GRD ARD          | 10m        | 2014–present | 7 SAR            |

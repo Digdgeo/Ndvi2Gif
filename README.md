@@ -118,7 +118,7 @@ Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
   author  = {García Díaz, Diego},
   title   = {ndvi2gif: Multi-Seasonal Remote Sensing Analysis Suite},
   url     = {https://github.com/Digdgeo/Ndvi2Gif},
-  version = {1.2.0},
+  version = {1.2.2},
   year    = {2020}
 }
 ```

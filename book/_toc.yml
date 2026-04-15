@@ -57,9 +57,13 @@ parts:
   - caption: Notebooks
     chapters:
       - file: notebooks/01_basic_usage
+        title: "Basic Usage"
       - file: notebooks/02_landcover_classification
+        title: "Land Cover Classification"
       - file: notebooks/03_time_series_analysis
+        title: "Time Series Analysis"
       - file: notebooks/04_sar_vegetation
+        title: "SAR Vegetation"
       - file: notebooks/05_hydroperiod
         title: "Hydroperiod Analysis"
 

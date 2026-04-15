@@ -82,12 +82,12 @@ ndvi.get_gif('ndvi_evolution.gif')
 If you use Ndvi2Gif in your research, please cite:
 
 ```bibtex
-@software{garcia_diaz_ndvi2gif_2025,
+@software{garcia_diaz_ndvi2gif_2020,
   author = {García Díaz, Diego},
   title = {ndvi2gif: Multi-Seasonal Remote Sensing Analysis Suite},
   url = {https://github.com/Digdgeo/Ndvi2Gif},
-  version = {1.0.0},
-  year = {2025}
+  version = {1.2.2},
+  year = {2020}
 }
 ```
 

@@ -73,7 +73,7 @@ Ndvi2Gif will automatically install the following key dependencies:
 - **earthengine-api** (≥0.1.347): Google Earth Engine Python API
 - **geemap** (≥0.29.5): Interactive mapping with Earth Engine
 - **geopandas**: Geospatial data processing
-- **numpy** (<2.0): Numerical operations (pinned to 1.x)
+- **numpy** (>=1.24): Numerical operations
 - **pandas**: Data manipulation
 - **matplotlib**: Visualization
 - **scipy**: Scientific computing
@@ -92,7 +92,8 @@ from ndvi2gif import (
     NdviSeasonality,
     S1ARDProcessor,
     TimeSeriesAnalyzer,
-    LandCoverClassifier
+    LandCoverClassifier,
+    HydroperiodAnalyzer,
 )
 
 print("✓ All modules loaded successfully!")
@@ -100,23 +101,13 @@ print("✓ All modules loaded successfully!")
 
 Expected output:
 ```
-Ndvi2Gif version: 0.6.0
+Ndvi2Gif version: 1.2.2
 ✓ All modules loaded successfully!
 ```
 
 ## Troubleshooting
 
 ### Common Issues
-
-#### Issue: ImportError with numpy
-
-If you see errors related to numpy version conflicts:
-
-```bash
-pip install "numpy<2.0"
-```
-
-The Earth Engine API currently requires numpy 1.x.
 
 #### Issue: GDAL/Fiona installation problems
 

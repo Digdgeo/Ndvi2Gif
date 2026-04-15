@@ -36,6 +36,8 @@ parts:
         title: "Time Series Analysis"
       - file: advanced/classification
         title: "Land Cover Classification"
+      - file: advanced/hydroperiod
+        title: "Hydroperiod Analysis"
       - file: advanced/water_quality
         title: "Water Quality Monitoring"
       - file: advanced/export_options
@@ -58,6 +60,8 @@ parts:
       - file: notebooks/02_landcover_classification
       - file: notebooks/03_time_series_analysis
       - file: notebooks/04_sar_vegetation
+      - file: notebooks/05_hydroperiod
+        title: "Hydroperiod Analysis"
 
   - caption: Reference
     chapters:

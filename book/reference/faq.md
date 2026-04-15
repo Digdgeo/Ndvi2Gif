@@ -16,13 +16,6 @@ ee.Authenticate()
 ee.Initialize(project='your-project-id')
 ```
 
-### Q: Why do I get "numpy" version errors?
-
-**A:** Earth Engine API requires numpy < 2.0. Install with:
-```bash
-pip install "numpy<2.0"
-```
-
 ### Q: Do I need a Google Earth Engine account?
 
 **A:** Yes. Sign up at https://signup.earthengine.google.com/ - it's free for research and education.

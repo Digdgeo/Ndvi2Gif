@@ -15,6 +15,18 @@ pip install ndvi2gif
 quickstart
 notebooks/Basic_Usage
 notebooks/LandCover_Class
+notebooks/Hydroperiod
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Tutorials
+
+tutorials/ndvi2gif
+tutorials/timeseries
+tutorials/s1_ard
+tutorials/clasification
+tutorials/hydroperiod
 ```
 
 ```{toctree}

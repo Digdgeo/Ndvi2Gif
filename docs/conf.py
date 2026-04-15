@@ -14,7 +14,7 @@ extensions = [
 html_theme = "pydata_sphinx_theme"
 
 html_theme_options = {
-    "github_url": "https://github.com/tuusuario/ndvi2gif",  # Cambia por tu repo
+    "github_url": "https://github.com/Digdgeo/Ndvi2Gif",
     "show_toc_level": 2,
     "navbar_align": "left",
 }

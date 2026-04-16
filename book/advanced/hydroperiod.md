@@ -510,6 +510,12 @@ All `compute_*` methods return `ee.Image` objects immediately — no computation
 
 ## References
 
+### Related Python library
+
+- **`phydroperiod`** (García Díaz & Bustamante Díaz, 2026) — standalone Python library for hydroperiod computation from water masks. Available on PyPI: `pip install phydroperiod`. Repository: [https://pypi.org/project/phydroperiod/](https://pypi.org/project/phydroperiod/). Use `phydroperiod` when you already have water masks as local raster files or NumPy arrays; use the `HydroperiodAnalyzer` in ndvi2gif when you want to run the full pipeline (satellite collection → water masks → hydroperiod) server-side on Google Earth Engine.
+
+### Methodology and context
+
 Bustamante, J., Aragonés, D., Afán, I., Luque, C.J., Pérez-Vázquez, A., Castellanos, E.M., Díaz-Delgado, R. (2016). Predictive models of floristic composition based on flooding frequency in Mediterranean wetlands. *Remote Sensing*, 8(9), 776. https://doi.org/10.3390/rs8090776
 
 Xu, H. (2006). Modification of normalised difference water index (NDWI) to enhance open water features in remotely sensed imagery. *International Journal of Remote Sensing*, 27(14), 3025–3033.

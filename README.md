@@ -26,11 +26,11 @@ Built on top of [Google Earth Engine](https://github.com/google/earthengine-api)
 
 ---
 
-## ✨ What's New in v1.2.0
+## ✨ What's New in v1.3.0
 
-**New module: `HydroperiodAnalyzer`** — GEE-native flood duration analysis per pixel using midpoint temporal weighting, entirely server-side. Supports multi-year cycles, anomaly detection, and IRT metrics. Methodology based on [phydroperiod](https://github.com/hectocore/phydroperiod).
+**New module: `SpatialPhenologyAnalyzer`** — GEE-native, **per-pixel phenology rasters** (Start/Peak/End of Season and derived metrics) for the whole ROI, entirely server-side. Three methods (`threshold`, `derivative`, and `harmonic` Fourier regression — the Earth Engine-native replacement for double-logistic fitting), per-year or multi-year aggregate outputs, and export to local GeoTIFF or Google Drive with named bands. See [CHANGELOG](CHANGELOG.md) for details.
 
-Minor improvements: SCL-based cloud masking for Sentinel-2 (`scl_mask=True` by default), numpy 2.x support. See [CHANGELOG](CHANGELOG.md) for details.
+Previously, in v1.2.0: `HydroperiodAnalyzer` (GEE-native flood duration analysis), SCL-based cloud masking for Sentinel-2, and numpy 2.x support.
 
 ---
 
@@ -41,6 +41,7 @@ Minor improvements: SCL-based cloud masking for Sentinel-2 (`scl_mask=True` by d
 | `NdviSeasonality` | Core engine: seasonal compositing, 40+ indices, 7 sensors, flexible ROI input |
 | `HydroperiodAnalyzer` | Wetland flood duration analysis (days/year) with multi-year anomaly detection |
 | `TimeSeriesAnalyzer` | Trend detection (Mann-Kendall, Sen's slope), phenology metrics, dashboards |
+| `SpatialPhenologyAnalyzer` | Per-pixel phenology rasters (SOS/POS/EOS) via threshold, derivative or harmonic methods |
 | `S1ARDProcessor` | Sentinel-1 SAR preprocessing: terrain correction, speckle filtering |
 | `LandCoverClassifier` | Supervised (RF, SVM, CART) and unsupervised (K-means, LDA) classification |
 
@@ -118,7 +119,7 @@ Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
   author  = {García Díaz, Diego},
   title   = {ndvi2gif: Multi-Seasonal Remote Sensing Analysis Suite},
   url     = {https://github.com/Digdgeo/Ndvi2Gif},
-  version = {1.2.2},
+  version = {1.3.0},
   year    = {2020}
 }
 ```

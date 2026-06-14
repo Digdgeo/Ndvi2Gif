@@ -9,6 +9,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-06-14
+
+### Added
+
+- **🌱 SpatialPhenologyAnalyzer**: New GEE-native module that produces **per-pixel phenology rasters** (Start/Peak/End of Season and derived metrics) for the whole ROI, entirely server-side. Complements the point-based phenology of `TimeSeriesAnalyzer`.
+  - Output bands: `sos`, `pos`, `eos`, `los`, `amplitude`, `peak_value`, `baseline`, `growth_rate`, `senescence_rate` (SOS/POS/EOS/LOS in day-of-year).
+  - Three server-side methods: `threshold` (amplitude crossing), `derivative` (steepest rate of change) and `harmonic` (per-pixel Fourier regression → smooth curve → threshold extraction). The `harmonic` method is the Earth Engine-native replacement for the client-side double-logistic fit, which relies on `scipy.optimize.curve_fit` and cannot run server-side.
+  - Two outputs: `extract_phenology_rasters()` returns one image per year (`ee.ImageCollection`); `phenology_summary()` returns a single multi-year aggregate (`ee.Image`).
+  - Export to local GeoTIFF (band names embedded via `rasterio`) or Google Drive (batch task, band names preserved by Earth Engine) through `export_target='local'|'drive'`.
+- New documentation section "Per-pixel spatial phenology" in `book/advanced/time_series.md` and example notebook `examples_notebooks/Spatial_Phenology.ipynb`.
+
+### Changed
+
+- Added `rasterio` to the runtime dependencies (used to embed band names in locally exported GeoTIFFs).
+
+### No Breaking Changes
+
+Full backward compatibility with v1.2.x.
+
+---
+
 ## [1.2.0] - 2026-04-12
 
 ### Added

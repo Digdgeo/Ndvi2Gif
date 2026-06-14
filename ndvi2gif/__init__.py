@@ -7,11 +7,11 @@ with Google Earth Engine.
 
 __author__ = "Diego García Díaz"
 __email__ = "diegogarcia@ebd.csic.es"
-__version__ = "1.2.2"
+__version__ = "1.3.0"
 
 from .ndvi2gif import NdviSeasonality, scale_OLI, scale_ETM
 from .s1_ard import S1ARDProcessor
-from .timeseries import TimeSeriesAnalyzer, SpatialTrendAnalyzer
+from .timeseries import TimeSeriesAnalyzer, SpatialTrendAnalyzer, SpatialPhenologyAnalyzer
 from .clasification import LandCoverClassifier
 from .hydroperiod import HydroperiodAnalyzer
 
@@ -20,6 +20,7 @@ __all__ = [
     "S1ARDProcessor",
     "TimeSeriesAnalyzer",
     "SpatialTrendAnalyzer",
+    "SpatialPhenologyAnalyzer",
     "LandCoverClassifier",
     "HydroperiodAnalyzer",
     "scale_OLI",

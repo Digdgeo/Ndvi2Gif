@@ -3251,5 +3251,509 @@ class SpatialTrendAnalyzer:
             filename = f'{self.processor.sat}_{self.processor.index}_trend_{method}_{self.processor.start_year}_{self.processor.end_year-1}.tif'
             print(f"Exporting trend map as {filename}")
             self.processor.get_export_single(trend_image, name=filename, scale=scale)
-        
+
         return trend_image
+
+
+class SpatialPhenologyAnalyzer:
+    """
+    Server-side, per-pixel phenology raster generation with Earth Engine.
+
+    While :class:`TimeSeriesAnalyzer` extracts phenological metrics for a single
+    point (downloading the time series via ``getInfo``), this class computes the
+    same family of metrics for **every pixel** of the ROI entirely on Earth
+    Engine, producing phenology rasters (Start/Peak/End of Season, etc.).
+
+    Three extraction methods are available, all running fully server-side:
+
+    * ``'threshold'`` : amplitude-based thresholding (SOS/EOS as the first/last
+      day-of-year above an amplitude fraction of the seasonal curve).
+    * ``'derivative'`` : SOS/EOS from the steepest positive/negative rate of
+      change between consecutive composites.
+    * ``'harmonic'`` : harmonic (Fourier) regression per pixel, used to
+      reconstruct a smooth seasonal curve from which SOS/POS/EOS are extracted.
+      This is the Earth Engine-friendly replacement for the client-side
+      double-logistic fit (which relies on ``scipy.optimize.curve_fit`` and
+      cannot run server-side).
+
+    Phenology is computed **year by year** (each year has its own seasonal
+    cycle). Two entry points are provided:
+
+    * :meth:`extract_phenology_rasters` returns one image per year as an
+      ``ee.ImageCollection`` (useful for analysing how phenology shifts over
+      time, e.g. earlier SOS year after year).
+    * :meth:`phenology_summary` collapses all years into a single multi-band
+      ``ee.Image`` using a reducer (median/mean), i.e. the typical phenology of
+      the period.
+
+    Output bands (per year and in the summary): ``sos``, ``pos``, ``eos``,
+    ``los``, ``amplitude``, ``peak_value``, ``baseline``, ``growth_rate``,
+    ``senescence_rate``. SOS/POS/EOS/LOS are expressed in day-of-year (days).
+
+    Parameters
+    ----------
+    ndvi_seasonality_instance : NdviSeasonality
+        Configured NdviSeasonality instance with ROI, periods and year range.
+
+    Notes
+    -----
+    Phenology extraction needs enough intra-annual temporal resolution. Using
+    ``periods=12`` (monthly) or ``periods=24`` (bi-monthly) is strongly
+    recommended; with ``periods=4`` (seasonal) results are coarse and a warning
+    is issued.
+
+    Examples
+    --------
+    >>> processor = NdviSeasonality(sat='S2', index='ndvi', periods=12,
+    ...                             start_year=2018, end_year=2023)
+    >>> pheno = SpatialPhenologyAnalyzer(processor)
+    >>> # Option A: one phenology image per year
+    >>> yearly = pheno.extract_phenology_rasters(method='harmonic')
+    >>> # Option B: single multi-year median phenology map
+    >>> summary = pheno.phenology_summary(method='harmonic', reducer='median')
+    """
+
+    def __init__(self, ndvi_seasonality_instance):
+        """Initialize SpatialPhenologyAnalyzer with an NdviSeasonality instance."""
+        self.processor = ndvi_seasonality_instance
+
+    # ========== PUBLIC API ==========
+
+    def extract_phenology_rasters(self,
+                                  method: str = 'threshold',
+                                  threshold_percentile: float = 50,
+                                  adaptive_threshold: bool = True,
+                                  n_harmonics: int = 2,
+                                  harmonic_step: int = 10,
+                                  min_observations: int = 5,
+                                  export: bool = False,
+                                  export_target: str = 'local',
+                                  drive_folder: Optional[str] = None,
+                                  crs: str = 'EPSG:4326',
+                                  scale: int = 30) -> ee.ImageCollection:
+        """
+        Compute one per-pixel phenology image per year (Option A).
+
+        Parameters
+        ----------
+        method : {'threshold', 'derivative', 'harmonic'}, optional
+            Phenology extraction method. Default is 'threshold'.
+        threshold_percentile : float, optional
+            Amplitude percentile (0-100) defining the season threshold for the
+            ``'threshold'`` and ``'harmonic'`` methods. Default is 50.
+        adaptive_threshold : bool, optional
+            If True, uses a lower threshold for SOS and a higher one for EOS
+            (mirrors the client-side behaviour). Default is True.
+        n_harmonics : int, optional
+            Number of harmonics for the ``'harmonic'`` method. Default is 2.
+        harmonic_step : int, optional
+            Day-of-year step used to reconstruct the smooth harmonic curve.
+            Smaller values give finer SOS/EOS resolution at higher cost.
+            Default is 10.
+        min_observations : int, optional
+            Minimum valid composites per pixel and year. Pixels with fewer are
+            masked. Default is 5.
+        export : bool, optional
+            Export each yearly image to GeoTIFF. Default is False.
+        export_target : {'local', 'drive'}, optional
+            Where to export when ``export=True``. ``'local'`` downloads a
+            GeoTIFF to the working directory (band names are embedded with
+            rasterio if available); ``'drive'`` starts a batch task to Google
+            Drive (Earth Engine preserves band names). Default is 'local'.
+        drive_folder : str or None, optional
+            Google Drive folder for ``export_target='drive'``. Default is None
+            (Drive root).
+        crs : str, optional
+            Output CRS for export. Default is 'EPSG:4326'.
+        scale : int, optional
+            Output resolution in meters (used for export). Default is 30.
+
+        Returns
+        -------
+        ee.ImageCollection
+            One multi-band image per year, each carrying a ``'year'`` property.
+
+        Examples
+        --------
+        >>> yearly = pheno.extract_phenology_rasters(method='derivative')
+        >>> first = ee.Image(yearly.first())
+        """
+        p = self.processor
+
+        if method not in ('threshold', 'derivative', 'harmonic'):
+            raise ValueError(
+                f"Unknown method '{method}'. Use 'threshold', 'derivative' or 'harmonic'."
+            )
+
+        if p.periods < 12:
+            print(f"WARNING: periods={p.periods} gives coarse phenology. "
+                  f"periods=12 (monthly) or 24 (bi-monthly) is recommended.")
+
+        images = []
+        for year in range(p.start_year, p.end_year + 1):
+            year_image = self._phenology_for_year(
+                year, method=method,
+                threshold_percentile=threshold_percentile,
+                adaptive_threshold=adaptive_threshold,
+                n_harmonics=n_harmonics,
+                harmonic_step=harmonic_step,
+                min_observations=min_observations,
+            )
+            year_image = year_image.set('year', year).clip(p.roi)
+            images.append(year_image)
+
+            if export:
+                name_base = f'{p.sat}_{p.index}_phenology_{method}_{year}'
+                self._export_image(year_image, name_base, scale, export_target,
+                                   drive_folder, crs)
+
+        return ee.ImageCollection.fromImages(images)
+
+    def phenology_summary(self,
+                          method: str = 'threshold',
+                          reducer: str = 'median',
+                          threshold_percentile: float = 50,
+                          adaptive_threshold: bool = True,
+                          n_harmonics: int = 2,
+                          harmonic_step: int = 10,
+                          min_observations: int = 5,
+                          export: bool = False,
+                          export_target: str = 'local',
+                          drive_folder: Optional[str] = None,
+                          crs: str = 'EPSG:4326',
+                          scale: int = 30) -> ee.Image:
+        """
+        Collapse all years into a single multi-band phenology image (Option B).
+
+        Builds the per-year collection with :meth:`extract_phenology_rasters`
+        and reduces it across years with the requested reducer, yielding the
+        typical phenology of the whole period.
+
+        Parameters
+        ----------
+        method : {'threshold', 'derivative', 'harmonic'}, optional
+            Phenology extraction method. Default is 'threshold'.
+        reducer : {'median', 'mean'}, optional
+            Reducer applied across years. Default is 'median'.
+        threshold_percentile, adaptive_threshold, n_harmonics, harmonic_step, min_observations, export_target, drive_folder, crs, scale
+            See :meth:`extract_phenology_rasters`.
+        export : bool, optional
+            Export the aggregated image to GeoTIFF. Default is False.
+
+        Returns
+        -------
+        ee.Image
+            Multi-band image with the across-year reduced metrics, keeping the
+            original band names (``sos``, ``pos``, ``eos``, ...).
+
+        Examples
+        --------
+        >>> summary = pheno.phenology_summary(method='harmonic', reducer='median')
+        """
+        p = self.processor
+
+        collection = self.extract_phenology_rasters(
+            method=method,
+            threshold_percentile=threshold_percentile,
+            adaptive_threshold=adaptive_threshold,
+            n_harmonics=n_harmonics,
+            harmonic_step=harmonic_step,
+            min_observations=min_observations,
+            export=False,
+        )
+
+        if reducer == 'median':
+            summary = collection.median()
+        elif reducer == 'mean':
+            summary = collection.mean()
+        else:
+            raise ValueError(f"Unknown reducer '{reducer}'. Use 'median' or 'mean'.")
+
+        summary = summary.toFloat().clip(p.roi)
+
+        if export:
+            name_base = (f'{p.sat}_{p.index}_phenology_{method}_{reducer}_'
+                         f'{p.start_year}_{p.end_year}')
+            self._export_image(summary, name_base, scale, export_target,
+                               drive_folder, crs)
+
+        return summary
+
+    # ========== INTERNAL HELPERS ==========
+
+    def _export_image(self, image, name_base, scale, target, drive_folder, crs):
+        """
+        Export a phenology image either locally or to Google Drive.
+
+        Local exports embed band names with rasterio when available; Drive
+        batch exports preserve band names natively (Earth Engine writes them
+        as GeoTIFF band descriptions).
+        """
+        p = self.processor
+        if target == 'drive':
+            print(f"Starting Drive export task '{name_base}' "
+                  f"(folder={drive_folder or 'root'}). "
+                  f"Track it in the Earth Engine Tasks panel.")
+            p.export_to_drive(image, description=name_base, region=p.roi,
+                              scale=scale, crs=crs, folder=drive_folder)
+        elif target == 'local':
+            filename = f'{name_base}.tif'
+            print(f"Exporting {filename}")
+            p.get_export_single(image, name=filename, crs=crs, scale=scale)
+            self._set_band_descriptions(os.path.join(os.getcwd(), filename), image)
+        else:
+            raise ValueError(
+                f"Unknown export_target '{target}'. Use 'local' or 'drive'."
+            )
+
+    def _set_band_descriptions(self, path, image):
+        """Write band names into a local GeoTIFF so QGIS shows them (best-effort)."""
+        try:
+            import rasterio
+        except ImportError:
+            print("(install 'rasterio' to embed band names in the local GeoTIFF)")
+            return
+        try:
+            names = image.bandNames().getInfo()
+            with rasterio.open(path, 'r+') as ds:
+                if ds.count == len(names):
+                    for i, band_name in enumerate(names, start=1):
+                        ds.set_band_description(i, band_name)
+                else:
+                    print(f"(band count mismatch {ds.count} vs {len(names)}; "
+                          f"band names not written)")
+        except Exception as e:
+            print(f"(could not embed band names: {e})")
+
+    def _period_mid_doy(self, period_idx: int, year: int) -> int:
+        """Return the mid-point day-of-year of a temporal period."""
+        start_date, end_date = self.processor.period_dates[period_idx]
+        sd = datetime.strptime(f"{year}{start_date}", "%Y-%m-%d")
+        ed = datetime.strptime(f"{year}{end_date}", "%Y-%m-%d")
+        mid = sd + (ed - sd) / 2
+        return mid.timetuple().tm_yday
+
+    def _period_composite_light(self, year: int, period_idx: int) -> ee.Image:
+        """
+        Lightweight single-reducer period composite.
+
+        ``NdviSeasonality.get_period_composite`` eagerly computes six statistical
+        reducers per period and returns only one. Phenology builds many
+        composites (periods x years), so here we compute just the configured
+        reducer (``self.processor.key``) to keep the Earth Engine graph small
+        and avoid hitting interactive memory limits.
+        """
+        p = self.processor
+        start_date, end_date = p.period_dates[period_idx]
+        init = f"{year}{start_date}"
+        ends = f"{year}{end_date}"
+
+        filtered = p.ndvi_col.filterDate(init, ends).map(p.d[p.index])
+
+        if p.key == 'percentile':
+            return filtered.reduce(ee.Reducer.percentile([p.percentile]))
+        # max / min / median / mean / sum -> ee.ImageCollection has these methods
+        return getattr(filtered, p.key)()
+
+    def _build_year_collection(self, year: int) -> ee.ImageCollection:
+        """
+        Build the intra-annual composite collection for a single year.
+
+        Each image has two bands: ``nd`` (the index value) and ``doy`` (the
+        period mid day-of-year, masked exactly like ``nd`` so the two stay
+        aligned when converted to per-pixel arrays).
+        """
+        p = self.processor
+        images = []
+        # Fully-masked placeholder used when a period has no images (0-band composite)
+        empty = ee.Image.constant(0).toFloat().rename('nd').updateMask(ee.Image.constant(0))
+        for period_idx in range(p.periods):
+            raw = ee.Image(self._period_composite_light(year, period_idx))
+            # Guard against empty periods: only select/rename when bands exist
+            composite = ee.Image(ee.Algorithms.If(
+                raw.bandNames().size().gt(0),
+                raw.select([0]).rename('nd').toFloat(),
+                empty
+            ))
+            doy = self._period_mid_doy(period_idx, year)
+            doy_band = ee.Image.constant(doy).toFloat().rename('doy').updateMask(composite.mask())
+            millis = ee.Date.fromYMD(year, 1, 1).advance(doy - 1, 'day').millis()
+            img = composite.addBands(doy_band).set('system:time_start', millis)
+            images.append(img)
+        # Sorting by time keeps array element order deterministic and chronological
+        return ee.ImageCollection.fromImages(images).sort('system:time_start')
+
+    def _phenology_for_year(self, year, method, threshold_percentile,
+                            adaptive_threshold, n_harmonics, harmonic_step,
+                            min_observations) -> ee.Image:
+        """Dispatch to the requested method and apply the data-availability mask."""
+        year_col = self._build_year_collection(year)
+        valid_count = year_col.select('nd').count()
+
+        if method == 'threshold':
+            metrics = self._extract_threshold_ee(
+                year_col, threshold_percentile, adaptive_threshold
+            )
+        elif method == 'derivative':
+            metrics = self._extract_derivative_ee(year_col)
+        else:  # harmonic
+            rec_col = self._reconstruct_harmonic_collection(
+                year_col, n_harmonics, harmonic_step
+            )
+            metrics = self._extract_threshold_ee(
+                rec_col, threshold_percentile, adaptive_threshold
+            )
+
+        # Mask pixels that did not have enough real observations this year
+        return metrics.updateMask(valid_count.gte(min_observations)).toFloat()
+
+    def _extract_threshold_ee(self, col, threshold_percentile,
+                              adaptive_threshold) -> ee.Image:
+        """
+        Amplitude-threshold phenology, server-side.
+
+        Works on any (``nd``, ``doy``) collection, including the smooth curve
+        reconstructed by the harmonic method.
+        """
+        nd = col.select('nd')
+        doy = col.select('doy')
+
+        baseline = nd.min()
+        peak = nd.max()
+        amplitude = peak.subtract(baseline)
+
+        if adaptive_threshold:
+            sos_pct = max(threshold_percentile * 0.7, 20)
+            eos_pct = min(threshold_percentile * 1.2, 70)
+        else:
+            sos_pct = eos_pct = threshold_percentile
+
+        sos_threshold = baseline.add(amplitude.multiply(sos_pct / 100.0))
+        eos_threshold = baseline.add(amplitude.multiply(eos_pct / 100.0))
+
+        # Per-pixel 1-D arrays of values and their day-of-year (aligned, chronological).
+        # ImageCollection.toArray() yields a 2-D [nImages, nBands] array; arrayProject
+        # collapses the single-band axis so we work with clean 1-D arrays.
+        nd_arr = nd.toArray().arrayProject([0])
+        doy_arr = doy.toArray().arrayProject([0])
+
+        # POS: day-of-year of the seasonal maximum
+        pos_idx = nd_arr.arrayArgmax().arrayFlatten([['idx']]).toInt()
+        pos = doy_arr.arrayGet(pos_idx).rename('pos')
+
+        # SOS: first day-of-year above the SOS threshold
+        doy_above_sos = doy_arr.arrayMask(nd_arr.gte(sos_threshold))
+        sos = doy_above_sos.arrayReduce(ee.Reducer.min(), [0]).arrayFlatten([['sos']])
+
+        # EOS: last day-of-year above the EOS threshold
+        doy_above_eos = doy_arr.arrayMask(nd_arr.gte(eos_threshold))
+        eos = doy_above_eos.arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['eos']])
+
+        return self._assemble_metrics(sos, pos, eos, baseline, peak, amplitude)
+
+    def _extract_derivative_ee(self, col) -> ee.Image:
+        """
+        Rate-of-change phenology, server-side.
+
+        SOS is the mid-point day-of-year of the steepest increase, EOS the
+        steepest decrease, POS the day-of-year of the maximum value.
+        """
+        nd = col.select('nd')
+        doy = col.select('doy')
+
+        # Collapse the single-band axis to obtain clean 1-D per-pixel arrays
+        nd_arr = nd.toArray().arrayProject([0])
+        doy_arr = doy.toArray().arrayProject([0])
+
+        # Consecutive differences (works for variable per-pixel array lengths)
+        nd0 = nd_arr.arraySlice(0, 0, -1)
+        nd1 = nd_arr.arraySlice(0, 1)
+        doy0 = doy_arr.arraySlice(0, 0, -1)
+        doy1 = doy_arr.arraySlice(0, 1)
+
+        deriv = nd1.subtract(nd0).divide(doy1.subtract(doy0))
+        mid_doy = doy0.add(doy1).divide(2)
+
+        sos_idx = deriv.arrayArgmax().arrayFlatten([['idx']]).toInt()
+        sos = mid_doy.arrayGet(sos_idx).rename('sos')
+        eos_idx = deriv.multiply(-1).arrayArgmax().arrayFlatten([['idx']]).toInt()
+        eos = mid_doy.arrayGet(eos_idx).rename('eos')
+        pos_idx = nd_arr.arrayArgmax().arrayFlatten([['idx']]).toInt()
+        pos = doy_arr.arrayGet(pos_idx).rename('pos')
+
+        baseline = nd_arr.arrayReduce(ee.Reducer.min(), [0]).arrayFlatten([['baseline']])
+        peak = nd_arr.arrayReduce(ee.Reducer.max(), [0]).arrayFlatten([['peak']])
+        amplitude = peak.subtract(baseline)
+
+        return self._assemble_metrics(sos, pos, eos, baseline, peak, amplitude)
+
+    def _reconstruct_harmonic_collection(self, col, n_harmonics,
+                                         harmonic_step) -> ee.ImageCollection:
+        """
+        Fit a per-pixel harmonic (Fourier) model and rebuild a smooth curve.
+
+        Returns a dense (``nd``, ``doy``) collection sampled every
+        ``harmonic_step`` days, on which the threshold extractor is then run.
+        This replaces the client-side double-logistic fit with an Earth
+        Engine-native, gap-resilient alternative.
+        """
+        omega = 2.0 * np.pi
+
+        predictors = ['constant']
+        for h in range(1, n_harmonics + 1):
+            predictors += [f'cos{h}', f'sin{h}']
+
+        def add_harmonics(img):
+            t = img.select('doy').divide(365.25)
+            out = ee.Image.constant(1).toFloat().rename('constant')
+            for h in range(1, n_harmonics + 1):
+                out = out.addBands(t.multiply(omega * h).cos().rename(f'cos{h}'))
+                out = out.addBands(t.multiply(omega * h).sin().rename(f'sin{h}'))
+            out = out.addBands(img.select('nd'))
+            return out.updateMask(img.select('nd').mask())
+
+        harm_col = col.map(add_harmonics)
+
+        fit = harm_col.select(predictors + ['nd']).reduce(
+            ee.Reducer.linearRegression(numX=len(predictors), numY=1)
+        )
+        coeffs = (fit.select('coefficients')
+                  .arrayProject([0])
+                  .arrayFlatten([predictors]))
+
+        # Reconstruct the smooth curve across the observed day-of-year span
+        doy_values = [self._period_mid_doy(i, self.processor.start_year)
+                      for i in range(self.processor.periods)]
+        doy_min, doy_max = min(doy_values), max(doy_values)
+
+        rec_images = []
+        for d in np.arange(doy_min, doy_max + 1, harmonic_step):
+            t = float(d) / 365.25
+            rec = coeffs.select('constant')
+            for h in range(1, n_harmonics + 1):
+                rec = rec.add(coeffs.select(f'cos{h}').multiply(float(np.cos(omega * h * t))))
+                rec = rec.add(coeffs.select(f'sin{h}').multiply(float(np.sin(omega * h * t))))
+            rec = rec.toFloat().rename('nd')
+            doy_band = ee.Image.constant(float(d)).toFloat().rename('doy')
+            rec_images.append(rec.addBands(doy_band))
+
+        return ee.ImageCollection.fromImages(rec_images)
+
+    def _assemble_metrics(self, sos, pos, eos, baseline, peak, amplitude) -> ee.Image:
+        """Build the final multi-band metrics image (shared by all methods)."""
+        los = eos.subtract(sos).rename('los')
+        growth_rate = amplitude.divide(pos.subtract(sos)).rename('growth_rate')
+        senescence_rate = amplitude.divide(eos.subtract(pos)).multiply(-1).rename('senescence_rate')
+
+        metrics = (sos.rename('sos')
+                   .addBands(pos.rename('pos'))
+                   .addBands(eos.rename('eos'))
+                   .addBands(los)
+                   .addBands(amplitude.rename('amplitude'))
+                   .addBands(peak.rename('peak_value'))
+                   .addBands(baseline.rename('baseline'))
+                   .addBands(growth_rate)
+                   .addBands(senescence_rate))
+
+        # Drop flat pixels with no meaningful seasonal cycle
+        return metrics.updateMask(amplitude.gte(0.01)).toFloat()

@@ -80,6 +80,12 @@ Thumbs.db
 # AI assistant files
 CLAUDE.md
 
+# Exported rasters / phenology test outputs
+examples_notebooks/*.tif
+
+# Notebook backups
+*.ipynb.bak
+
 # Ejemplos:
 # docs/**/*.tif
 # data/**/*.tif

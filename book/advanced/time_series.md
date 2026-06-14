@@ -2,7 +2,7 @@
 
 `TimeSeriesAnalyzer` turns the period-by-period composites produced by `NdviSeasonality` into a full time-series analysis pipeline: point or polygon extraction, trend detection, phenology metrics, and diagnostic dashboards. Everything runs as a thin Python layer on top of GEE — extraction uses `reduceRegion` lazily, and only the resulting table is brought back to the client for statistics and plotting.
 
-For **per-pixel** trend maps over an ROI (rather than a single point or polygon), ndvi2gif also ships `SpatialTrendAnalyzer`, covered at the end of this page.
+For **per-pixel** maps over an ROI (rather than a single point or polygon), ndvi2gif also ships `SpatialTrendAnalyzer` (trend maps) and `SpatialPhenologyAnalyzer` (phenology rasters), both covered at the end of this page.
 
 ---
 
@@ -212,6 +212,106 @@ This runs entirely on GEE servers — no client-side loop over pixels, and it sc
 
 ---
 
+## 6. Per-pixel spatial phenology with `SpatialPhenologyAnalyzer`
+
+`TimeSeriesAnalyzer.extract_phenology_metrics()` gives you SOS/POS/EOS for **one point** (it downloads the series with `getInfo` and runs SciPy on the client). When you want **phenology rasters** — a per-pixel map of SOS, POS, EOS and derived metrics across the whole ROI — use `SpatialPhenologyAnalyzer`, which computes the same family of metrics entirely server-side.
+
+```python
+from ndvi2gif import NdviSeasonality, SpatialPhenologyAnalyzer
+
+ns = NdviSeasonality(
+    roi=roi, sat='S2', index='ndvi',
+    start_year=2019, end_year=2022,
+    periods=12,            # monthly — enough intra-annual resolution
+    key='median',          # per-period reducer (median/max/percentile/...)
+)
+
+pheno = SpatialPhenologyAnalyzer(ns)
+```
+
+### Two outputs
+
+```python
+# Option A — one phenology image per year (ee.ImageCollection, each tagged 'year')
+yearly = pheno.extract_phenology_rasters(method='harmonic')
+
+# Option B — a single multi-year aggregate (ee.Image), the typical phenology
+summary = pheno.phenology_summary(method='harmonic', reducer='median')
+```
+
+Both return images (or collections) with nine bands:
+
+| Band | Units | Meaning |
+|---|---|---|
+| `sos`, `pos`, `eos` | day of year | Start / Peak / End of Season |
+| `los` | days | Length of Season (`eos − sos`) |
+| `amplitude` | index value | `peak − baseline` |
+| `peak_value`, `baseline` | index value | Seasonal max / min |
+| `growth_rate`, `senescence_rate` | value/day | Approximate green-up / senescence rates |
+
+Option A is for studying **how phenology shifts over time** (e.g. an advancing SOS year after year — feed `yearly` to `SpatialTrendAnalyzer` for a trend map of the timing). Option B is a clean, stable **reference phenology map** of the area.
+
+### Three server-side methods
+
+| Method | Definition of SOS/EOS | Notes |
+|---|---|---|
+| `threshold` | First / last day-of-year above an amplitude fraction of the seasonal curve | Fast and robust; mirrors the point-based threshold method |
+| `derivative` | Day of the steepest increase / decrease between consecutive composites | Captures fast green-up; sensitive to temporal resolution |
+| `harmonic` | Per-pixel **Fourier** regression → smooth reconstructed curve → threshold extraction | Earth Engine-native replacement for the double-logistic fit |
+
+The `harmonic` method is the spatial counterpart of the client-side `logistic` method. The double-logistic fit relies on `scipy.optimize.curve_fit`, which cannot run on GEE; harmonic regression (`ee.Reducer.linearRegression` on sine/cosine terms) gives an equivalent smooth, gap-resilient curve that *can*. SOS/POS/EOS are then read off the reconstructed curve.
+
+```python
+summary = pheno.phenology_summary(
+    method='harmonic',
+    reducer='median',
+    threshold_percentile=50,    # amplitude fraction defining the season
+    adaptive_threshold=True,    # lower threshold for SOS, higher for EOS
+    n_harmonics=2,              # number of Fourier harmonics
+    harmonic_step=10,          # day step when rebuilding the smooth curve
+    min_observations=5,        # min valid composites per pixel and year
+)
+```
+
+### Visualising the rasters
+
+```python
+import geemap
+Map = geemap.Map()
+Map.centerObject(ns.roi, zoom=11)
+
+doy_vis = {'min': 1, 'max': 365,
+           'palette': ['#2c7bb6', '#ffffbf', '#d7191c']}
+
+Map.addLayer(summary.select('sos'), doy_vis, 'SOS (day of year)')
+Map.addLayer(summary.select('eos'), doy_vis, 'EOS (day of year)', False)
+Map.addLayer(summary.select('los'),
+             {'min': 30, 'max': 250, 'palette': ['white', 'green']},
+             'LOS (days)', False)
+Map
+```
+
+### Exporting
+
+Both entry points accept `export=True` (one GeoTIFF per year for the collection, one file for the summary) with two targets:
+
+```python
+# Local GeoTIFF — band names (sos, pos, eos, ...) are embedded with rasterio
+# if installed, so QGIS shows them instead of "Band 1, 2, 3".
+pheno.phenology_summary(method='harmonic', export=True,
+                        export_target='local', scale=20)
+
+# Batch export to Google Drive — Earth Engine preserves band names natively,
+# and the memory budget is far larger (best for big ROIs / fine scales).
+pheno.phenology_summary(method='harmonic', export=True,
+                        export_target='drive',
+                        drive_folder='ndvi2gif_phenology', scale=20)
+```
+
+> **Interactive vs batch.** Map tiles are computed lazily, so `addLayer` is always fine. A `reduceRegion(...).getInfo()` over the whole ROI at fine scale, however, forces the full graph at once and can raise *"User memory limit exceeded"* — especially for `harmonic`. Mitigate with `tileScale=4` (or higher) and a coarser `scale` for quick numeric checks, and use `export=True` (batch) for the full-resolution product, which has a far larger memory budget.
+
+---
+
 ## Tips and caveats
 
 ### `extract_time_series()` is lazy-per-period but eager-per-call
@@ -265,9 +365,18 @@ Points are more sensitive to sub-pixel registration; buffered polygons (≥ 3×3
 |---|---|---|
 | `calculate_pixel_trends(method, min_observations, scale, export)` | `ee.Image` | Per-pixel trend map (slope / tau / p-value) |
 
+### `SpatialPhenologyAnalyzer(ndvi_seasonality_instance)`
+
+| Method | Returns | Description |
+|---|---|---|
+| `extract_phenology_rasters(method, threshold_percentile, adaptive_threshold, n_harmonics, harmonic_step, min_observations, export, export_target, drive_folder, crs, scale)` | `ee.ImageCollection` | One per-pixel phenology image per year |
+| `phenology_summary(method, reducer, ...)` | `ee.Image` | Multi-year aggregate phenology map |
+
+**Export targets** (`export_target`): `local` (GeoTIFF download, band names via rasterio) or `drive` (batch task, band names preserved by Earth Engine).
+
 **Supported trend methods:** `linear`, `sen`, `mann_kendall` (and `all` for `TimeSeriesAnalyzer.analyze_trend`)
 
-**Supported phenology methods:** `threshold`, `derivative`, `logistic`
+**Supported phenology methods:** `threshold`, `derivative`, `logistic` (point-based, `TimeSeriesAnalyzer`); `threshold`, `derivative`, `harmonic` (per-pixel, `SpatialPhenologyAnalyzer`)
 
 ---
 
@@ -284,3 +393,5 @@ Savitzky, A., Golay, M.J.E. (1964). Smoothing and differentiation of data by sim
 Jönsson, P., Eklundh, L. (2002). Seasonality extraction by function fitting to time-series of satellite sensor data. *IEEE Transactions on Geoscience and Remote Sensing*, 40(8), 1824–1832.
 
 Zhang, X., Friedl, M.A., Schaaf, C.B., Strahler, A.H., Hodges, J.C.F., Gao, F., Reed, B.C., Huete, A. (2003). Monitoring vegetation phenology using MODIS. *Remote Sensing of Environment*, 84(3), 471–475.
+
+Jakubauskas, M.E., Legates, D.R., Kastens, J.H. (2001). Harmonic analysis of time-series AVHRR NDVI data. *Photogrammetric Engineering & Remote Sensing*, 67(4), 461–470.

@@ -1408,7 +1408,8 @@ class NdviSeasonality:
         
         # Conditional configuration based on time period
         if self.start_year >= 2003:  # Period after Aqua availability
-            print("Using MODIS Terra + Aqua LST (maximum coverage)")
+            if self.sat == 'MODIS':
+                print("Using MODIS Terra + Aqua LST (maximum coverage)")
             
             # Aqua reflectance
             MYD09A1 = ee.ImageCollection("MODIS/061/MYD09A1").select(
@@ -1424,7 +1425,8 @@ class NdviSeasonality:
             MODIS_LST = MOD11A1.merge(MYD11A1)
             
         else:  # Period before Aqua (2000-2002)
-            print("Using MODIS Terra LST only (Aqua not available before July 2002)")
+            if self.sat == 'MODIS':
+                print("Using MODIS Terra LST only (Aqua not available before July 2002)")
             
             # Only Terra
             MODIS_reflectance = MOD09A1
@@ -1461,23 +1463,27 @@ class NdviSeasonality:
         # Apply orbit filter
         if self.orbit == 'ASCENDING':
             s1 = s1.filter(ee.Filter.eq('orbitProperties_pass', 'ASCENDING'))
-            print("Using Sentinel-1 ascending orbits only.")
+            if self.sat == 'S1':
+                print("Using Sentinel-1 ascending orbits only.")
         elif self.orbit == 'DESCENDING':
             s1 = s1.filter(ee.Filter.eq('orbitProperties_pass', 'DESCENDING'))
-            print("Using Sentinel-1 descending orbits only.")
+            if self.sat == 'S1':
+                print("Using Sentinel-1 descending orbits only.")
         else:
-            print("Using all Sentinel-1 orbits (ascending + descending).")
+            if self.sat == 'S1':
+                print("Using all Sentinel-1 orbits (ascending + descending).")
 
         # Filter by ROI
         s1 = s1.filterBounds(self.roi)
 
         # Define preprocessing function
         if hasattr(self, 'use_sar_ard') and self.use_sar_ard:
-            print(f"Applying S1 ARD preprocessing:")
-            print(f"  - Speckle filter: {self.sar_speckle_filter}")
-            print(f"  - Terrain correction: {self.sar_terrain_correction}")
-            if self.sar_terrain_correction:
-                print(f"  - Terrain model: {self.sar_terrain_model}")
+            if self.sat == 'S1':
+                print(f"Applying S1 ARD preprocessing:")
+                print(f"  - Speckle filter: {self.sar_speckle_filter}")
+                print(f"  - Terrain correction: {self.sar_terrain_correction}")
+                if self.sar_terrain_correction:
+                    print(f"  - Terrain model: {self.sar_terrain_model}")
             
             # Create ARD processor
             ard_processor = S1ARDProcessor(
@@ -1494,8 +1500,9 @@ class NdviSeasonality:
 
             selected_bands = ['VV', 'VH', 'angle']
         else:
-            print("Using basic S1 preprocessing (focal_median filter only)")
-            
+            if self.sat == 'S1':
+                print("Using basic S1 preprocessing (focal_median filter only)")
+
             def apply_speckle_filter(image):
                 filtered = image.focal_median(radius=1, kernelType='square', units='pixels')
                 return filtered.copyProperties(image, ['system:time_start', 'system:time_end'])

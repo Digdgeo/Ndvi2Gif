@@ -143,9 +143,11 @@ print("✓ Analysis complete! Check your GIF file.")
 
 - `'S2'` - Sentinel-2 (10m, 5-day revisit)
 - `'S1'` - Sentinel-1 SAR (10m, 6-12 day revisit)
-- `'L8'` - Landsat 8 (30m, 16-day revisit)
-- `'L9'` - Landsat 9 (30m, 16-day revisit)
+- `'Landsat'` - Landsat 4-9 merged (30m, 16-day revisit)
 - `'MODIS'` - MODIS (500m, daily)
+- `'S3'` - Sentinel-3 OLCI (300m)
+- `'ERA5'` - ERA5-Land climate reanalysis (~11km, daily)
+- `'CHIRPS'` - CHIRPS precipitation (~5.5km, daily)
 
 ### `periods` - Temporal Resolution
 
@@ -167,7 +169,7 @@ print("✓ Analysis complete! Check your GIF file.")
 - `'evi'` - Enhanced vegetation index
 - `'ndwi'` - Water content
 - `'ndmi'` - Moisture stress
-- Many more! See [Indices Overview](../tutorials/indices_overview.md)
+- Many more! See [Indices Reference](../reference/indices.md)
 
 ## Export Options
 
@@ -248,8 +250,7 @@ Now that you understand the basics, explore:
 
 - [ROI Options](roi_options.md) - Learn all the ways to define your study area
 - [Multi-Sensor Comparison](../tutorials/multi_sensor.md) - Compare different satellite sensors
-- [Indices Overview](../tutorials/indices_overview.md) - Explore 40+ available indices
-- [Statistical Methods](../tutorials/statistical_methods.md) - Deep dive into temporal aggregation
+- [Indices Reference](../reference/indices.md) - Explore 40+ available indices
 
 ## Tips & Tricks
 

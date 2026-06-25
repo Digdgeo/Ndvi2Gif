@@ -736,7 +736,12 @@ class NdviSeasonality:
         self.periods = periods
         self.start_year = start_year
         self.end_year = end_year
-        self.key = key if key in ['max', 'min', 'median', 'percentile', 'mean', 'sum'] else 'max'
+        valid_keys = ['max', 'min', 'median', 'percentile', 'mean', 'sum']
+        if key not in valid_keys:
+            raise ValueError(
+                f"Statistic '{key}' is not supported. Available statistics (key) are: {valid_keys}"
+            )
+        self.key = key
         self.percentile = percentile
         self.imagelist = []
         self.index = index

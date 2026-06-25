@@ -19,14 +19,8 @@ parts:
         title: "1. Basic NDVI Analysis"
       - file: tutorials/multi_sensor
         title: "2. Multi-Sensor Comparison"
-      - file: tutorials/temporal_composites
-        title: "3. Temporal Composites"
-      - file: tutorials/statistical_methods
-        title: "4. Statistical Methods"
-      - file: tutorials/indices_overview
-        title: "5. Vegetation & Environmental Indices"
       - file: tutorials/climate_analysis
-        title: "6. Climate Data Analysis (ERA5 & CHIRPS)"
+        title: "3. Climate Data Analysis (ERA5 & CHIRPS)"
 
   - caption: Advanced Features
     chapters:
@@ -43,17 +37,6 @@ parts:
       - file: advanced/export_options
         title: "Export & Batch Processing"
 
-  - caption: Use Cases
-    chapters:
-      - file: use_cases/agriculture
-        title: "Agricultural Monitoring"
-      - file: use_cases/wetlands
-        title: "Wetland Dynamics"
-      - file: use_cases/drought
-        title: "Drought Assessment"
-      - file: use_cases/phenology
-        title: "Vegetation Phenology"
-
   - caption: Notebooks
     chapters:
       - file: notebooks/01_basic_usage
@@ -62,8 +45,6 @@ parts:
         title: "Land Cover Classification"
       - file: notebooks/03_time_series_analysis
         title: "Time Series Analysis"
-      - file: notebooks/04_sar_vegetation
-        title: "SAR Vegetation"
       - file: notebooks/05_hydroperiod
         title: "Hydroperiod Analysis"
 

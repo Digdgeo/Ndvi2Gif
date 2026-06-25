@@ -906,4 +906,4 @@ soil = NdviSeasonality(
 
 - [Datasets Reference](datasets.md) - Detailed platform documentation
 - [API Reference](api.md) - Complete class documentation
-- [Tutorials](../tutorials/indices_overview.md) - Step-by-step index usage
+- [Tutorials](../tutorials/basic_ndvi.md) - Step-by-step index usage

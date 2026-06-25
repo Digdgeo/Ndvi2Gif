@@ -386,7 +386,6 @@ for i, image in enumerate(temp.imagelist[0]):
 ---
 
 ```{seealso}
-- {doc}`time_series` - Advanced time series analysis
-- {doc}`statistical_methods` - Statistical reducers explained
+- {doc}`../advanced/time_series` - Advanced time series analysis
 - {doc}`../reference/datasets` - Complete dataset documentation
 ```

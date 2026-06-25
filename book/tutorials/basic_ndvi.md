@@ -378,6 +378,6 @@ composite_masked = composite.updateMask(water.lt(50))  # Keep only low water occ
 ## Next Steps
 
 - [Multi-Sensor Comparison](multi_sensor.md) - Compare Sentinel-2 vs Landsat NDVI
-- [Indices Overview](indices_overview.md) - Explore other vegetation indices
+- [Indices Reference](../reference/indices.md) - Explore other vegetation indices
 - [Time Series Analysis](../advanced/time_series.md) - Detect trends and phenology
 - [Classification](../advanced/classification.md) - Use NDVI for land cover mapping

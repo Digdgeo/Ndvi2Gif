@@ -43,7 +43,7 @@ s2_ndvi = NdviSeasonality(
 # Landsat 8
 l8_ndvi = NdviSeasonality(
     roi=roi,
-    sat='L8',
+    sat='Landsat',
     periods=12,
     start_year=2023,
     end_year=2024,

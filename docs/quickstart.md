@@ -34,7 +34,7 @@ proc = NdviSeasonality(
     start_year=2020,
     end_year=2023,      # exclusive -> 2020–2022
     periods=4,
-    sat="L8",
+    sat="Landsat",
     index="ndvi",
     stats=["max"]
 )

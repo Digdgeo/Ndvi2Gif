@@ -153,7 +153,7 @@ roi = '198/034'  # Path 198, Row 034
 
 ndvi = NdviSeasonality(
     roi=roi,
-    sat='L8',  # Works best with Landsat
+    sat='Landsat',  # Works best with Landsat
     periods=12,
     start_year=2023,
     end_year=2024

@@ -41,6 +41,9 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r book/requirements.txt
+          # Install the checked-out source so the API reference (autodoc)
+          # always documents this repo, not the last PyPI release.
+          pip install .
 
       - name: Build Jupyter Book
         run: |

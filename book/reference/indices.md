@@ -1,6 +1,14 @@
 # Indices & Variables Reference
 
-Complete catalog of 88 variables supported by ndvi2gif v1.0.0, organized by category and satellite platform.
+Complete catalog of the variables supported by ndvi2gif, organized by category and satellite platform.
+
+```{note}
+Many of the reference DOIs listed for the spectral indices below were sourced from the
+[**Awesome Spectral Indices**](https://github.com/awesome-spectral-indices/awesome-spectral-indices)
+catalogue (Montero *et al.*, *A standardized catalogue of spectral indices to advance the use of
+remote sensing in Earth system research*, **Scientific Data**, 2023). We gratefully acknowledge this
+open community resource.
+```
 
 ## Overview by Category
 
@@ -37,7 +45,7 @@ index='ndvi'
 - 0.5 - 0.8: Dense vegetation, crops
 - > 0.8: Very dense vegetation, forests
 
-**Reference**: Rouse et al. (1974)
+**Reference**: [Rouse et al. (1974)](https://ntrs.nasa.gov/citations/19740022614)
 
 ---
 
@@ -53,7 +61,7 @@ index='evi'
 
 **Advantages**: Better in high biomass areas, reduced soil brightness influence
 
-**Reference**: Huete et al. (2002)
+**Reference**: [Huete et al. (2002)](https://doi.org/10.1016/S0034-4257(96)00112-5)
 
 ---
 
@@ -69,7 +77,7 @@ index='savi'
 
 **Use Cases**: Arid/semi-arid regions, early crop growth
 
-**Reference**: Huete (1988)
+**Reference**: [Huete (1988)](https://doi.org/10.1016/0034-4257(88)90106-X)
 
 ---
 
@@ -85,6 +93,8 @@ index='gndvi'
 
 **Use Cases**: Nitrogen assessment, crop health monitoring
 
+**Reference**: [Original reference](https://doi.org/10.1016/S0034-4257(96)00072-7)
+
 ---
 
 #### NDMI - Normalized Difference Moisture Index
@@ -99,6 +109,8 @@ index='ndmi'
 
 **Use Cases**: Irrigation management, drought stress detection, fire risk
 
+**Reference**: [Original reference](https://doi.org/10.1016/S0034-4257(01)00318-2)
+
 ---
 
 #### EVI2 - Two-Band Enhanced Vegetation Index
@@ -110,6 +122,8 @@ index='evi2'
 **Description**: EVI without blue band requirement. Compatible with more sensors.
 
 **Advantages**: Works with Landsat TM/ETM+ without blue band
+
+**Reference**: [Original reference](https://doi.org/10.1016/j.rse.2008.06.006)
 
 ---
 
@@ -123,7 +137,7 @@ index='arvi'
 
 **Use Cases**: Areas with high atmospheric contamination
 
-**Reference**: Kaufman & Tanré (1992)
+**Reference**: [Kaufman & Tanré (1992)](https://doi.org/10.1109/36.134076)
 
 ---
 
@@ -144,7 +158,7 @@ index='ndwi'
 - 0 - 0.3: Mixed pixels
 - < 0: Land
 
-**Reference**: McFeeters (1996)
+**Reference**: [McFeeters (1996)](https://doi.org/10.1080/01431169608948714)
 
 ---
 
@@ -158,7 +172,7 @@ index='mndwi'
 
 **Advantages**: Better separation of water from urban areas
 
-**Reference**: Xu (2006)
+**Reference**: [Xu (2006)](https://doi.org/10.1080/01431160600589179)
 
 ---
 
@@ -178,6 +192,8 @@ index='lswi'
 
 **Description**: Detects surface water and soil moisture. Similar to NDMI.
 
+**Reference**: [Original reference](https://doi.org/10.1016/j.rse.2003.11.008)
+
 ---
 
 #### AWEInsh - Automated Water Extraction Index (no shadow)
@@ -190,7 +206,7 @@ index='aweinsh'
 
 **Advantages**: Robust in urban and mountainous areas
 
-**Reference**: Feyisa et al. (2014)
+**Reference**: [Feyisa et al. (2014)](https://doi.org/10.1016/j.rse.2013.08.029)
 
 ---
 
@@ -204,6 +220,8 @@ index='osavi'
 
 **Description**: Optimized L parameter for SAVI. Works across wider vegetation range.
 
+**Reference**: [Original reference](https://doi.org/10.1016/0034-4257(95)00186-7)
+
 ---
 
 #### MSAVI - Modified Soil Adjusted Vegetation Index
@@ -214,6 +232,8 @@ index='msavi'
 
 **Description**: Self-adjusting L parameter based on NIR-Red relationship.
 
+**Reference**: [Original reference](https://doi.org/10.1016/0034-4257(94)90134-1)
+
 ---
 
 #### VARI - Visible Atmospherically Resistant Index
@@ -223,6 +243,8 @@ index='vari'
 **Formula**: `(Green - Red) / (Green + Red - Blue)`
 
 **Description**: Uses only visible bands. Good for RGB sensors without NIR.
+
+**Reference**: [Original reference](https://doi.org/10.1016/S0034-4257(01)00289-9)
 
 ---
 
@@ -236,6 +258,8 @@ index='gci'
 
 **Use Cases**: Nitrogen status, crop health assessment
 
+**Reference**: [Original reference](https://doi.org/10.1078/0176-1617-00887)
+
 ---
 
 #### SIPI - Structure Insensitive Pigment Index
@@ -245,6 +269,8 @@ index='sipi'
 **Formula**: `(NIR - Blue) / (NIR - Red)`
 
 **Description**: Ratio of carotenoids to chlorophyll. Stress indicator.
+
+**Reference**: [Original reference](https://eurekamag.com/research/009/395/009395053.php)
 
 ---
 
@@ -258,6 +284,8 @@ index='nbr'
 
 **Use Cases**: Post-fire assessment, burn scar mapping
 
+**Reference**: [Original reference](https://doi.org/10.3133/ofr0211)
+
 ---
 
 #### BAIS2 - Burned Area Index for Sentinel-2
@@ -270,6 +298,8 @@ index='bais2'
 
 **Platform**: Sentinel-2 only (requires specific bands)
 
+**Reference**: [Original reference](https://doi.org/10.3390/ecrs-2-05177)
+
 ---
 
 #### BSI - Bare Soil Index
@@ -279,6 +309,8 @@ index='bsi'
 **Formula**: `((SWIR1 + Red) - (NIR + Blue)) / ((SWIR1 + Red) + (NIR + Blue))`
 
 **Description**: Identifies bare soil and unvegetated areas.
+
+**Reference**: [Original reference](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.8749&rep=rep1&type=pdf)
 
 ---
 
@@ -292,6 +324,8 @@ index='ndsi'
 
 **Interpretation**: > 0.4 typically indicates snow
 
+**Reference**: [Original reference](https://doi.org/10.1109/IGARSS.1994.399618)
+
 ---
 
 #### CIG - Chlorophyll Index Green
@@ -301,6 +335,8 @@ index='cig'
 **Formula**: `(NIR / Green) - 1`
 
 **Description**: Chlorophyll content using green band. Similar to GCI.
+
+**Reference**: [Original reference](https://doi.org/10.1078/0176-1617-00887)
 
 ---
 
@@ -328,6 +364,8 @@ index='mcari'  # Sentinel-2 only
 
 **Description**: Chlorophyll content with reduced soil/atmospheric effects.
 
+**Reference**: [Original reference](http://dx.doi.org/10.1016/S0034-4257(00)00113-9)
+
 ---
 
 #### CIre - Chlorophyll Index Red Edge
@@ -337,6 +375,8 @@ index='cire'  # Sentinel-2 only
 **Formula**: `(NIR / RedEdge1) - 1`
 
 **Description**: Chlorophyll-sensitive index using red edge.
+
+**Reference**: [Original reference](https://doi.org/10.1078/0176-1617-00887)
 
 ---
 
@@ -348,6 +388,8 @@ index='ireci'  # Sentinel-2 only
 
 **Description**: ESA's chlorophyll index for Sentinel-2.
 
+**Reference**: [Original reference](https://doi.org/10.1016/j.isprsjprs.2013.04.007)
+
 ---
 
 #### RECI - Red Edge Chlorophyll Index
@@ -357,6 +399,8 @@ index='reci'  # Sentinel-2 only
 **Formula**: `(NIR / RedEdge1) - 1`
 
 **Description**: Alternative formulation for chlorophyll content.
+
+**Reference**: [Original reference](https://doi.org/10.1078/0176-1617-00887)
 
 ---
 
@@ -369,6 +413,8 @@ index='s2rep'  # Sentinel-2 only
 **Description**: Estimates position of red edge inflection point (nm).
 
 **Use Cases**: Nitrogen status, crop health
+
+**Reference**: [Original reference](https://doi.org/10.1016/j.isprsjprs.2013.04.007)
 
 ---
 
@@ -390,6 +436,8 @@ index='mtci'  # Sentinel-2 compatible
 
 **Description**: Chlorophyll concentration in dense canopies.
 
+**Reference**: [Original reference](https://doi.org/10.1080/0143116042000274015)
+
 ---
 
 #### MSAVI_re - Modified SAVI with Red Edge
@@ -408,6 +456,8 @@ index='psri'  # Sentinel-2 only
 
 **Description**: Detects plant senescence and maturity stages.
 
+**Reference**: [Original reference](https://doi.org/10.1034/j.1399-3054.1999.106119.x)
+
 ---
 
 ### Water Quality Indices (6)
@@ -419,6 +469,8 @@ index='ndti'
 **Formula**: `(Red - Green) / (Red + Green)`
 
 **Description**: Estimates water turbidity and suspended sediment.
+
+**Reference**: [Original reference](https://doi.org/10.1016/j.rse.2006.07.012)
 
 ---
 
@@ -451,6 +503,8 @@ index='ndci'
 **Description**: Chlorophyll concentration in turbid waters.
 
 **Platform**: Sentinel-2 (requires red edge)
+
+**Reference**: [Original reference](https://doi.org/10.1016/j.rse.2011.10.016)
 
 ---
 
@@ -493,6 +547,8 @@ sat='S1', index='rvi'
 - 0.5 - 1.5: Sparse vegetation
 - > 1.5: Dense vegetation
 
+**Reference**: [Original reference](https://doi.org/10.2134/agronj1968.00021962006000060016x)
+
 ---
 
 ### DPSVI - Dual Polarization SAR Vegetation Index
@@ -512,6 +568,8 @@ sat='S1', index='rfdi'
 **Formula**: `(VV - VH) / (VV + VH)`
 
 **Description**: Detects forest degradation and deforestation.
+
+**Reference**: [Original reference](https://doi.org/10.5194/bg-9-179-2012)
 
 ---
 

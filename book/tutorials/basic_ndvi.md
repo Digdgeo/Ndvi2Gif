@@ -55,20 +55,21 @@ ndvi = NdviSeasonality(
     start_year=2023,
     end_year=2024,
     index='ndvi',
-    key='median',          # Robust to clouds
-    mask_clouds=True       # Remove cloudy pixels
+    key='median'           # Robust to clouds (cloud filtering is on by default)
 )
 ```
 
 ### Step 4: Generate Composite
 
 ```python
-# Get annual composite (all 12 months)
-composite_2023 = ndvi.get_year_composite(year=2023)
+# get_year_composite() returns an ImageCollection (one image per year)
+composites = ndvi.get_year_composite()
+composite_2023 = composites.first()
 
 # Check band names
 print("Bands:", composite_2023.bandNames().getInfo())
-# Output: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+# Output: ['january', 'february', 'march', 'april', 'may', 'june',
+#          'july', 'august', 'september', 'october', 'november', 'december']
 ```
 
 ### Step 5: Visualize Results
@@ -76,13 +77,12 @@ print("Bands:", composite_2023.bandNames().getInfo())
 ```python
 # Visualization parameters
 vis_params = {
-    'bands': ['Jul', 'Apr', 'Jan'],  # Summer, Spring, Winter
+    'bands': ['july', 'april', 'january'],  # RGB = Summer, Spring, Winter
     'min': 0,
-    'max': 0.8,
-    'palette': ['red', 'yellow', 'green']
+    'max': 0.8
 }
 
-# Add to map
+# Add to map (a 3-band RGB composite does not take a palette)
 Map = geemap.Map()
 Map.addLayer(composite_2023, vis_params, 'NDVI 2023')
 Map.addLayer(roi, {}, 'ROI')
@@ -93,15 +93,10 @@ Map
 ### Step 6: Create Animated GIF
 
 ```python
-# Generate temporal animation
+# Generate temporal animation (one frame per year, RGB from three periods)
 ndvi.get_gif(
-    name='ndvi_2023_monthly.gif',
-    fps=2,
-    figsize=(12, 10),
-    palette='RdYlGn',
-    vmin=0,
-    vmax=0.8,
-    title='NDVI Evolution 2023'
+    name='ndvi_monthly.gif',
+    bands=['july', 'april', 'january']   # [R, G, B] periods
 )
 ```
 
@@ -123,10 +118,9 @@ ndvi_multi = NdviSeasonality(
     key='median'
 )
 
-# Get composites for each year
-for year in range(2020, 2024):
-    composite = ndvi_multi.get_year_composite(year=year)
-    print(f"Processed {year}")
+# One call returns all years (2020–2023) as an ImageCollection
+composites = ndvi_multi.get_year_composite()
+print("Years processed:", composites.size().getInfo())
 ```
 
 ### Seasonal Analysis
@@ -144,17 +138,17 @@ ndvi_seasonal = NdviSeasonality(
     index='ndvi'
 )
 
-composite = ndvi_seasonal.get_year_composite(year=2023)
+composite = ndvi_seasonal.get_year_composite().first()
 
-# Visualize seasons
+# Visualize seasons (period names for periods=4: winter, spring, summer, autumn)
 Map = geemap.Map()
 Map.addLayer(
-    composite.select('Q1'),  # Winter
+    composite.select('winter'),
     {'min': 0, 'max': 0.8, 'palette': ['red', 'yellow', 'green']},
     'Winter'
 )
 Map.addLayer(
-    composite.select('Q3'),  # Summer
+    composite.select('summer'),
     {'min': 0, 'max': 0.8, 'palette': ['red', 'yellow', 'green']},
     'Summer'
 )
@@ -235,7 +229,7 @@ Extract mean NDVI per month:
 
 ```python
 # Get time series for ROI
-composite = ndvi.get_year_composite(year=2023)
+composite = ndvi.get_year_composite().first()
 
 # Extract values for each month
 stats = []
@@ -277,7 +271,7 @@ points = ee.FeatureCollection([
 ])
 
 # Sample composite
-composite = ndvi.get_year_composite(year=2023)
+composite = ndvi.get_year_composite().first()
 samples = composite.sampleRegions(
     collection=points,
     scale=10
@@ -291,17 +285,14 @@ print(samples['features'])
 ### Export as GeoTIFF
 
 ```python
-# Export composite to file
-ndvi.get_export(
-    year=2023,
-    filename='ndvi_2023_monthly.tif'
-)
+# Exports each year's composite; filenames auto-generated as {sat}_{index}_{key}_{year}.tif
+ndvi.get_export(scale=10)
 ```
 
 ### Export to Google Drive
 
 ```python
-composite = ndvi.get_year_composite(year=2023)
+composite = ndvi.get_year_composite().first()
 
 ndvi.export_to_drive(
     image=composite,
@@ -344,7 +335,8 @@ ndvi = NdviSeasonality(
     start_year=2023,
     end_year=2024,
     index='ndvi',
-    mask_clouds=True  # ← Important!
+    cloud_filter=True,     # Cloud filtering (on by default)
+    max_cloud_cover=10     # ← Stricter scene cloud threshold
 )
 ```
 
@@ -377,7 +369,6 @@ composite_masked = composite.updateMask(water.lt(50))  # Keep only low water occ
 
 ## Next Steps
 
-- [Multi-Sensor Comparison](multi_sensor.md) - Compare Sentinel-2 vs Landsat NDVI
 - [Indices Reference](../reference/indices.md) - Explore other vegetation indices
 - [Time Series Analysis](../advanced/time_series.md) - Detect trends and phenology
 - [Classification](../advanced/classification.md) - Use NDVI for land cover mapping

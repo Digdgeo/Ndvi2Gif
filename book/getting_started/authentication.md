@@ -78,7 +78,12 @@ ee.Initialize()
 
 # Test with a simple computation
 point = ee.Geometry.Point([-3.7, 40.4])  # Madrid, Spain
-image = ee.Image('COPERNICUS/S2_SR_HARMONIZED/20230601T110621_20230601T110616_T30TVK')
+
+# Grab the first Sentinel-2 scene covering the point in June 2023
+image = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+         .filterBounds(point)
+         .filterDate('2023-06-01', '2023-07-01')
+         .first())
 
 # Get a value
 value = image.select('B8').reduceRegion(

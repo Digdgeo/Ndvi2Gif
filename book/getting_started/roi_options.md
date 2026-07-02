@@ -106,8 +106,8 @@ roi = ee.Geometry.Polygon([[
 Use ecological research site boundaries via DEIMS IDs:
 
 ```python
-# Use eLTER site ID
-roi = 'deimsid:ab8278e6-0b71-4b36-a6d2-e8f34aa3df30'
+# Use eLTER site ID (format: 'deimsid/<site-id>')
+roi = 'deimsid/11696159-444f-4e06-b537-d4c5c0a4e97d'
 
 ndvi = NdviSeasonality(
     roi=roi,
@@ -129,8 +129,8 @@ This is perfect for long-term ecological research sites!
 Use Sentinel-2 MGRS tile codes:
 
 ```python
-# Use tile code directly
-roi = 'T30TVK'  # Madrid area
+# Use tile code with the 's2:' prefix (MGRS name without the leading 'T')
+roi = 's2:30TVK'  # Madrid area
 
 ndvi = NdviSeasonality(
     roi=roi,
@@ -148,8 +148,8 @@ Find tile codes at [Sentinel-2 Tiling Grid](https://maps.eatlas.org.au/index.htm
 Use Landsat WRS-2 path and row:
 
 ```python
-# Use path/row notation
-roi = '198/034'  # Path 198, Row 034
+# Use the 'wrs:path,row' notation
+roi = 'wrs:198,34'  # Path 198, Row 34
 
 ndvi = NdviSeasonality(
     roi=roi,
@@ -180,7 +180,7 @@ For large regions, consider using multiple tiles:
 
 ```python
 # Process multiple Sentinel-2 tiles
-tiles = ['T30TVK', 'T30TUK', 'T30TVL']
+tiles = ['s2:30TVK', 's2:30TUK', 's2:30TVL']
 
 results = []
 for tile in tiles:
@@ -242,7 +242,7 @@ ee.Initialize()
 configs = [
     {'name': 'rectangle', 'roi': ee.Geometry.Rectangle([-3.8, 40.3, -3.6, 40.5])},
     {'name': 'buffer', 'roi': ee.Geometry.Point([-3.7, 40.4]).buffer(5000)},
-    {'name': 'tile', 'roi': 'T30TVK'},
+    {'name': 'tile', 'roi': 's2:30TVK'},
     {'name': 'shapefile', 'roi': 'madrid_area.shp'}
 ]
 
@@ -256,7 +256,7 @@ for config in configs:
         end_year=2024,
         index='ndvi'
     )
-    composite = ndvi.get_year_composite(year=2023)
+    composites = ndvi.get_year_composite()
     print(f"✓ {config['name']} complete")
 ```
 
@@ -264,4 +264,3 @@ for config in configs:
 
 - [Quick Start](quick_start.md) - Create your first analysis
 - [Basic NDVI Tutorial](../tutorials/basic_ndvi.md) - Detailed NDVI workflow
-- [Multi-Sensor Comparison](../tutorials/multi_sensor.md) - Compare sensors

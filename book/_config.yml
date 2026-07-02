@@ -20,7 +20,14 @@ latex:
 
 # Add a bibtex file so that we can create citations
 bibtex_bibfiles:
-  - references.bib
+  - reference/references.bib
+
+# Stray helper files that are not part of the book navigation
+exclude_patterns:
+  - README.md
+  - SUMMARY.md
+  - QUICKSTART.md
+  - BUILD_GUIDE.md
 
 # Information about where the book exists on the web
 repository:
@@ -31,7 +38,6 @@ repository:
 # Add GitHub buttons to your book
 # See https://jupyterbook.org/customize/config.html#add-a-link-to-your-repository
 html:
-  favicon: _static/favicon.ico
   use_edit_page_button: true
   use_issues_button: true
   use_repository_button: true

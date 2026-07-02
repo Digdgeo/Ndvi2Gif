@@ -9,7 +9,7 @@
 ### Q: Can I use Ndvi2Gif in Google Colab?
 
 **A:** Yes! Install with:
-```python
+```ipython3
 !pip install ndvi2gif
 import ee
 ee.Authenticate()
@@ -94,7 +94,7 @@ ndvi.export_to_drive(
 ### Q: Clouds are ruining my results
 
 **A:**
-1. Enable cloud masking: `mask_clouds=True`
+1. Cloud filtering is on by default; lower the scene threshold, e.g. `max_cloud_cover=10`
 2. Use `median` or percentiles instead of `max`
 3. Extend time period to get more images
 4. Try higher percentiles: `percentile=85` or `percentile=90`
@@ -105,7 +105,7 @@ ndvi.export_to_drive(
 1. **Wrong ROI projection**: Convert to EPSG:4326
 2. **ROI outside sensor coverage**: Check if area has data
 3. **Wrong date range**: S3 starts 2016, S2 starts 2015, etc.
-4. **Cloud masking too aggressive**: Try `mask_clouds=False`
+4. **Cloud masking too aggressive**: Try `cloud_filter=False` or `scl_mask=False`
 
 ### Q: How do I handle incomplete years (e.g., monitoring 2024)?
 
@@ -200,7 +200,7 @@ ndvi.get_export(
 ```python
 # Sample composite at points
 points = ee.FeatureCollection('path/to/points')
-composite = ndvi.get_year_composite(year=2023)
+composite = ndvi.get_year_composite().first()
 
 samples = composite.sampleRegions(
     collection=points,
@@ -263,7 +263,7 @@ custom_col = ee.ImageCollection('YOUR/COLLECTION') \
 # Submit multiple tasks
 for roi in roi_list:
     ndvi = NdviSeasonality(roi=roi, sat='S2', ...)
-    composite = ndvi.get_year_composite(year=2023)
+    composite = ndvi.get_year_composite().first()
 
     # Export (runs in background)
     ndvi.export_to_drive(

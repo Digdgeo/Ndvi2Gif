@@ -133,8 +133,8 @@ def scale_OLI(image):
     
     References
     ----------
-    .. [1] USGS (2021). Landsat Collection 2 Level-2 Science Products.
-           https://www.usgs.gov/landsat-missions/landsat-collection-2-level-2-science-products
+    USGS (2021). Landsat Collection 2 Level-2 Science Products.
+    https://www.usgs.gov/landsat-missions/landsat-collection-2-level-2-science-products
     """
     opticalBands = image.select(['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
     return image.addBands(opticalBands, None, True)
@@ -208,8 +208,8 @@ def scale_ETM(image):
     
     References
     ----------
-    .. [1] USGS (2021). Landsat Collection 2 Level-2 Science Products.
-           https://www.usgs.gov/landsat-missions/landsat-collection-2-level-2-science-products
+    USGS (2021). Landsat Collection 2 Level-2 Science Products.
+    https://www.usgs.gov/landsat-missions/landsat-collection-2-level-2-science-products
     """
     opticalBands = image.select(['SR_B1','SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7']).multiply(0.0000275).add(-0.2).rename(['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2'])
     return image.addBands(opticalBands, None, True)
@@ -1691,11 +1691,9 @@ class NdviSeasonality:
         -------
         dict
             Dictionary with satellite names as keys and sorted lists of available
-            indices as values. Structure:
-            {
-                'satellite_name': ['index1', 'index2', ...],
-                ...
-            }
+            indices as values. Structure::
+
+                {'satellite_name': ['index1', 'index2', ...], ...}
             
         Examples
         --------
@@ -1737,24 +1735,16 @@ class NdviSeasonality:
         -----
         **Sensor Capabilities Summary:**
         
-        - **Sentinel-2 (S2)**: Most versatile optical sensor with Red Edge bands
-        enabling advanced vegetation analysis and chlorophyll estimation
-        
-        - **Landsat**: Long-term optical observations (1982-present) with consistent
-        band configuration across missions, ideal for time series analysis
-        
-        - **MODIS**: Global daily coverage at coarser resolution, excellent for
-        large-scale monitoring and climate studies
-        
-        - **Sentinel-1 (S1)**: All-weather SAR observations, unique for detecting
-        structural changes, crop monitoring, and flood mapping
-        
-        - **Sentinel-3 (S3)**: Specialized ocean and coastal monitoring with many
-        spectral bands optimized for water quality assessment
-        
+        - **Sentinel-2 (S2)**: Most versatile optical sensor with Red Edge bands enabling advanced vegetation analysis and chlorophyll estimation
+        - **Landsat**: Long-term optical observations (1982-present) with consistent band configuration across missions, ideal for time series analysis
+        - **MODIS**: Global daily coverage at coarser resolution, excellent for large-scale monitoring and climate studies
+        - **Sentinel-1 (S1)**: All-weather SAR observations, unique for detecting structural changes, crop monitoring, and flood mapping
+        - **Sentinel-3 (S3)**: Specialized ocean and coastal monitoring with many spectral bands optimized for water quality assessment
+
         This method is particularly useful for:
+
         - Sensor capability comparison
-        - Multi-sensor analysis planning  
+        - Multi-sensor analysis planning
         - Index availability validation
         - Documentation and tutorial purposes
             
@@ -2453,7 +2443,7 @@ class NdviSeasonality:
         - 80-100: Condiciones muy favorables
         
         Referencias
-        ----------
+        -----------
         Kogan, F.N. (1995). Application of vegetation index and brightness temperature 
         for drought detection. Advances in Space Research, 15(11), 91-100.
         
@@ -2562,7 +2552,7 @@ class NdviSeasonality:
         Para detectar cambios: dNBR = NBR_prefire - NBR_postfire
         
         Referencias
-        ----------
+        -----------
         Key, C.H., Benson, N.C. (2006). Landscape Assessment: Ground measure of 
         severity, the Composite Burn Index. FIREMON: Fire effects monitoring and 
         inventory framework. USDA Forest Service.
@@ -2593,7 +2583,7 @@ class NdviSeasonality:
         - Valores más positivos indican mayor probabilidad de agua
         
         Referencias
-        ----------
+        -----------
         Fisher, A., Flood, N., Danaher, T. (2016). 
         Comparing Landsat water index methods for automated water classification 
         in eastern Australia. Remote Sensing of Environment, 175, 167-182.
@@ -2622,7 +2612,7 @@ class NdviSeasonality:
         - > 0.5: Área densamente construida
         
         Referencias
-        ----------
+        -----------
         Zha, Y., Gao, J., Ni, S. (2003). Use of normalized difference built-up index 
         in automatically mapping urban areas from TM imagery. 
         International Journal of Remote Sensing, 24(3), 583-594.
@@ -4470,12 +4460,9 @@ class NdviSeasonality:
 
         Notes
         -----
-        * **SAR sensors (S1):** a typical dB scale is applied (``min=-25``,
-        ``max=0``).  
-        * **Optical sensors:** a typical vegetation index range is applied
-        (``min=0.15``, ``max=0.85``).  
-        * Output video is set to ``dimensions=768`` pixels and
-        ``framesPerSecond=10`` for a balance between clarity and file size.
+        * **SAR sensors (S1):** a typical dB scale is applied (``min=-25``, ``max=0``).
+        * **Optical sensors:** a typical vegetation index range is applied (``min=0.15``, ``max=0.85``).
+        * Output video is set to ``dimensions=768`` pixels and ``framesPerSecond=10`` for a balance between clarity and file size.
 
         Raises
         ------

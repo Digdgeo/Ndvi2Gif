@@ -68,11 +68,12 @@ ndvi_processor = NdviSeasonality(
 ### Step 4: Get the Composite
 
 ```python
-# Get composite for a specific year
-composite = ndvi_processor.get_year_composite(year=2023)
-
-# Get the full time series
+# get_year_composite() returns an ee.ImageCollection with one image per year.
+# Each image has one band per period (january, february, ..., december).
 all_composites = ndvi_processor.get_year_composite()
+
+# Select a single year's composite (here, the first year in the range)
+composite = all_composites.first()
 ```
 
 ### Step 5: Visualize
@@ -85,7 +86,8 @@ vis_params = {
     'max': 1,
     'palette': ['red', 'yellow', 'green']
 }
-Map.addLayer(composite, vis_params, 'NDVI Composite')
+# A palette can only be applied to a single band, so select one period (e.g. june)
+Map.addLayer(composite.select('june'), vis_params, 'NDVI June')
 Map.centerObject(roi, 10)
 Map
 ```
@@ -93,12 +95,11 @@ Map
 ### Step 6: Create an Animated GIF
 
 ```python
-# Generate GIF
+# Generate an RGB GIF: one frame per year, using three periods as R, G, B.
+# The frame rate (10 fps) and dimensions are set internally.
 ndvi_processor.get_gif(
-    name='ndvi_2023.gif',
-    fps=2,                 # Frames per second
-    figsize=(10, 10),
-    palette='RdYlGn'       # Red-Yellow-Green color scheme
+    name='ndvi.gif',
+    bands=['march', 'june', 'september']   # [R, G, B] periods
 )
 ```
 
@@ -128,11 +129,11 @@ ndvi = NdviSeasonality(
     key='median'
 )
 
-# Get composite
-composite = ndvi.get_year_composite(year=2023)
+# Get the yearly composites (ee.ImageCollection, one image per year)
+composites = ndvi.get_year_composite()
 
-# Create GIF
-ndvi.get_gif(name='madrid_ndvi_2023.gif', fps=2)
+# Create an RGB GIF (one frame per year)
+ndvi.get_gif(name='madrid_ndvi.gif', bands=['march', 'june', 'september'])
 
 print("✓ Analysis complete! Check your GIF file.")
 ```
@@ -176,11 +177,9 @@ print("✓ Analysis complete! Check your GIF file.")
 ### Export as GeoTIFF
 
 ```python
-# Export to file
-ndvi.get_export(
-    year=2023,
-    filename='ndvi_2023.tif'
-)
+# Export every year's composite as a GeoTIFF to the current directory.
+# Filenames are generated automatically as {sat}_{index}_{key}_{year}.tif
+ndvi.get_export(scale=10)
 ```
 
 ### Export to Google Drive
@@ -210,8 +209,12 @@ ndvi = NdviSeasonality(
     index='ndvi'
 )
 
-# Get combined composite (max across all years)
-multi_year = ndvi.get_year_composite()
+# Get the yearly composites (one image per year)
+composites = ndvi.get_year_composite()
+
+# Thanks to the band-based design, cross-year seasonal queries are one line.
+# For example, the maximum June NDVI across all years:
+june_max = composites.select('june').max()
 ```
 
 ### High Temporal Resolution
@@ -249,7 +252,6 @@ ndvi = NdviSeasonality(
 Now that you understand the basics, explore:
 
 - [ROI Options](roi_options.md) - Learn all the ways to define your study area
-- [Multi-Sensor Comparison](../tutorials/multi_sensor.md) - Compare different satellite sensors
 - [Indices Reference](../reference/indices.md) - Explore 40+ available indices
 
 ## Tips & Tricks

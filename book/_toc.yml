@@ -17,10 +17,8 @@ parts:
     chapters:
       - file: tutorials/basic_ndvi
         title: "1. Basic NDVI Analysis"
-      - file: tutorials/multi_sensor
-        title: "2. Multi-Sensor Comparison"
       - file: tutorials/climate_analysis
-        title: "3. Climate Data Analysis (ERA5 & CHIRPS)"
+        title: "2. Climate Data Analysis (ERA5 & CHIRPS)"
 
   - caption: Advanced Features
     chapters:

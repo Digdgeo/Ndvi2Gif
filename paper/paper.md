@@ -14,7 +14,7 @@ authors:
     orcid: 0000-0002-2757-7112
     affiliation: 1
 affiliations:
-  - name: Estación Biológica de Doñana (EBD-CSIC), Spain
+  - name: Laboratorio de SIG y Teledetección de la Estación Biológica de Doñana (LAST-EBD), CSIC, Spain
     index: 1
 date: 28 December 2025
 bibliography: paper.bib
@@ -154,6 +154,12 @@ Ndvi2Gif has demonstrated realized research impact through peer-reviewed publica
 Ndvi2Gif serves as a foundational component of *geeltermap*, a Python mapping application providing operational environmental monitoring tools for the eLTER network [@DiazDelgado2024b]. Geeltermap integrates PhenoApp for phenology monitoring [@Garcia2023], FloodApp for flood extent analysis, and LSTApp for land surface temperature assessment.
 
 The package is currently used as a core analytical tool in the eLTER network infrastructure and the SUMHAL biodiversity monitoring initiative in Spanish protected areas, demonstrating readiness for reproducible multi-temporal remote sensing analysis.
+
+Beyond these research applications, Ndvi2Gif has achieved substantial community uptake. It has been downloaded more than 26,000 times from PyPI and more than 66,000 times from conda-forge, where it is distributed through a community-maintained feedstock, and its repository has been forked more than a dozen times and starred by over 40 users. The package has been disseminated to the geospatial community through a talk at PyCon ES 2021[^pycon], a hands-on tutorial delivered to eLTER technical staff[^elter], and a presentation at the 2026 congress of the Spanish Association of Remote Sensing (AET) in Cáceres [@GarciaDiaz2026]; it was also featured among community contributors in an ESA Earth Observation Open Science showcase[^esa]. At LAST-EBD (CSIC) the package is used routinely to answer spatial and remote-sensing queries raised by researchers across the Estación Biológica de Doñana, and these real-world requests directly drive the incorporation of new functionality, forming a user-need feedback loop that has guided much of the package's evolution. Two further studies based on Ndvi2Gif are currently in preparation, addressing wetland hydroperiod dynamics in the Danube basin and cyanobacterial blooms in Spanish reservoirs. The project is openly maintained with regular tagged releases, comprehensive documentation, and contribution guidelines that welcome third-party involvement.
+
+[^esa]: https://eo4society.esa.int/2020/08/26/eo-open-science-enthusiastic-community/
+[^pycon]: https://www.youtube.com/watch?v=vGEzSq0JLpM
+[^elter]: https://www.youtube.com/watch?v=kJkX6aVXBws
 
 # AI Usage Disclosure
 

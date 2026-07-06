@@ -52,7 +52,7 @@ from ndvi2gif import NdviSeasonality, HydroperiodAnalyzer
 
 # Authenticate only the first time
 # ee.Authenticate()
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 ```
 
 `HydroperiodAnalyzer` requires an existing `NdviSeasonality` instance. All satellite configuration — ROI, sensor, date range, cloud filtering, band standardisation — is reused from it.

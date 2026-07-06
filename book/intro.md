@@ -40,7 +40,7 @@ import ee
 from ndvi2gif import NdviSeasonality
 
 # Authenticate and initialize
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 
 # Create seasonal NDVI composite
 ndvi = NdviSeasonality(

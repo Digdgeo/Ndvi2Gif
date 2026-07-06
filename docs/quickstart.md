@@ -14,7 +14,7 @@ Authenticate once if needed:
 ```python
 import ee
 ee.Authenticate()  # only once on a new machine/session
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 ```
 
 ## Minimal example (Landsat, unsupervised)
@@ -23,7 +23,7 @@ ee.Initialize()
 import ee
 from ndvi2gif import NdviSeasonality, LandCoverClassifier
 
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 
 # 1) Area of interest (change to your AOI)
 roi = ee.Geometry.Rectangle([-4.80, 37.80, -4.60, 37.95])

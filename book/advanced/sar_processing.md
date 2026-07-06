@@ -29,7 +29,7 @@ In short: without ARD, pixel values between two dates are not directly comparabl
 import ee
 from ndvi2gif import NdviSeasonality, S1ARDProcessor
 
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 ```
 
 ---

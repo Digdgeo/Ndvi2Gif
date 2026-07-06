@@ -12,7 +12,11 @@ For **per-pixel** maps over an ROI (rather than a single point or polygon), ndvi
 import ee
 from ndvi2gif import NdviSeasonality, TimeSeriesAnalyzer
 
-ee.Initialize()
+ee.Initialize(project='your-project-id')
+
+# Any ee.Geometry, shapefile path, or GeoJSON works as an ROI.
+# Here, a small area near Doñana (SW Spain) as a self-contained example.
+roi = ee.Geometry.Rectangle([-6.45, 36.95, -6.35, 37.05])
 
 ns = NdviSeasonality(
     roi=roi,

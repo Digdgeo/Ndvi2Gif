@@ -13,6 +13,16 @@ Before using Ndvi2Gif, you need to authenticate with Google Earth Engine.
 Earth Engine is **free for research, education, and non-profit use**!
 ```
 
+```{important}
+**A Google Cloud project ID is now required.** Since late 2023, Earth Engine
+initializes against a Cloud project, so a bare `ee.Initialize()` fails with
+*"Not signed up for Earth Engine or project is not registered"*. Always pass your
+project: `ee.Initialize(project='your-project-id')`. Create/find your project ID
+at the [Google Cloud Console](https://console.cloud.google.com/) (it looks like
+`ee-yourusername`) and register it for Earth Engine at
+[code.earthengine.google.com](https://code.earthengine.google.com/).
+```
+
 ## Authentication Methods
 
 ### Method 1: Interactive Authentication (Recommended for First Time)
@@ -24,7 +34,7 @@ import ee
 ee.Authenticate()
 
 # Initialize Earth Engine
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 ```
 
 This will:
@@ -44,7 +54,7 @@ import ee
 ee.Authenticate(force=True)  # Use force=True to re-authenticate
 
 # Initialize
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 ```
 
 ### Method 3: Using Service Accounts (Advanced)
@@ -74,7 +84,7 @@ Verify that authentication works:
 import ee
 
 # Initialize
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 
 # Test with a simple computation
 point = ee.Geometry.Point([-3.7, 40.4])  # Madrid, Spain
@@ -112,7 +122,7 @@ Try re-authenticating:
 ```python
 import ee
 ee.Authenticate(force=True)
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 ```
 
 ### Issue: "Project not found"

@@ -236,7 +236,7 @@ with open('roi.geojson', 'w') as f:
 import ee
 from ndvi2gif import NdviSeasonality
 
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 
 # Same analysis, different ROI definitions
 configs = [

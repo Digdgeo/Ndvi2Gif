@@ -66,7 +66,7 @@ import ee
 from ndvi2gif import NdviSeasonality
 
 ee.Authenticate()
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 
 # Monthly NDVI composites from Sentinel-2 (2018–2024)
 ndvi = NdviSeasonality(

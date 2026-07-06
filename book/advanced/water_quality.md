@@ -29,25 +29,28 @@ NDCI exploits the Red-Edge band B5 (705 nm), exclusive to Sentinel-2 among the s
 
 ## 1. Setup and ROI
 
-The ROI is a reservoir polygon. The notebook loads a CHG reservoir shapefile and selects one reservoir; any shapefile or GeoJSON works. A 500 m buffer is recommended so that the shoreline and the transition zone are included in every monthly composite, regardless of the water level:
+The ROI is a reservoir polygon. Any `ee.Geometry`, shapefile, or GeoJSON works. To keep this page fully reproducible, we load a **public Earth Engine asset** with the CHG reservoir polygons (Confederación Hidrográfica del Guadalquivir), pick the largest one — the **Embalse de Iznájar** (~24 km², the largest in Andalusia) — and buffer it by 500 m:
 
 ```python
-import ee, geemap, geopandas as gpd
+import ee, geemap
 from ndvi2gif import NdviSeasonality, TimeSeriesAnalyzer
 
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 
-gdf = gpd.read_file('CHG.ZonasProtegidas.CaptacionesEmbalses.shp')
-gdf['area_m2'] = gdf.geometry.to_crs('EPSG:32630').area
+# Public asset: CHG reservoir polygons (Guadalquivir basin).
+reservoirs = ee.FeatureCollection(
+    'projects/ee-digdgeografo/assets/CHG_CaptacionesEmbalses'
+)
 
-# Pick the largest reservoir and buffer it by 500 m
-reservoir = gdf.loc[[gdf['area_m2'].idxmax()]]
-roi_buffer = reservoir.to_crs('EPSG:32630').buffer(500).to_crs('EPSG:4326')
-roi_path = '/tmp/reservoir_buffer.shp'
-gpd.GeoDataFrame(geometry=roi_buffer, crs='EPSG:4326').to_file(roi_path)
+# Pick the largest reservoir (area computed server-side) and buffer it by 500 m.
+reservoirs = reservoirs.map(lambda f: f.set('area_m2', f.geometry().area(1)))
+largest = ee.Feature(reservoirs.sort('area_m2', False).first())
+roi = largest.geometry().buffer(500)
 ```
 
-> **Why the buffer?** In water-quality work, forgetting the buffer silently clips the shoreline when the reservoir is full, and creates a ring of dry pixels at low water that contaminate the mask. Buffering by 200–1000 m in projected coordinates fixes both issues.
+> **Why the buffer?** In water-quality work, forgetting the buffer silently clips the shoreline when the reservoir is full, and creates a ring of dry pixels at low water that contaminate the mask. Buffering by 200–1000 m fixes both issues.
+>
+> **Using your own vector file.** Any shapefile or GeoJSON path works in place of the asset — just pass it as `roi=` to `NdviSeasonality`, or load it with `geemap.shp_to_ee(...)` / `geopandas` if you need to select and buffer a specific feature first.
 
 ---
 
@@ -57,7 +60,7 @@ gpd.GeoDataFrame(geometry=roi_buffer, crs='EPSG:4326').to_file(roi_path)
 
 ```python
 s2_mndwi = NdviSeasonality(
-    roi=roi_path,
+    roi=roi,
     periods=12,
     start_year=2020,
     end_year=2025,
@@ -143,7 +146,7 @@ The Normalised Difference Chlorophyll Index (Mishra & Mishra, 2012) uses Red-Edg
 
 ```python
 s2_ndci = NdviSeasonality(
-    roi=roi_path,
+    roi=roi,
     periods=12,
     start_year=2020,
     end_year=2025,

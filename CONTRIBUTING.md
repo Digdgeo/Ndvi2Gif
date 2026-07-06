@@ -16,21 +16,70 @@ This project grew from a small NDVI-to-GIF helper into a **remote sensing analyt
 
 ---
 
+## Contribution Workflow
+
+We follow the standard GitHub **fork → branch → pull request** model. You do
+**not** need write access to the main repository.
+
+1. **Fork** the repository to your own GitHub account (click *Fork* at the top
+   right of [the repo page](https://github.com/Digdgeo/Ndvi2Gif)).
+
+2. **Clone your fork** and add the original repo as an `upstream` remote so you
+   can keep your fork in sync:
+
+   ```bash
+   git clone https://github.com/<your-username>/Ndvi2Gif.git
+   cd Ndvi2Gif
+   git remote add upstream https://github.com/Digdgeo/Ndvi2Gif.git
+   ```
+
+3. **Create a feature branch** off `master` (never commit directly to `master`):
+
+   ```bash
+   git checkout -b my-new-index      # e.g. add-savi-index, fix-export-crs
+   ```
+
+4. **Make your changes**, then commit them with a clear message:
+
+   ```bash
+   git add .
+   git commit -m "Add SAVI index for S2 and Landsat"
+   ```
+
+5. **Keep your branch up to date** with upstream before opening the PR:
+
+   ```bash
+   git fetch upstream
+   git rebase upstream/master
+   ```
+
+6. **Push** the branch to your fork and **open a Pull Request** against
+   `Digdgeo/Ndvi2Gif:master`:
+
+   ```bash
+   git push origin my-new-index
+   ```
+
+   Then open the PR from GitHub and describe what you changed and why.
+
+---
+
 ## Development Setup
 
-```bash
-git clone https://github.com/Digdgeo/Ndvi2Gif.git
-cd Ndvi2Gif
+Set up a development environment inside your cloned fork:
 
+```bash
 conda create -n ndvi2gif-dev python=3.11 -y
 conda activate ndvi2gif-dev
 pip install -e ".[dev]"
 ```
 
-Authenticate Earth Engine with:
-```bash
+Authenticate Earth Engine (a Google Cloud **project ID is required**):
+
+```python
+import ee
 ee.Authenticate()
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 ```
 
 ---
@@ -173,12 +222,16 @@ pytest -q
 
 ---
 
-## Pull Requests
+## Pull Request Checklist
 
-- Format with `black` + `isort`.  
-- Lint with `ruff` or `flake8`.  
-- Add/update docstrings and CHANGELOG entry.  
-- Add or update a notebook if your change introduces a new feature.  
+Before opening the PR (see [Contribution Workflow](#contribution-workflow) above),
+make sure you have:
+
+- [ ] Formatted with `black` + `isort`.
+- [ ] Linted with `ruff` or `flake8`.
+- [ ] Added/updated docstrings and a `CHANGELOG` entry.
+- [ ] Added or updated a notebook if your change introduces a new feature.
+- [ ] Run the test suite (`pytest -q`) and confirmed it passes.
 
 ---
 

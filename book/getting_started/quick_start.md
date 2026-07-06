@@ -14,7 +14,7 @@ import geemap
 from ndvi2gif import NdviSeasonality
 
 # Initialize Earth Engine
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 ```
 
 ### Step 2: Define Your Region of Interest (ROI)
@@ -113,10 +113,12 @@ import geemap
 from ndvi2gif import NdviSeasonality
 
 # Initialize
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 
-# Define ROI (Madrid, Spain)
-roi = ee.Geometry.Rectangle([-3.8, 40.3, -3.6, 40.5])
+# Define ROI (small area near Madrid, Spain).
+# Kept small on purpose so the direct GeoTIFF download below stays under
+# Earth Engine's ~50 MB synchronous limit — see "Export as GeoTIFF".
+roi = ee.Geometry.Rectangle([-3.74, 40.38, -3.67, 40.45])
 
 # Create processor
 ndvi = NdviSeasonality(
@@ -181,6 +183,15 @@ print("✓ Analysis complete! Check your GIF file.")
 # Filenames are generated automatically as {sat}_{index}_{key}_{year}.tif
 ndvi.get_export(scale=10)
 ```
+
+> **⚠️ Size limit.** `get_export()` downloads directly from Earth Engine, which
+> caps each synchronous request at **~50 MB**. A large ROI, many periods
+> (`periods=12`/`24`), or a fine `scale` can easily exceed it and raise
+> `Total request size ... must be less than or equal to 50331648 bytes`.
+> When that happens, either **coarsen** the export (`ndvi.get_export(scale=30)`),
+> shrink the ROI, or export asynchronously to Google Drive
+> (see [Export to Google Drive](#export-to-google-drive) below), which runs as a
+> background task with a far larger budget.
 
 ### Export to Google Drive
 

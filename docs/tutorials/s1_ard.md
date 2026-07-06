@@ -28,7 +28,7 @@ For most workflows, SAR preprocessing is configured through `NdviSeasonality`:
 import ee
 from ndvi2gif import NdviSeasonality
 
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 
 roi = ee.Geometry.Rectangle([-6.55, 36.85, -6.10, 37.20])
 

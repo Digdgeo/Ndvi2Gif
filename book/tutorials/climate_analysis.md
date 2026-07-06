@@ -32,7 +32,7 @@ import ee
 from ndvi2gif import NdviSeasonality
 from ndvi2gif.timeseries import TimeSeriesAnalyzer
 
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 
 # Define ROI (e.g., Doñana National Park, Spain)
 roi = ee.Geometry.Point([-6.48, 37.13]).buffer(10000)  # 10km buffer

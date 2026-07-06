@@ -1,5 +1,5 @@
 ---
-title: 'Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis via Google Earth Engine'
+title: 'Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis with Google Earth Engine'
 tags:
   - Python
   - remote sensing
@@ -22,9 +22,9 @@ bibliography: paper.bib
 
 # Summary
 
-Google Earth Engine (GEE) is a cloud-based platform for planetary-scale geospatial analysis [@Gorelick2017]. Ndvi2Gif is a Python package built on top of GEE and geemap [@Wu2020] that simplifies the generation and analysis of multi-temporal composite images from satellite and climate reanalysis data. The package provides unified access to 7 satellite platforms (Sentinel-1/2/3, Landsat 4–9, MODIS) and climate reanalysis data (ERA5-Land, CHIRPS), with 53 predefined spectral and radar indices plus 48 climate variables. Beyond compositing, the package includes modules for SAR preprocessing, time series and phenology analysis, machine learning land cover classification, and hydroperiod analysis of surface water dynamics.
+Google Earth Engine (GEE) is a cloud-based platform for planetary-scale geospatial analysis [@Gorelick2017]. Ndvi2Gif is a Python package built on top of GEE and geemap [@Wu2020] that simplifies the generation and analysis of multi-temporal composite images from satellite and climate reanalysis data. The package provides unified access to 7 satellite platforms (Sentinel-1/2/3, Landsat 4–9, MODIS) and climate reanalysis data (ERA5-Land, CHIRPS), with 53 predefined spectral and radar indices plus 48 climate variables. Beyond compositing, the package includes modules for SAR preprocessing, time series and phenology analysis, land cover classification, and hydroperiod analysis of surface water dynamics.
 
-The core concept of Ndvi2Gif is the creation of **multi-seasonal statistical composites**. The `get_year_composite()` method returns an `ee.ImageCollection` where each image represents one year, with bands for each temporal period (e.g., `periods=12` generates bands named `january`, `february`, ..., `december`). This band-based temporal organization enables queries such as: *What was the maximum flood extent detected in January across 40 years of Landsat (1982–2024)?* by simply calling `collection.select('january').max()`. Built-in zonal statistics extraction via `get_stats()` allows direct computation of statistics per polygon without external GIS processing.
+The core idea behind Ndvi2Gif is the **multi-seasonal statistical composite**. Instead of handling the thousands of individual scenes a satellite records over an area, the user obtains a compact summary in which each year is represented by a fixed set of seasonal or monthly snapshots (for example, one image per month). Each snapshot condenses all the observations in that period into a single representative value —such as the median, maximum, or a chosen percentile— which suppresses clouds and data gaps. This makes long-term comparisons across the chosen temporal windows straightforward: one can, for example, map changes in the maximum flooded area each winter over several decades, track how the timing of vegetation green-up shifts from year to year, or follow the annual evolution of burned area —anywhere on the planet. Summary statistics for user-defined areas, such as field plots or protected sites, can also be extracted directly, leaving the results ready to analyse without further GIS processing.
 
 # Statement of need
 
@@ -145,7 +145,7 @@ This design enables queries such as: *What is the mean cyanobacteria index (NDCI
 
 This architecture trades increased per-image band dimensionality for drastically simpler, more reproducible seasonal queries. This trade-off is well suited to long-term ecological and phenological analysis, but less appropriate for applications focused on high-frequency pixel-level forecasting.
 
-Beyond temporal organization, ndvi2gif integrates complete Sentinel-1 ARD preprocessing, automated phenology metrics extraction, machine learning classification, zonal statistics, and geemap-based visualization within a unified API.
+Beyond temporal organization, ndvi2gif integrates complete Sentinel-1 ARD preprocessing, automated phenology metrics extraction, land cover classification, zonal statistics, and geemap-based visualization within a unified API.
 
 # Research Impact Statement
 

@@ -29,7 +29,7 @@ from ndvi2gif import NdviSeasonality
 import matplotlib.pyplot as plt
 
 # Initialize
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 ```
 
 ### Step 2: Define Study Area

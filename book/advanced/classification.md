@@ -12,7 +12,11 @@ The design intent: you should not have to rewrite your feature engineering every
 import ee
 from ndvi2gif import NdviSeasonality, LandCoverClassifier
 
-ee.Initialize()
+ee.Initialize(project='your-project-id')
+
+# Any ee.Geometry, shapefile path, or GeoJSON works as an ROI.
+# Here, a small area near Córdoba (S Spain) as a self-contained example.
+roi = ee.Geometry.Rectangle([-4.80, 37.80, -4.60, 37.95])
 
 ns = NdviSeasonality(
     roi=roi,

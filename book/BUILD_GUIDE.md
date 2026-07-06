@@ -181,7 +181,7 @@ Run code examples manually to verify they work:
 import ee
 from ndvi2gif import NdviSeasonality
 
-ee.Initialize()
+ee.Initialize(project='your-project-id')
 
 roi = ee.Geometry.Point([-3.7, 40.4]).buffer(5000)
 ndvi = NdviSeasonality(

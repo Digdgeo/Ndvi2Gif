@@ -1,0 +1,24 @@
+{
+  "title": "Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis with Google Earth Engine",
+  "description": "Ndvi2Gif is a Python library for multi-seasonal remote sensing analysis with Google Earth Engine: seasonal compositing and temporal analysis of satellite imagery (Sentinel-1/2/3, Landsat, MODIS), 40+ vegetation and environmental indices, SAR preprocessing, time series and per-pixel phenology, land cover classification, and automated GIF generation.",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "MIT",
+  "creators": [
+    {
+      "name": "García Díaz, Diego",
+      "orcid": "0000-0002-2757-7112",
+      "affiliation": "Laboratorio de SIG y Teledetección de la Estación Biológica de Doñana (LAST-EBD), CSIC, Spain"
+    }
+  ],
+  "keywords": [
+    "Google Earth Engine",
+    "remote sensing",
+    "NDVI",
+    "phenology",
+    "time series",
+    "SAR",
+    "land cover classification",
+    "vegetation indices"
+  ]
+}

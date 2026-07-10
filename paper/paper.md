@@ -22,13 +22,13 @@ bibliography: paper.bib
 
 # Summary
 
-Google Earth Engine (GEE) is a cloud-based platform for planetary-scale geospatial analysis [@Gorelick2017]. Ndvi2Gif is a Python package built on top of GEE and geemap [@Wu2020] that simplifies the generation and analysis of multi-temporal composite images from satellite and climate reanalysis data. The package provides unified access to 7 satellite platforms (Sentinel-1/2/3, Landsat 4–9, MODIS) and climate reanalysis data (ERA5-Land, CHIRPS), with 53 predefined spectral and radar indices plus 48 climate variables. Beyond compositing, the package includes modules for SAR preprocessing, time series and phenology analysis, land cover classification, and hydroperiod analysis of surface water dynamics.
+Google Earth Engine (GEE) is a cloud-based platform for planetary-scale geospatial analysis [@Gorelick2017]. `Ndvi2Gif` is a Python package built on top of GEE and `geemap` [@Wu2020] that simplifies the generation and analysis of multi-temporal composite images from satellite and climate reanalysis data. The package provides unified access to 7 satellite platforms (Sentinel-1/2/3, Landsat 4–9, MODIS) and climate reanalysis data (ERA5-Land, CHIRPS), with 53 predefined spectral and radar indices plus 48 climate variables. Beyond compositing, the package includes modules for Synthetic Aperture Radar (SAR) preprocessing, time series and phenology analysis, land cover classification, and hydroperiod analysis of surface water dynamics.
 
-The core idea behind Ndvi2Gif is the **multi-seasonal statistical composite**. Instead of handling the thousands of individual scenes a satellite records over an area, the user obtains a compact summary in which each year is represented by a fixed set of seasonal or monthly snapshots (for example, one image per month). Each snapshot condenses all the observations in that period into a single representative value —such as the median, maximum, or a chosen percentile— which suppresses clouds and data gaps. This makes long-term comparisons across the chosen temporal windows straightforward: one can, for example, map changes in the maximum flooded area each winter over several decades, track how the timing of vegetation green-up shifts from year to year, or follow the annual evolution of burned area —anywhere on the planet. Summary statistics for user-defined areas, such as field plots or protected sites, can also be extracted directly, leaving the results ready to analyse without further GIS processing.
+The core idea behind `Ndvi2Gif` is the **multi-seasonal statistical composite**. Instead of handling the thousands of individual scenes a satellite records over an area, the user obtains a compact summary in which each year is represented by a fixed set of seasonal or monthly snapshots (for example, one image per month). Each snapshot condenses all the observations in that period into a single representative value —such as the median, maximum, or a chosen percentile— which suppresses clouds and data gaps. This makes long-term comparisons across the chosen temporal windows straightforward: one can, for example, map changes in the maximum flooded area each winter over several decades, track how the timing of vegetation green-up shifts from year to year, or follow the annual evolution of burned area —anywhere on the planet. Summary statistics for user-defined areas, such as field plots or protected sites, can also be extracted directly, leaving the results ready to analyse without further GIS processing.
 
 # Statement of need
 
-Generating multi-temporal composites in GEE requires 30–40 lines of boilerplate per sensor for collection filtering, cloud masking, scaling to reflectance, and temporal aggregation. Using Ndvi2Gif, this reduces to:
+Generating multi-temporal composites in GEE requires 30–40 lines of boilerplate per sensor for collection filtering, cloud masking, scaling to reflectance, and temporal aggregation. Using `Ndvi2Gif`, this reduces to:
 
 ```python
 from ndvi2gif import NdviSeasonality
@@ -38,25 +38,25 @@ ndvi = NdviSeasonality(roi=roi, start_year=2013, end_year=2013,
 collection = ndvi.get_year_composite()
 ```
 
-This simplification extends across 7 satellite platforms, 53 spectral and radar indices, 48 climate variables, multiple temporal aggregation methods, and flexible region of interest specifications—all through a unified API that inherits geemap's interactive mapping capabilities. The architectural decisions and design philosophy that enable this simplification are detailed in the sections below. \autoref{fig:workflow} provides an overview of the package's workflow and capabilities.
+This simplification extends across 7 satellite platforms, 53 spectral and radar indices, 48 climate variables, multiple temporal aggregation methods, and flexible region of interest (ROI) specifications—all through a unified API that inherits `geemap`'s interactive mapping capabilities. The architectural decisions and design philosophy that enable this simplification are detailed in the sections below. \autoref{fig:workflow} provides an overview of the package's workflow and capabilities.
 
-![Ndvi2Gif workflow architecture and capabilities. Color coding: Blue — input data sources and ROI specification; Green — processing operations; Purple — main analysis classes; Orange — download-ready output products.\label{fig:workflow}](ndvi2gif_workflow.png){ width=95% }
+![`Ndvi2Gif` workflow architecture and capabilities. Color coding: Blue — input data sources and ROI specification; Green — processing operations; Purple — main analysis classes; Orange — download-ready output products.\label{fig:workflow}](ndvi2gif_workflow.png){ width=95% }
 
 # State of the Field
 
-Remote sensing analysis using Google Earth Engine (GEE) has been widely facilitated by several Python-based libraries. Packages such as **geemap** [@Wu2020] provide interactive mapping and user-friendly access to Earth Engine data, while **eemont** [@Montero2021] focuses on preprocessing utilities and spectral index computation while preserving the native `ee.ImageCollection` temporal structure. **Wxee** [@Zuspan2021] emphasizes interoperability with the scientific Python ecosystem by exporting Earth Engine data into xarray objects for sequential time series analysis.
+Remote sensing analysis using Google Earth Engine (GEE) has been widely facilitated by several Python-based libraries. Packages such as `geemap` [@Wu2020] provide interactive mapping and user-friendly access to Earth Engine data, while `eemont` [@Montero2021] focuses on preprocessing utilities and spectral index computation while preserving the native `ee.ImageCollection` temporal structure. `wxee` [@Zuspan2021] emphasizes interoperability with the scientific Python ecosystem by exporting Earth Engine data into xarray objects for sequential time series analysis.
 
 While these tools significantly lower the entry barrier to GEE, they are primarily designed as general-purpose interfaces or extensible utility layers. As a result, researchers conducting long-term ecological or phenological studies often need to implement substantial custom code to ensure consistent temporal alignment, multi-seasonal comparability, and reproducibility across decades of observations.
 
-Ndvi2Gif addresses this gap by adopting a distinct design philosophy centered on **band-based temporal organization**, where each image represents a temporal unit (typically a year) and bands encode fixed intra-annual periods (e.g., months or seasons). This approach enables direct multi-decadal queries across consistent seasonal windows, which is difficult to achieve efficiently using the native collection-based paradigm.
+`Ndvi2Gif` addresses this gap by adopting a distinct design philosophy centered on **band-based temporal organization**, where each image represents a temporal unit (typically a year) and bands encode fixed intra-annual periods (e.g., months or seasons). This approach enables direct multi-decadal queries across consistent seasonal windows, which is difficult to achieve efficiently using the native collection-based paradigm.
 
-Contributing this functionality to existing packages would require fundamental changes to their core temporal abstractions and design goals. Ndvi2Gif therefore complements, rather than replaces, existing GEE Python tools by providing a specialized framework tailored to multi-seasonal ecological analysis, phenology validation, and operational environmental monitoring.
+Contributing this functionality to existing packages would require fundamental changes to their core temporal abstractions and design goals. `Ndvi2Gif` therefore complements, rather than replaces, existing GEE Python tools by providing a specialized framework tailored to multi-seasonal ecological analysis, phenology validation, and operational environmental monitoring.
 
 # Key features
 
 ## Multi-platform data access
 
-Ndvi2Gif provides unified access to optical, SAR, and climate reanalysis datasets through a consistent interface (\autoref{tab:datasets}).
+`Ndvi2Gif` provides unified access to optical, SAR, and climate reanalysis datasets through a consistent interface (\autoref{tab:datasets}).
 
 : Supported satellite and reanalysis datasets. \label{tab:datasets}
 
@@ -86,7 +86,7 @@ The library supports multiple ROI specification formats, enabling seamless integ
 | S2 tile     | `'s2:29SQB'`            | MGRS tile code           |
 | Landsat WRS | `'wrs:200,32'`          | Path and Row             |
 | ee.Geometry | `ee.Geometry.Point()`   | GEE geometry             |
-| geemap      | `Map.draw_features`     | Interactive selection    |
+| `geemap`    | `Map.draw_features`     | Interactive selection    |
 
 ## Advanced SAR processing
 
@@ -139,23 +139,23 @@ This functionality is particularly suited to Mediterranean wetlands and seasonal
 
 # Software Design
 
-Ndvi2Gif preserves the native `ee.ImageCollection` abstraction but implements a **hierarchical band-based approach**: each collection element corresponds to a year, and bands encode fixed intra-annual sub-periods (months, biweekly intervals, or seasons). A 40-year monthly analysis produces 40 images with 12 bands each, rather than 480 individual images.
+`Ndvi2Gif` preserves the native `ee.ImageCollection` abstraction but implements a **hierarchical band-based approach**: each collection element corresponds to a year, and bands encode fixed intra-annual sub-periods (months, biweekly intervals, or seasons). A 40-year monthly analysis produces 40 images with 12 bands each, rather than 480 individual images.
 
 This design enables queries such as: *What is the mean cyanobacteria index (NDCI) detected from Sentinel-2 during August across the last 10 years?* by simply calling `collection.select('august').mean()`, or *In which week of the year does chlorophyll detected from Sentinel-3 peak?* by computing `collection.max().bandNames()`.
 
 This architecture trades increased per-image band dimensionality for drastically simpler, more reproducible seasonal queries. This trade-off is well suited to long-term ecological and phenological analysis, but less appropriate for applications focused on high-frequency pixel-level forecasting.
 
-Beyond temporal organization, ndvi2gif integrates complete Sentinel-1 ARD preprocessing, automated phenology metrics extraction, land cover classification, zonal statistics, and geemap-based visualization within a unified API.
+Beyond temporal organization, `Ndvi2Gif` integrates complete Sentinel-1 ARD preprocessing, automated phenology metrics extraction, land cover classification, zonal statistics, and `geemap`-based visualization within a unified API.
 
 # Research Impact Statement
 
-Ndvi2Gif has demonstrated realized research impact through peer-reviewed publications, operational research infrastructure, and downstream software integration since its initial release in May 2020. The package has been applied in calibration and validation studies of Earth Observation products for phenology and surface water monitoring at the Doñana protected area [@DiazDelgado2024].
+`Ndvi2Gif` has demonstrated realized research impact through peer-reviewed publications, operational research infrastructure, and downstream software integration since its initial release in May 2020. The package has been applied in calibration and validation studies of Earth Observation products for phenology and surface water monitoring at the Doñana protected area [@DiazDelgado2024].
 
-Ndvi2Gif serves as a foundational component of *geeltermap*, a Python mapping application providing operational environmental monitoring tools for the eLTER network [@DiazDelgado2024b]. Geeltermap integrates PhenoApp for phenology monitoring [@Garcia2023], FloodApp for flood extent analysis, and LSTApp for land surface temperature assessment.
+`Ndvi2Gif` serves as a foundational component of `geeltermap`, a Python mapping application providing operational environmental monitoring tools for the eLTER network [@DiazDelgado2024b]. `geeltermap` integrates `PhenoApp` for phenology monitoring [@Garcia2023], `FloodApp` for flood extent analysis, and `LSTApp` for land surface temperature assessment.
 
 The package is currently used as a core analytical tool in the eLTER network infrastructure and the SUMHAL biodiversity monitoring initiative in Spanish protected areas, demonstrating readiness for reproducible multi-temporal remote sensing analysis.
 
-Beyond these research applications, Ndvi2Gif has achieved substantial community uptake. It has been downloaded more than 26,000 times from PyPI and more than 66,000 times from conda-forge, where it is distributed through a community-maintained feedstock, and its repository has been forked more than a dozen times and starred by over 40 users. The package has been disseminated to the geospatial community through a talk at PyCon ES 2021[^pycon], a hands-on tutorial delivered to eLTER technical staff[^elter], and a presentation at the 2026 congress of the Spanish Association of Remote Sensing (AET) in Cáceres [@GarciaDiaz2026]; it was also featured among community contributors in an ESA Earth Observation Open Science showcase[^esa]. At LAST-EBD (CSIC) the package is used routinely to answer spatial and remote-sensing queries raised by researchers across the Estación Biológica de Doñana, and these real-world requests directly drive the incorporation of new functionality, forming a user-need feedback loop that has guided much of the package's evolution. Two further studies based on Ndvi2Gif are currently in preparation, addressing wetland hydroperiod dynamics in the Danube basin and cyanobacterial blooms in Spanish reservoirs. The project is openly maintained with regular tagged releases, comprehensive documentation, and contribution guidelines that welcome third-party involvement.
+Beyond these research applications, `Ndvi2Gif` has achieved substantial community uptake. It has been downloaded more than 26,000 times from PyPI and more than 66,000 times from conda-forge, where it is distributed through a community-maintained feedstock, and its repository has been forked more than a dozen times and starred by over 40 users. The package has been disseminated to the geospatial community through a talk at PyCon ES 2021[^pycon], a hands-on tutorial delivered to eLTER technical staff[^elter], and a presentation at the 2026 congress of the Spanish Association of Remote Sensing (AET) in Cáceres [@GarciaDiaz2026]; it was also featured among community contributors in an ESA Earth Observation Open Science showcase[^esa]. At LAST-EBD (CSIC) the package is used routinely to answer spatial and remote-sensing queries raised by researchers across the Estación Biológica de Doñana, and these real-world requests directly drive the incorporation of new functionality, forming a user-need feedback loop that has guided much of the package's evolution. Two further studies based on `Ndvi2Gif` are currently in preparation, addressing wetland hydroperiod dynamics in the Danube basin and cyanobacterial blooms in Spanish reservoirs. The project is openly maintained with regular tagged releases, comprehensive documentation, and contribution guidelines that welcome third-party involvement.
 
 [^esa]: https://eo4society.esa.int/2020/08/26/eo-open-science-enthusiastic-community/
 [^pycon]: https://www.youtube.com/watch?v=vGEzSq0JLpM
@@ -163,10 +163,10 @@ Beyond these research applications, Ndvi2Gif has achieved substantial community 
 
 # AI Usage Disclosure
 
-Ndvi2Gif was initially developed in May 2020 and underwent sustained development through 2024 before current-generation AI coding assistants became widely available. The core scientific methodology, architectural design decisions, and algorithmic implementations represent the author's original intellectual contributions. AI tools are currently used as development assistants for refactoring, documentation, debugging, and test implementation, while all strategic decisions regarding software architecture and scientific approach remain under the author's direction.
+`Ndvi2Gif` was initially developed in May 2020 and underwent sustained development through 2024 before current-generation AI coding assistants became widely available. The core scientific methodology, architectural design decisions, and algorithmic implementations represent the author's original intellectual contributions. AI tools are currently used as development assistants for refactoring, documentation, debugging, and test implementation, while all strategic decisions regarding software architecture and scientific approach remain under the author's direction.
 
 # Acknowledgements
 
-The author thanks the Google Earth Engine team and community, and especially acknowledges Qiusheng Wu for geemap, which serves as the primary foundation of Ndvi2Gif, and for his continued contributions to open-source geospatial software.
+The author thanks the Google Earth Engine team and community, and especially acknowledges Qiusheng Wu for `geemap`, which serves as the primary foundation of `Ndvi2Gif`, and for his continued contributions to open-source geospatial software.
 
 # References

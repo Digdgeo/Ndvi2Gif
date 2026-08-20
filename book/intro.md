@@ -79,15 +79,20 @@ ndvi.get_gif('ndvi_evolution.gif')
 
 ## Citation
 
-If you use Ndvi2Gif in your research, please cite:
+If you use Ndvi2Gif in your research, please cite the JOSS paper:
 
 ```bibtex
-@software{garcia_diaz_ndvi2gif_2020,
-  author = {García Díaz, Diego},
-  title = {ndvi2gif: Multi-Seasonal Remote Sensing Analysis Suite},
-  url = {https://github.com/Digdgeo/Ndvi2Gif},
-  version = {1.2.2},
-  year = {2020}
+@article{GarciaDiaz2026,
+  author    = {García Díaz, Diego},
+  title     = {Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis with Google Earth Engine},
+  journal   = {Journal of Open Source Software},
+  year      = {2026},
+  volume    = {11},
+  number    = {124},
+  pages     = {10654},
+  publisher = {The Open Journal},
+  doi       = {10.21105/joss.10654},
+  url       = {https://doi.org/10.21105/joss.10654}
 }
 ```
 

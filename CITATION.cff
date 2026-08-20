@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it using these metadata."
+message: "If you use this software, please cite the JOSS paper (preferred-citation)."
 title: "Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis with Google Earth Engine"
 type: software
 authors:
@@ -7,8 +7,32 @@ authors:
     given-names: "Diego"
     orcid: "https://orcid.org/0000-0002-2757-7112"
     affiliation: "Laboratorio de SIG y Teledetección de la Estación Biológica de Doñana (LAST-EBD), CSIC, Spain"
+identifiers:
+  - type: doi
+    value: "10.21105/joss.10654"
+    description: "JOSS paper describing Ndvi2Gif"
+  - type: doi
+    value: "10.5281/zenodo.20693553"
+    description: "Concept DOI of the Zenodo software archive (all versions)"
 repository-code: "https://github.com/Digdgeo/Ndvi2Gif"
 url: "https://digdgeo.github.io/Ndvi2Gif/"
 license: MIT
 version: 1.3.1
 date-released: "2026-07-07"
+preferred-citation:
+  type: article
+  title: "Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis with Google Earth Engine"
+  authors:
+    - family-names: "García Díaz"
+      given-names: "Diego"
+      orcid: "https://orcid.org/0000-0002-2757-7112"
+      affiliation: "Laboratorio de SIG y Teledetección de la Estación Biológica de Doñana (LAST-EBD), CSIC, Spain"
+  journal: "Journal of Open Source Software"
+  year: 2026
+  volume: 11
+  issue: 124
+  start: 10654
+  publisher:
+    name: "The Open Journal"
+  doi: "10.21105/joss.10654"
+  url: "https://doi.org/10.21105/joss.10654"

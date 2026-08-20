@@ -1,5 +1,6 @@
 # Ndvi2Gif: Multi-Seasonal Remote Sensing Index Composites
 
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.10654/status.svg)](https://doi.org/10.21105/joss.10654)
 [![PyPI version](https://img.shields.io/pypi/v/ndvi2gif.svg)](https://pypi.org/project/ndvi2gif/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/ndvi2gif.svg)](https://pypi.org/project/ndvi2gif/)
 [![Conda version](https://img.shields.io/conda/vn/conda-forge/ndvi2gif.svg)](https://anaconda.org/conda-forge/ndvi2gif)
@@ -114,13 +115,20 @@ Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 
 ## Citation
 
+If you use Ndvi2Gif in your research, please cite the JOSS paper:
+
 ```bibtex
-@software{garcia_diaz_ndvi2gif_2020,
-  author  = {García Díaz, Diego},
-  title   = {ndvi2gif: Multi-Seasonal Remote Sensing Analysis Suite},
-  url     = {https://github.com/Digdgeo/Ndvi2Gif},
-  version = {1.3.0},
-  year    = {2020}
+@article{GarciaDiaz2026,
+  author    = {García Díaz, Diego},
+  title     = {Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis with Google Earth Engine},
+  journal   = {Journal of Open Source Software},
+  year      = {2026},
+  volume    = {11},
+  number    = {124},
+  pages     = {10654},
+  publisher = {The Open Journal},
+  doi       = {10.21105/joss.10654},
+  url       = {https://doi.org/10.21105/joss.10654}
 }
 ```
 

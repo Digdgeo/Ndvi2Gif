@@ -9,6 +9,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-08-22
+
+### Added
+
+- **📊 Dispersion reducers**: four new `key` options in `NdviSeasonality` that describe how much an index **varies** inside each period, instead of its typical level:
+  - `key='std'` — standard deviation of the observations in the period.
+  - `key='variance'` — variance of the observations in the period.
+  - `key='range'` — maximum minus minimum (within-period amplitude).
+  - `key='cv'` — coefficient of variation (std / mean).
+
+  They work with every sensor and index, and the resulting composites keep the usual period band names (`winter, spring, summer, autumn`, `january…december`, …), so they can be exported, animated and analysed exactly like the existing `max`/`median`/`mean` composites. Useful to map phenological change, disturbances and unstable surfaces such as flooded areas.
+
+  `cv` divides by the mean, so it is only meaningful for indices that stay positive; a warning is printed when it is used with Sentinel-1 backscatter in dB.
+
+- **💧 Water mask download in `HydroperiodAnalyzer`**: the per-date binary water masks can now be exported alongside the hydroperiod bands.
+  - `get_water_masks_stack()` flattens the mask collection into a single `uint8` `ee.Image` with one band per acquisition date (`water_YYYY_MM_DD`), encoded as `0` = dry, `1` = water, `2` = observed but discarded as cloud/shadow, `255` = no scene covered the pixel or outside the ROI. Both no-value codes are configurable (`masked_value`, `nodata`).
+  - `export_water_masks_to_drive()` and `export_water_masks_to_asset()` send that stack to Google Drive or to an Earth Engine asset.
+  - `export_to_drive(..., include_masks=True)` and `export_to_asset(..., include_masks=True)` launch both exports at once and return a `(hydroperiod_task, masks_task)` tuple. The index, threshold and cycle are read from the `'index'`/`'threshold'`/`'hyd_year_start'` properties of the image being exported, so the masks always match it even if `compute_hydroperiod()` has since been called with other settings; the cached values are used only for images that carry no such metadata. The asset version accepts `masks_asset_id` and otherwise derives it from `asset_id` with a `_water_masks` suffix.
+  - `get_water_masks()` gained an `add_footprint` flag adding a `'footprint'` band (1 inside the acquisition footprint of that date). This is what separates "cloudy" from "never observed" — the footprint survives the cloud mask, so the slanted edges of Landsat scenes and the gaps between orbits are identified as real no-data instead of being lumped in with clouds. Off by default, so `get_water_masks()` keeps returning a single-band collection.
+
+  The masks go to a **separate** file on purpose: a GeoTIFF holds a single data type, so bundling them with the `int16` hydroperiod bands would promote them to `int16` and cancel out the saving. Earth Engine does not write a nodata tag into the GeoTIFF header, so `255` must be declared as nodata when reading the file.
+
+### Fixed
+
+- `tests/test_basic.py` no longer asserts the old silent fallback for invalid `sat`/`key` values (both raise `ValueError` since v1.2), and passes each sensor an index it actually supports.
+- `tests/conftest.py` now initializes Earth Engine before collecting the tests. Building an `NdviSeasonality` already talks to the EE client, so the tests that make no EE calls of their own were failing anyway; a bare `ee.Initialize()` only works when the credentials carry a Cloud project, so `EARTHENGINE_PROJECT`/`GOOGLE_CLOUD_PROJECT` is used as a fallback. Without a session those tests are skipped with an explanatory message instead of erroring out.
+
 ## [1.3.1] - 2026-07-07
 
 ### Fixed

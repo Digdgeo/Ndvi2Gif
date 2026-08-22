@@ -27,11 +27,13 @@ Built on top of [Google Earth Engine](https://github.com/google/earthengine-api)
 
 ---
 
-## ✨ What's New in v1.3.0
+## ✨ What's New in v1.4.0
 
-**New module: `SpatialPhenologyAnalyzer`** — GEE-native, **per-pixel phenology rasters** (Start/Peak/End of Season and derived metrics) for the whole ROI, entirely server-side. Three methods (`threshold`, `derivative`, and `harmonic` Fourier regression — the Earth Engine-native replacement for double-logistic fitting), per-year or multi-year aggregate outputs, and export to local GeoTIFF or Google Drive with named bands. See [CHANGELOG](CHANGELOG.md) for details.
+**Dispersion reducers** — four new `key` options (`'std'`, `'variance'`, `'range'`, `'cv'`) that map how much an index **varies** inside each period instead of its typical level, useful for phenological change, disturbances and unstable surfaces such as flooded areas. They work with every sensor and index, and the composites keep the usual period band names, so they export, animate and analyse like any other.
 
-Previously, in v1.2.0: `HydroperiodAnalyzer` (GEE-native flood duration analysis), SCL-based cloud masking for Sentinel-2, and numpy 2.x support.
+**Downloadable water masks** — `HydroperiodAnalyzer.get_water_masks_stack()` flattens the per-date binary masks into a single `uint8` image (one band per acquisition date), and `include_masks=True` sends them to Drive or to an Earth Engine asset alongside the hydroperiod. Cloudy pixels and pixels no satellite ever saw get their own codes, so a time series can tell them apart.
+
+Previously, in v1.3.0: `SpatialPhenologyAnalyzer`, GEE-native per-pixel phenology rasters (SOS/POS/EOS) with threshold, derivative and harmonic methods. See [CHANGELOG](CHANGELOG.md) for details.
 
 ---
 
@@ -88,7 +90,7 @@ Yes, it makes nice GIFs — but it's much more than that.
 
 ## What you can do with it
 
-- **Compute pixel-wise statistics** over any region and time span — seasonal medians, percentiles, multi-year aggregations
+- **Compute pixel-wise statistics** over any region and time span — seasonal medians, percentiles, multi-year aggregations, or dispersion (std, variance, range, CV) to map variability instead of level
 - **Monitor 40+ indices** across Sentinel-1/2/3, Landsat (4–9), MODIS, ERA5-Land, and CHIRPS
 - **Analyse wetland hydroperiod** and multi-year flood anomalies with `HydroperiodAnalyzer`
 - **Detect trends and phenology** (SOS, EOS, POS, Length of Season) with `TimeSeriesAnalyzer`

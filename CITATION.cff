@@ -17,8 +17,8 @@ identifiers:
 repository-code: "https://github.com/Digdgeo/Ndvi2Gif"
 url: "https://digdgeo.github.io/Ndvi2Gif/"
 license: MIT
-version: 1.3.1
-date-released: "2026-07-07"
+version: 1.4.0
+date-released: "2026-08-22"
 preferred-citation:
   type: article
   title: "Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis with Google Earth Engine"

@@ -14,6 +14,13 @@ import pandas as pd
 import numpy as np
 
 
+# Statistical reducers accepted by NdviSeasonality(key=...)
+VALID_KEYS = {
+    "max", "min", "median", "mean", "sum", "percentile",
+    "std", "variance", "range", "cv",
+}
+
+
 # ---------------------------------------------------------------------
 # Public API imports
 # ---------------------------------------------------------------------
@@ -50,7 +57,7 @@ def test_ndvi_seasonality_defaults():
     assert inst.periods >= 4
     assert inst.start_year <= inst.end_year
     assert inst.sat in {"S2", "Landsat", "MODIS", "S1", "S3", "ERA5"}
-    assert inst.key in {"max", "median", "mean", "percentile"}
+    assert inst.key in VALID_KEYS
     assert isinstance(inst.index, str)
 
     # Period definitions are created
@@ -83,21 +90,28 @@ def test_valid_satellite_options_updated():
     """Accept supported sats including S3, ERA5, and CHIRPS; invalid falls back to default (S2)."""
     from ndvi2gif.ndvi2gif import NdviSeasonality
 
-    for sat in ["S2", "Landsat", "MODIS", "S1", "S3", "ERA5", "CHIRPS"]:
-        assert NdviSeasonality(sat=sat).sat == sat
+    # Each sensor needs an index it actually supports (S1 has no 'ndvi')
+    sat_index = {
+        "S2": "ndvi", "Landsat": "ndvi", "MODIS": "ndvi", "S1": "vv",
+        "S3": "ndvi", "ERA5": "temperature_2m", "CHIRPS": "precipitation",
+    }
+    for sat, index in sat_index.items():
+        assert NdviSeasonality(sat=sat, index=index).sat == sat
 
-    assert NdviSeasonality(sat="InvalidSat").sat == "S2"
+    with pytest.raises(ValueError):
+        NdviSeasonality(sat="InvalidSat")
 
 
 def test_statistic_key_validation_updated():
-    """Support modern keys; invalid falls back to max."""
+    """Every documented key is accepted; an unknown one raises ValueError."""
     from ndvi2gif.ndvi2gif import NdviSeasonality
 
-    for key in ["max", "median", "mean", "percentile"]:
+    for key in sorted(VALID_KEYS):
         inst = NdviSeasonality(key=key, percentile=90)
         assert inst.key == key
 
-    assert NdviSeasonality(key="invalid_stat").key == "max"
+    with pytest.raises(ValueError):
+        NdviSeasonality(key="invalid_stat")
 
 
 def test_core_indices_available():
@@ -222,15 +236,30 @@ def test_timeseries_analyzer_analyze_trend_on_dataframe():
 #   - conftest.py/pytest.ini can skip it unless enabled
 # ---------------------------------------------------------------------
 
+def _require_ee():
+    """Return a working ee module, or skip the test.
+
+    A bare ``ee.Initialize()`` only works when the credentials carry a Cloud
+    project, so an already initialized session is reused instead of being
+    overwritten.
+    """
+    try:
+        import ee
+        try:
+            ee.Number(1).getInfo()
+        except Exception:
+            ee.Initialize()
+            ee.Number(1).getInfo()
+        return ee
+    except Exception as e:
+        pytest.skip(f"Earth Engine not initialized: {e}")
+
+
 @pytest.mark.ee
 def test_integration_basic_workflow():
     """Runs only when EE tests are enabled (see pytest.ini/conftest.py)."""
-    try:
-        import ee
-        from ndvi2gif.ndvi2gif import NdviSeasonality
-        ee.Initialize()
-    except Exception as e:
-        pytest.skip(f"Earth Engine not initialized: {e}")
+    _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
 
     inst = NdviSeasonality(periods=4, start_year=2020, end_year=2021)
     assert hasattr(inst, "get_year_composite")
@@ -238,6 +267,37 @@ def test_integration_basic_workflow():
     assert hasattr(inst, "get_export")
     assert hasattr(inst, "get_gif")
     assert hasattr(inst, "get_stats")
+
+
+@pytest.mark.ee
+def test_integration_dispersion_reducers():
+    """std/variance/range/cv build composites with the usual period band names."""
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
+    expected_bands = ["winter", "spring", "summer", "autumn"]
+    means = {}
+
+    for key in ["max", "min", "std", "variance", "range", "cv"]:
+        inst = NdviSeasonality(
+            roi=roi, periods=4, start_year=2021, end_year=2021,
+            sat="S2", key=key, index="ndvi",
+        )
+        composite = inst.get_year_composite().first()
+        # Dispersion reducers must not leak the '_stdDev'/'_variance' suffix
+        # that ee.ImageCollection.reduce() appends to every band
+        assert composite.bandNames().getInfo() == expected_bands
+        means[key] = composite.reduceRegion(
+            ee.Reducer.mean(), roi, 100, maxPixels=1e9
+        ).getInfo()
+
+    for band in expected_bands:
+        assert means["range"][band] == pytest.approx(
+            means["max"][band] - means["min"][band], abs=1e-6
+        )
+        assert means["std"][band] > 0
+        assert means["variance"][band] > 0
 
 
 if __name__ == "__main__":

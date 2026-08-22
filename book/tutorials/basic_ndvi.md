@@ -221,6 +221,37 @@ ndvi_p85 = NdviSeasonality(
 )
 ```
 
+### Dispersion (How Much NDVI Moves)
+
+The reducers above summarise the *level* of NDVI in each period. `std`,
+`variance`, `range` and `cv` summarise its *variability* instead, which is what
+you want when the question is "where is the vegetation changing", not "how green
+is it":
+
+```python
+# Within-season NDVI variability
+ndvi_std = NdviSeasonality(
+    roi=roi,
+    sat='S2',
+    periods=4,
+    start_year=2023,
+    end_year=2024,
+    index='ndvi',
+    key='std'  # Standard deviation inside each season
+)
+
+Map.addLayer(
+    ndvi_std.get_year_composite().first().select('spring'),
+    {'min': 0, 'max': 0.2, 'palette': ['white', 'orange', 'red']},
+    'Spring NDVI variability'
+)
+```
+
+Stable surfaces (bare soil, water, evergreen forest, asphalt) come out low;
+croplands, deciduous canopies and recently disturbed or flooded areas come out
+high. Use `range` for a more intuitive amplitude in index units, and `cv` only
+for indices that stay positive.
+
 ## Extracting Statistics
 
 ### Zonal Statistics

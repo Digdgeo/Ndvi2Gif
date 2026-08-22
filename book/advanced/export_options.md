@@ -40,7 +40,7 @@ ns.get_export(scale=10, crs='EPSG:4326')
 # ndvi_max_2020.tif, ndvi_max_2021.tif, ndvi_max_2022.tif, ...
 ```
 
-Filenames follow the pattern `{sat}_{index}_{stat}_{year}.tif`, where `{stat}` is `max`, `mean`, `median`, or `p{N}` when `key='percentile'`. One multi-band file per year; bands are the periods (`winter, spring, summer, autumn` for `periods=4`; `january…december` for `periods=12`; `p1…pN` otherwise).
+Filenames follow the pattern `{sat}_{index}_{stat}_{year}.tif`, where `{stat}` is the `key` you chose (`max`, `mean`, `median`, `std`, `range`, …), or `p{N}` when `key='percentile'`. One multi-band file per year; bands are the periods (`winter, spring, summer, autumn` for `periods=4`; `january…december` for `periods=12`; `p1…pN` otherwise).
 
 > **Don't oversample.** Setting `scale=10` on Landsat or MODIS data does not produce 10 m imagery — it produces a resampled fake that wastes quota. Use the native resolution of the sensor.
 

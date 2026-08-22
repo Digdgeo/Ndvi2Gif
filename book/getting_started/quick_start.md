@@ -161,10 +161,37 @@ print("✓ Analysis complete! Check your GIF file.")
 
 ### `key` - Statistical Method
 
+**Central tendency** — what the index typically looks like in each period:
+
 - `'median'` - Robust to outliers (recommended for optical)
 - `'max'` - Maximum value (good for vegetation indices)
+- `'min'` - Minimum value
 - `'mean'` - Average value
+- `'sum'` - Total sum (accumulation variables such as precipitation)
 - `'percentile'` - Custom percentile (specify with `percentile` parameter)
+
+**Dispersion** — how much the index *varies* inside each period, useful to spot
+phenological change, disturbances or unstable surfaces such as flooded areas:
+
+- `'std'` - Standard deviation
+- `'variance'` - Variance
+- `'range'` - Maximum minus minimum (amplitude)
+- `'cv'` - Coefficient of variation (std / mean)
+
+```python
+# Where does NDVI change the most within each season?
+variability = NdviSeasonality(
+    roi=roi, periods=4, start_year=2020, end_year=2023,
+    sat='S2', key='std', index='ndvi'
+)
+Map.addLayer(variability.get_year_composite().first(), {'min': 0, 'max': 0.2}, 'NDVI std')
+```
+
+```{note}
+`'cv'` divides by the mean, so it is only meaningful for indices that stay
+positive. It becomes unstable when the mean approaches zero, and it is negative
+for Sentinel-1 backscatter in dB — use `'std'` or `'range'` for SAR instead.
+```
 
 ### `index` - Spectral Index
 

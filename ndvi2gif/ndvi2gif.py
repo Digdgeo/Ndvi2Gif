@@ -266,14 +266,20 @@ class NdviSeasonality:
         
         Default is 'S2'.
         
-    key : {'max', 'median', 'mean', 'sum', 'percentile'}, optional
+    key : {'max', 'min', 'median', 'mean', 'sum', 'percentile', 'std', 'variance', 'range', 'cv'}, optional
         Statistical reducer for temporal aggregation:
 
         * ``'max'`` : Maximum value (vegetation peak detection)
+        * ``'min'`` : Minimum value
         * ``'median'`` : Median value (robust to outliers)
         * ``'mean'`` : Mean value (smooth temporal profiles)
         * ``'sum'`` : Total sum (ideal for precipitation, accumulation)
         * ``'percentile'`` : Custom percentile (set with percentile param)
+        * ``'std'`` : Standard deviation (within-period variability)
+        * ``'variance'`` : Variance (squared variability)
+        * ``'range'`` : Maximum minus minimum (amplitude)
+        * ``'cv'`` : Coefficient of variation, std divided by mean.
+          Only meaningful for indices that stay positive
 
         Default is 'max'.
         
@@ -492,12 +498,25 @@ class NdviSeasonality:
             
         key : str, optional
             Statistical reducer for temporal aggregation within each period:
-            
+
             - 'max': Maximum value (default, good for vegetation peak detection)
+            - 'min': Minimum value
             - 'median': Median value (robust to outliers and clouds)
             - 'mean': Mean value (smooth temporal profiles)
+            - 'sum': Total sum (accumulation variables such as precipitation)
             - 'percentile': Custom percentile (specify with percentile parameter)
-            
+            - 'std': Standard deviation of the observations in the period
+            - 'variance': Variance of the observations in the period
+            - 'range': Maximum minus minimum (amplitude within the period)
+            - 'cv': Coefficient of variation (std / mean). Only meaningful for
+              indices that stay positive; it is unstable when the mean is close
+              to zero and negative for Sentinel-1 backscatter in dB
+
+            The last four are dispersion statistics: instead of describing the
+            typical level of the index, they describe how much it varies inside
+            each period, which is useful to detect phenological change,
+            disturbances or unstable surfaces such as flooded areas.
+
             Default is 'max'.
             
         index : str, optional
@@ -736,11 +755,16 @@ class NdviSeasonality:
         self.periods = periods
         self.start_year = start_year
         self.end_year = end_year
-        valid_keys = ['max', 'min', 'median', 'percentile', 'mean', 'sum']
+        valid_keys = ['max', 'min', 'median', 'percentile', 'mean', 'sum',
+                      'std', 'variance', 'range', 'cv']
         if key not in valid_keys:
             raise ValueError(
                 f"Statistic '{key}' is not supported. Available statistics (key) are: {valid_keys}"
             )
+        if key == 'cv' and sat == 'S1' and not normalize_sar:
+            print("Warning: key='cv' divides by the mean, and Sentinel-1 backscatter "
+                  "is negative in dB, so the coefficient of variation will be negative "
+                  "and hard to interpret. Use normalize_sar=True, or key='std'/'range'.")
         self.key = key
         self.percentile = percentile
         self.imagelist = []
@@ -1635,8 +1659,50 @@ class NdviSeasonality:
         period_stats['sum'] = filtered_collection.sum()
         period_stats['percentile'] = filtered_collection.reduce(ee.Reducer.percentile([self.percentile]))
 
+        # Dispersion statistics. ee.ImageCollection.reduce() appends the reducer
+        # name to every band ('nd' -> 'nd_stdDev'), so we strip that suffix to
+        # keep the same band naming as max/median/mean and reuse the band
+        # bookkeeping of get_year_composite
+        period_stats['std'] = self._strip_reducer_suffix(
+            filtered_collection.reduce(ee.Reducer.stdDev()), 'stdDev')
+        period_stats['variance'] = self._strip_reducer_suffix(
+            filtered_collection.reduce(ee.Reducer.variance()), 'variance')
+        # Band names of an arithmetic operation come from the first operand,
+        # which already carries the original names
+        period_stats['range'] = period_stats['max'].subtract(period_stats['min'])
+        period_stats['cv'] = period_stats['std'].divide(period_stats['mean'])
+
         # Return the composite corresponding to the user-specified statistical method
         return period_stats[self.key]
+
+    @staticmethod
+    def _strip_reducer_suffix(image, reducer_name):
+        """
+        Remove the reducer suffix that ee.ImageCollection.reduce() appends.
+
+        Earth Engine renames every band of a reduced collection as
+        ``<band>_<reducer>`` (for example ``nd`` becomes ``nd_stdDev``). This
+        helper restores the original band names so composites built with the
+        dispersion reducers are named exactly like the max/median/mean ones.
+
+        Parameters
+        ----------
+        image : ee.Image
+            Output of ``ee.ImageCollection.reduce()``.
+        reducer_name : str
+            Suffix added by the reducer, without the leading underscore
+            (e.g. ``'stdDev'``, ``'variance'``).
+
+        Returns
+        -------
+        ee.Image
+            Same image with the suffix removed from every band name.
+        """
+        pattern = '_' + reducer_name + '$'
+        renamed = image.bandNames().map(
+            lambda band: ee.String(band).replace(pattern, '')
+        )
+        return image.rename(renamed)
     
     def get_available_indices(self, satellite=None):
         """

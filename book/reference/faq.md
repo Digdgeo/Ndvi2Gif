@@ -38,6 +38,15 @@ ee.Initialize(project='your-project-id')
 
 For optical sensors (S2, Landsat), start with `median`. For SAR (S1), use `mean`.
 
+### Q: How do I map variability instead of the typical value?
+
+**A:** Use one of the dispersion reducers: `key='std'`, `'variance'`, `'range'`
+(max − min) or `'cv'` (std / mean). They aggregate the same observations, but
+answer "how much did this pixel move inside the period" rather than "what was
+its usual value" — handy for phenological change, disturbances and flooded
+areas. `'cv'` is only meaningful for indices that stay positive, so avoid it for
+Sentinel-1 backscatter in dB.
+
 ### Q: How do I choose the right satellite?
 
 **A:**

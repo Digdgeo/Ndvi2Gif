@@ -71,6 +71,10 @@ class HydroperiodAnalyzer:
         # Export to Drive
         ha.export_to_drive(folder='my_wetland')
 
+        # Same, plus the per-date water masks as a separate uint8 file
+        # (0 = dry, 1 = water, 2 = cloud-masked, 255 = no acquisition)
+        ha.export_to_drive(folder='my_wetland', include_masks=True)
+
         # Per-pixel IRT (temporal representativity)
         irt = ha.compute_irt_image()
 
@@ -95,6 +99,8 @@ class HydroperiodAnalyzer:
         self._hyd_year = None
         self._d0 = None
         self._results = None
+        self._last_index = None
+        self._last_threshold = None
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -191,6 +197,34 @@ class HydroperiodAnalyzer:
         weighted = ee.List.sequence(0, n.subtract(1)).map(_set_props)
         return ee.ImageCollection(weighted)
 
+    def _masks_params_for(self, image):
+        """Return the (index, threshold, hyd_year) matching an exported image.
+
+        :meth:`compute_hydroperiod` stamps ``index``, ``threshold`` and
+        ``hyd_year_start`` on every result, so the masks that accompany an
+        export can be rebuilt from the image itself rather than from whatever
+        the last call happened to leave behind. Falls back to the cached values
+        for images that carry no such metadata (a mean or anomaly composite).
+        """
+        info = image.toDictionary(
+            ['index', 'threshold', 'hyd_year_start']
+        ).getInfo() or {}
+
+        index = info.get('index', self._last_index)
+        threshold = info.get('threshold', self._last_threshold)
+        hyd_year = info.get('hyd_year_start', self._hyd_year)
+
+        if index is None:
+            raise ValueError(
+                "include_masks=True needs to know which index and threshold "
+                "to use. The image carries no 'index'/'threshold' property "
+                "and no compute_hydroperiod() has run on this analyzer. "
+                "Call compute_hydroperiod() first, or export the masks "
+                "explicitly with export_water_masks_to_drive(index=..., "
+                "threshold=...)."
+            )
+        return index, threshold, hyd_year
+
     def _validate_index(self, index):
         """Raise informative errors for unsupported indices."""
         if index not in self.WATER_INDICES:
@@ -210,7 +244,8 @@ class HydroperiodAnalyzer:
     # Public API
     # ------------------------------------------------------------------
 
-    def get_water_masks(self, index='mndwi', threshold=0.0, hyd_year=None):
+    def get_water_masks(self, index='mndwi', threshold=0.0, hyd_year=None,
+                        add_footprint=False):
         """Generate weighted binary water masks from the satellite collection.
 
         For each scene in the hydrological year:
@@ -234,6 +269,12 @@ class HydroperiodAnalyzer:
             Starting calendar year of the hydrological cycle
             (e.g. ``2023`` for the Sep 2023 – Aug 2024 cycle).
             Defaults to ``ns.start_year``.
+        add_footprint : bool
+            Add a second band ``'footprint'`` (1 inside the acquisition
+            footprint of that date, masked outside), which tells apart *"the
+            satellite looked here but the pixel was masked as cloud"* from
+            *"no scene covered this pixel that day"*. Used by
+            :meth:`get_water_masks_stack`. Default ``False``.
 
         Returns
         -------
@@ -241,6 +282,7 @@ class HydroperiodAnalyzer:
             Binary water masks (band ``'water'``: 1 = water, 0 = dry,
             masked = nodata/cloud) with properties:
             ``weight`` (days), ``start_doy``, ``end_doy``.
+            A ``'footprint'`` band is added when ``add_footprint=True``.
 
         Notes
         -----
@@ -261,9 +303,13 @@ class HydroperiodAnalyzer:
         def _to_mask(image):
             idx = index_fn(image).select(0)          # single-band, any name
             water = idx.gt(threshold).rename('water')
+            water = water.updateMask(idx.mask())     # preserve nodata/cloud mask
+            # The scene footprint survives updateMask, so it still describes
+            # where the sensor actually acquired data — including the slanted
+            # edges of Landsat scenes
+            footprint = ee.Image(1).clip(image.geometry()).rename('footprint')
             return (
-                water
-                .updateMask(idx.mask())              # preserve nodata/cloud mask
+                water.addBands(footprint)
                 .copyProperties(image, ['system:time_start', 'system:time_end'])
             )
 
@@ -271,11 +317,143 @@ class HydroperiodAnalyzer:
         water_col = self._mosaic_by_day(water_col)   # deduplicate same-day tiles
         water_col = self._add_scene_weights(water_col, d0)
 
+        if not add_footprint:
+            water_col = water_col.select('water')
+
         self._water_masks = water_col
         self._hyd_year = hyd_year
         self._d0 = d0
+        self._last_index = index
+        self._last_threshold = threshold
 
         return water_col
+
+    def get_water_masks_stack(
+        self,
+        index='mndwi',
+        threshold=0.0,
+        hyd_year=None,
+        masked_value=2,
+        nodata=255,
+    ):
+        """Stack the per-date water masks into a single 8-bit image.
+
+        Turns the collection returned by :meth:`get_water_masks` into one
+        multi-band ``ee.Image``, with **one band per acquisition date** named
+        ``water_YYYY_MM_DD``. Values are stored as ``uint8``, which is four
+        times smaller than the ``int16`` hydroperiod bands and is the whole
+        point of exporting the masks separately: a GeoTIFF has a single data
+        type for the entire file, so stacking the masks together with the
+        hydroperiod bands would promote them to ``int16`` and waste the saving.
+
+        Two different kinds of "no value" are distinguished, because they mean
+        different things when interpreting a time series:
+
+        - ``masked_value`` — the sensor **did** acquire the pixel that day, but
+          it was discarded as cloud, shadow or another invalid class.
+        - ``nodata`` — no scene covered the pixel at all: outside the
+          acquisition footprint (the slanted edges of Landsat scenes, the gaps
+          between Sentinel-2 orbits) or outside the ROI.
+
+        Parameters
+        ----------
+        index : str
+            Water index used to build the masks. Default ``'mndwi'``.
+        threshold : float
+            Water classification threshold. Default ``0.0``.
+        hyd_year : int, optional
+            Starting calendar year of the hydrological cycle.
+            Defaults to ``ns.start_year``.
+        masked_value : int
+            Value for pixels observed but masked as cloud/shadow. Default ``2``.
+        nodata : int
+            Value for pixels no scene covered, and for everything outside the
+            ROI. Default ``255``.
+
+        Both must be integers in ``[0, 255]``, different from 0, from 1 and
+        from each other.
+
+        Returns
+        -------
+        ee.Image
+            ``uint8`` image clipped to the ROI, one band per date:
+
+            - ``0``            : dry
+            - ``1``            : water
+            - ``masked_value`` : observed but masked as cloud/shadow (2)
+            - ``nodata``       : no acquisition, or outside the ROI (255)
+
+            Image properties: ``'hyd_year_start'``, ``'hyd_year_end'``,
+            ``'index'``, ``'threshold'``, ``'masked_value'``, ``'nodata'``.
+
+        Examples
+        --------
+        ::
+
+            stack = ha.get_water_masks_stack(index='mndwi', threshold=0.1)
+            print(stack.bandNames().getInfo()[:3])
+            # ['water_2022_09_04', 'water_2022_09_09', 'water_2022_09_14']
+
+        See Also
+        --------
+        export_water_masks_to_drive : Send this stack to Google Drive.
+        export_water_masks_to_asset : Send this stack to an Earth Engine asset.
+        """
+        for name, value in (('masked_value', masked_value), ('nodata', nodata)):
+            if not isinstance(value, int) or isinstance(value, bool) \
+                    or not 0 <= value <= 255:
+                raise ValueError(
+                    f"{name} must be an integer in [0, 255], got {value!r}."
+                )
+            if value in (0, 1):
+                raise ValueError(
+                    f"{name}={value} collides with the mask values "
+                    f"(0 = dry, 1 = water). Use a different value."
+                )
+        if masked_value == nodata:
+            raise ValueError(
+                f"masked_value and nodata must differ, both are {nodata}. "
+                f"They encode different things: masked_value means the pixel "
+                f"was observed but discarded as cloud, nodata means no scene "
+                f"covered it."
+            )
+
+        masks = self.get_water_masks(
+            index=index, threshold=threshold, hyd_year=hyd_year,
+            add_footprint=True,
+        )
+
+        def _encode(image):
+            # 1 where any scene of that date covered the pixel, 0 elsewhere
+            covered = image.select('footprint').unmask(0)
+            # 0 dry / 1 water, then masked_value wherever the observation was
+            # discarded, then nodata wherever nothing was acquired at all
+            encoded = image.select('water').unmask(masked_value)
+            return encoded.where(covered.Not(), nodata).toUint8()
+
+        encoded_col = masks.map(_encode)
+
+        # One band per date, named from system:time_start. aggregate_array
+        # preserves collection order, and the collection is already sorted by
+        # date and deduplicated by day, so names line up with toBands() output
+        band_names = masks.aggregate_array('system:time_start').map(
+            lambda t: ee.String('water_').cat(ee.Date(t).format('YYYY_MM_dd'))
+        )
+
+        stack = encoded_col.toBands().rename(band_names)
+
+        # Clip first, then unmask: everything outside the ROI ends up carrying
+        # the nodata value explicitly
+        stack = stack.clip(self.ns.roi).unmask(nodata).toUint8()
+
+        return stack.set({
+            'hyd_year_start': self._hyd_year,
+            'hyd_year_end': self._hyd_year + 1,
+            'index': index,
+            'threshold': threshold,
+            'masked_value': masked_value,
+            'nodata': nodata,
+        })
 
     def compute_hydroperiod(
         self,
@@ -529,7 +707,9 @@ class HydroperiodAnalyzer:
         if self._water_masks is None:
             self.get_water_masks(hyd_year=hyd_year)
 
-        water_masks = self._water_masks
+        # Select explicitly: the cached collection carries an extra 'footprint'
+        # band when it was last built by get_water_masks_stack()
+        water_masks = self._water_masks.select('water')
         period_length = 365.0 / n_periods
 
         # For each period: count valid (unmasked) observations per pixel
@@ -775,6 +955,115 @@ class HydroperiodAnalyzer:
     # Export helpers
     # ------------------------------------------------------------------
 
+    def export_water_masks_to_drive(
+        self,
+        index='mndwi',
+        threshold=0.0,
+        hyd_year=None,
+        masked_value=2,
+        nodata=255,
+        stack=None,
+        folder='hydroperiod',
+        description=None,
+        scale=10,
+        crs='EPSG:4326',
+        **kwargs,
+    ):
+        """Export the per-date water masks to Google Drive as an 8-bit stack.
+
+        Sends the image built by :meth:`get_water_masks_stack` to Drive as a
+        single ``uint8`` GeoTIFF with one band per acquisition date. This is a
+        separate file from the hydroperiod export on purpose: a GeoTIFF has one
+        data type for the whole file, so keeping the masks apart is what allows
+        them to stay 8-bit instead of being promoted to the ``int16`` of the
+        hydroperiod bands.
+
+        Parameters
+        ----------
+        index : str
+            Water index used to build the masks. Default ``'mndwi'``.
+        threshold : float
+            Water classification threshold. Default ``0.0``.
+        hyd_year : int, optional
+            Starting calendar year of the hydrological cycle.
+            Defaults to ``ns.start_year``.
+        masked_value : int
+            Value for pixels observed but masked as cloud/shadow. Default ``2``.
+        nodata : int
+            Value for pixels no scene covered, and for everything outside the
+            ROI. Default ``255``.
+        stack : ee.Image, optional
+            Pre-built mask stack to export. If given, ``index``, ``threshold``,
+            ``hyd_year``, ``masked_value`` and ``nodata`` are ignored.
+        folder : str
+            Google Drive destination folder. Default ``'hydroperiod'``.
+        description : str, optional
+            Task name in the Earth Engine Tasks panel.
+            Auto-generated from the hydrological year if not provided.
+        scale : int
+            Output pixel size in metres. Default 10 (Sentinel-2).
+        crs : str
+            Output CRS. Default ``'EPSG:4326'``.
+        **kwargs
+            Additional keyword arguments forwarded to
+            ``ee.batch.Export.image.toDrive``.
+
+        Returns
+        -------
+        ee.batch.Task
+            Started export task.
+
+        Notes
+        -----
+        The nodata value is *not* written into the GeoTIFF header — Earth
+        Engine does not tag it. Set it yourself when reading the file
+        (``rasterio.open(...).read(masked=True)`` after declaring it, or
+        Properties → No Data in QGIS).
+
+        Examples
+        --------
+        ::
+
+            ha.export_water_masks_to_drive(
+                index='mndwi', threshold=0.1,
+                folder='my_wetland', scale=10, crs='EPSG:25829',
+            )
+        """
+        if stack is None:
+            stack = self.get_water_masks_stack(
+                index=index, threshold=threshold, hyd_year=hyd_year,
+                masked_value=masked_value, nodata=nodata,
+            )
+        else:
+            # A pre-built stack carries its own encoding; read it back so the
+            # message below describes the file that is actually being written
+            encoding = stack.toDictionary(['masked_value', 'nodata']).getInfo()
+            masked_value = encoding.get('masked_value', masked_value)
+            nodata = encoding.get('nodata', nodata)
+
+        if description is None:
+            yr = self._hyd_year or self.ns.start_year
+            description = f'water_masks_{yr}_{yr + 1}'
+
+        task = ee.batch.Export.image.toDrive(
+            image=stack,
+            description=description,
+            folder=folder,
+            region=self.ns.roi,
+            scale=scale,
+            crs=crs,
+            maxPixels=1e13,
+            **kwargs,
+        )
+        task.start()
+        n_dates = stack.bandNames().size().getInfo()
+        print(
+            f"Export task '{description}' started → Drive folder '{folder}' "
+            f"({n_dates} dates, uint8: 0=dry, 1=water, "
+            f"{masked_value}=cloud-masked, {nodata}=no acquisition)."
+        )
+        return task
+
     def export_to_drive(
         self,
         image=None,
@@ -782,6 +1071,7 @@ class HydroperiodAnalyzer:
         description=None,
         scale=10,
         crs='EPSG:4326',
+        include_masks=False,
         **kwargs,
     ):
         """Export hydroperiod results to Google Drive.
@@ -800,14 +1090,23 @@ class HydroperiodAnalyzer:
             Output pixel size in metres. Default 10 (Sentinel-2).
         crs : str
             Output CRS. Default ``'EPSG:4326'``.
+        include_masks : bool
+            Also export the per-date water masks as a separate ``uint8``
+            file (0 = dry, 1 = water, 2 = cloud-masked, 255 = no acquisition).
+            The index, threshold and cycle are read from the exported image
+            itself, so the masks always match what is being exported. They
+            cannot share the hydroperiod file: a GeoTIFF has a single data
+            type, so bundling them would promote the masks to ``int16``.
+            Default ``False``.
         **kwargs
             Additional keyword arguments forwarded to
             ``ee.batch.Export.image.toDrive``.
 
         Returns
         -------
-        ee.batch.Task
-            Started export task.
+        ee.batch.Task or tuple of ee.batch.Task
+            Started export task. When ``include_masks=True``, a
+            ``(hydroperiod_task, masks_task)`` tuple is returned instead.
         """
         if image is None:
             if self._results is None:
@@ -843,6 +1142,119 @@ class HydroperiodAnalyzer:
         )
         task.start()
         print(f"Export task '{description}' started → Drive folder '{folder}'.")
+
+        if include_masks:
+            masks_index, masks_threshold, masks_year = \
+                self._masks_params_for(image)
+            # Both exports share kwargs, so a user-supplied file name has to be
+            # suffixed too or the two files would overwrite each other in Drive
+            masks_kwargs = dict(kwargs)
+            if 'fileNamePrefix' in masks_kwargs:
+                masks_kwargs['fileNamePrefix'] += '_water_masks'
+            masks_task = self.export_water_masks_to_drive(
+                index=masks_index,
+                threshold=masks_threshold,
+                hyd_year=masks_year,
+                folder=folder,
+                description=f'{description}_water_masks',
+                scale=scale,
+                crs=crs,
+                **masks_kwargs,
+            )
+            return task, masks_task
+
+        return task
+
+    def export_water_masks_to_asset(
+        self,
+        asset_id,
+        index='mndwi',
+        threshold=0.0,
+        hyd_year=None,
+        masked_value=2,
+        nodata=255,
+        stack=None,
+        description=None,
+        scale=10,
+        crs='EPSG:4326',
+        **kwargs,
+    ):
+        """Export the per-date water masks to an Earth Engine Asset.
+
+        Asset counterpart of :meth:`export_water_masks_to_drive`. Writes the
+        image built by :meth:`get_water_masks_stack` as a ``uint8`` asset with
+        one band per acquisition date.
+
+        Parameters
+        ----------
+        asset_id : str
+            Full EE asset path
+            (e.g. ``'projects/my-project/assets/water_masks_2023_2024'``).
+        index : str
+            Water index used to build the masks. Default ``'mndwi'``.
+        threshold : float
+            Water classification threshold. Default ``0.0``.
+        hyd_year : int, optional
+            Starting calendar year of the hydrological cycle.
+            Defaults to ``ns.start_year``.
+        masked_value : int
+            Value for pixels observed but masked as cloud/shadow. Default ``2``.
+        nodata : int
+            Value for pixels no scene covered, and for everything outside the
+            ROI. Default ``255``.
+        stack : ee.Image, optional
+            Pre-built mask stack to export. If given, ``index``, ``threshold``,
+            ``hyd_year``, ``masked_value`` and ``nodata`` are ignored.
+        description : str, optional
+            Task name. Auto-generated from the hydrological year if not
+            provided.
+        scale : int
+            Output pixel size in metres. Default 10 (Sentinel-2).
+        crs : str
+            Output CRS. Default ``'EPSG:4326'``.
+        **kwargs
+            Additional keyword arguments forwarded to
+            ``ee.batch.Export.image.toAsset``.
+
+        Returns
+        -------
+        ee.batch.Task
+            Started export task.
+
+        Notes
+        -----
+        Unlike a GeoTIFF, an Earth Engine asset keeps one data type per band,
+        so this could technically live in the same asset as the hydroperiod
+        bands. It is kept separate anyway, to mirror the Drive export and to
+        keep the date stack independent of the hydroperiod result.
+        """
+        if stack is None:
+            stack = self.get_water_masks_stack(
+                index=index, threshold=threshold, hyd_year=hyd_year,
+                masked_value=masked_value, nodata=nodata,
+            )
+
+        if description is None:
+            yr = self._hyd_year or self.ns.start_year
+            description = f'water_masks_{yr}_{yr + 1}'
+
+        task = ee.batch.Export.image.toAsset(
+            image=stack,
+            description=description,
+            assetId=asset_id,
+            region=self.ns.roi,
+            scale=scale,
+            crs=crs,
+            maxPixels=1e13,
+            **kwargs,
+        )
+        task.start()
+        n_dates = stack.bandNames().size().getInfo()
+        print(
+            f"Export task '{description}' started → Asset '{asset_id}' "
+            f"({n_dates} dates, uint8: 0=dry, 1=water, "
+            f"{masked_value}=cloud-masked, {nodata}=no acquisition)."
+        )
         return task
 
     def export_to_asset(
@@ -852,6 +1264,8 @@ class HydroperiodAnalyzer:
         description=None,
         scale=10,
         crs='EPSG:4326',
+        include_masks=False,
+        masks_asset_id=None,
         **kwargs,
     ):
         """Export hydroperiod results to an Earth Engine Asset.
@@ -870,14 +1284,24 @@ class HydroperiodAnalyzer:
             Output pixel size in metres. Default 10.
         crs : str
             Output CRS. Default ``'EPSG:4326'``.
+        include_masks : bool
+            Also export the per-date water masks as a separate ``uint8``
+            asset (0 = dry, 1 = water, 2 = cloud-masked, 255 = no
+            acquisition). The index, threshold and cycle are read from the
+            exported image itself, so the masks always match what is being
+            exported. Default ``False``.
+        masks_asset_id : str, optional
+            Asset path for the masks when ``include_masks=True``.
+            Defaults to ``asset_id`` with a ``'_water_masks'`` suffix.
         **kwargs
             Additional keyword arguments forwarded to
             ``ee.batch.Export.image.toAsset``.
 
         Returns
         -------
-        ee.batch.Task
-            Started export task.
+        ee.batch.Task or tuple of ee.batch.Task
+            Started export task. When ``include_masks=True``, a
+            ``(hydroperiod_task, masks_task)`` tuple is returned instead.
         """
         if image is None:
             if self._results is None:
@@ -915,6 +1339,22 @@ class HydroperiodAnalyzer:
         print(
             f"Export task '{description}' started → Asset '{asset_id}'."
         )
+
+        if include_masks:
+            masks_index, masks_threshold, masks_year = \
+                self._masks_params_for(image)
+            masks_task = self.export_water_masks_to_asset(
+                asset_id=masks_asset_id or f'{asset_id}_water_masks',
+                index=masks_index,
+                threshold=masks_threshold,
+                hyd_year=masks_year,
+                description=f'{description}_water_masks',
+                scale=scale,
+                crs=crs,
+                **kwargs,
+            )
+            return task, masks_task
+
         return task
 
     def __repr__(self):

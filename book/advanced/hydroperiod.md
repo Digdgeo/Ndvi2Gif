@@ -155,6 +155,38 @@ for w, s, e in zip(weights[:5], starts[:5], ends[:5]):
 
 Each image in the returned collection has a `water` band (1 = water, 0 = dry, masked = cloud/nodata) and three properties: `weight`, `start_doy`, and `end_doy` (all in days from the hydrological year start).
 
+To work with the masks as a raster rather than a collection, `get_water_masks_stack()` flattens them into a single `uint8` image with **one band per date**:
+
+```python
+stack = ha.get_water_masks_stack(index='mndwi', threshold=0.0, hyd_year=2022)
+
+print(stack.bandNames().getInfo()[:3])
+# ['water_2022_09_03', 'water_2022_09_08', 'water_2022_09_23']
+```
+
+Values use four levels, because "the satellite looked and saw a cloud" and "no satellite passed over this pixel" mean very different things when you read a time series:
+
+| Value | Meaning |
+|-------|---------|
+| `0` | Dry |
+| `1` | Water |
+| `2` | Observed, but discarded as cloud, shadow or another invalid class |
+| `255` | No scene covered the pixel that day, or the pixel is outside the ROI |
+
+The two "no value" codes are configurable via `masked_value` and `nodata`; both must differ from 0, from 1 and from each other.
+
+The distinction comes from the acquisition footprint of each scene, which survives the cloud mask. It matters most with **Landsat**, where the slanted scene edges leave large triangles with no data at all, and with any ROI wider than a single tile or orbit swath:
+
+```python
+# ROI spanning several Landsat scenes
+stack = ha.get_water_masks_stack(hyd_year=2022)
+
+h = stack.select(0).reduceRegion(
+    ee.Reducer.frequencyHistogram(), roi, 500, maxPixels=1e10
+).getInfo()
+# {'0': dry, '1': water, '2': cloud-masked, '255': outside the scene}
+```
+
 ---
 
 ### 4. Compute a single hydrological cycle
@@ -448,6 +480,41 @@ for yr, anom in anomalies.items():
 
 Monitor tasks at [code.earthengine.google.com/tasks](https://code.earthengine.google.com/tasks).
 
+#### Downloading the water masks too
+
+Set `include_masks=True` to also get the per-date binary masks. They travel in a **separate** `uint8` GeoTIFF, one band per acquisition date:
+
+```python
+hyd_task, masks_task = ha.export_to_drive(
+    image=result,
+    folder='my_wetland',
+    scale=10,
+    crs='EPSG:25829',
+    include_masks=True,          # returns a tuple of two tasks
+)
+```
+
+The index, threshold and cycle are read from the image being exported (`compute_hydroperiod()` stamps them as properties), so the masks match it even if you have since recomputed the hydroperiod with a different index or threshold. To export masks on their own, or with a different index, threshold or value encoding, call the method directly:
+
+```python
+ha.export_water_masks_to_drive(
+    index='mndwi',
+    threshold=0.1,
+    hyd_year=2022,
+    masked_value=2,              # observed but cloudy
+    nodata=255,                  # no acquisition at all
+    folder='my_wetland',
+    scale=10,
+    crs='EPSG:25829',
+)
+```
+
+```{note}
+**Why a separate file?** A GeoTIFF stores one data type for the whole file. The hydroperiod bands are `int16`, so bundling the masks with them would promote the masks to `int16` too and double their size for nothing. Kept apart, they stay `uint8` — one byte per pixel per date.
+
+Earth Engine does not write a nodata tag into the GeoTIFF header, so declare `255` as nodata when you open the file (Properties → No Data in QGIS, or `rasterio` on read). Keep `2` as a real value: it is data, it just says the pixel was cloudy that day.
+```
+
 #### To an Earth Engine Asset
 
 ```python
@@ -458,6 +525,30 @@ task = ha.export_to_asset(
     crs='EPSG:25829',
 )
 ```
+
+`include_masks=True` works here too. The masks go to their own asset, named after `asset_id` with a `_water_masks` suffix unless you set `masks_asset_id`:
+
+```python
+hyd_task, masks_task = ha.export_to_asset(
+    image=result,
+    asset_id='projects/your-project/assets/hydroperiod_2022_2023',
+    scale=10,
+    crs='EPSG:25829',
+    include_masks=True,
+    # masks_asset_id='projects/your-project/assets/masks_2022_2023',
+)
+
+# Or on their own
+ha.export_water_masks_to_asset(
+    asset_id='projects/your-project/assets/water_masks_2022_2023',
+    index='mndwi',
+    threshold=0.1,
+    hyd_year=2022,
+    scale=10,
+)
+```
+
+An Earth Engine asset keeps one data type per band, so the masks could technically share the hydroperiod asset — unlike a GeoTIFF. They are kept apart anyway, to mirror the Drive export and to keep the date stack usable on its own.
 
 ---
 

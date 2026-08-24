@@ -45,6 +45,8 @@ parts:
         title: "Time Series Analysis"
       - file: notebooks/05_hydroperiod
         title: "Hydroperiod Analysis"
+      - file: notebooks/06_stable_pixels
+        title: "Stable Pixels & PIF Selection"
 
   - caption: Reference
     chapters:

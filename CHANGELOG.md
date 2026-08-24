@@ -9,6 +9,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-08-24
+
+### Added
+
+- **🎨 Raw reflectance bands as selectable indices**: the standardized bands can now be requested directly through `index=`, on Sentinel-2, Landsat and MODIS:
+  - `index='blue'`, `'green'`, `'red'`, `'nir'`, `'swir1'`, `'swir2'`, plus `'red_edge1'`, `'red_edge2'` and `'red_edge3'` on Sentinel-2.
+  - Values come back as **surface reflectance in 0-1 on every sensor**. Sentinel-2 and MODIS store reflectance as integers multiplied by 10000 and are rescaled on the fly (`self.reflectance_scale`); Landsat is already rescaled by `scale_OLI` / `scale_ETM`. The same numeric threshold therefore means the same thing whichever sensor produced it.
+  - Not available on Sentinel-3, whose bands are top-of-atmosphere radiances with a different band set, nor on Sentinel-1, which already exposes `vv` and `vh`.
+
+  Spectral indices are ratios and cancel out multiplicative changes in brightness, so a pixel can keep exactly the same NDVI while its reflectance drifts. Combined with the dispersion reducers added in 1.4.0, the bands map how radiometrically invariant each pixel is over a time series, which is how pseudo-invariant features (PIFs) are selected for relative radiometric normalization.
+
+- **🔢 `key='count'`**: number of valid (non-masked) observations per pixel in each period. Not a value statistic but a quality layer: a standard deviation computed from three observations means very little, so `count` tells which parts of a dispersion map can be trusted. With `periods=1` it gives the yearly observation count per pixel, which also exposes the extra coverage in Sentinel-2 tile overlaps.
+
+### Fixed
+
+- **`SpatialTrendAnalyzer.calculate_pixel_trends()` dropped the last year of every trend map.** It iterated `range(start_year, end_year)` while `get_year_composite()` treats `end_year` as inclusive, so a 2018-2025 request was fitted on 2018-2024. The `magnitude` band was wrong on top of that: the slope was multiplied by `end_year - start_year` while the series only spanned one year less, overestimating the accumulated change by a full year.
+- **`method='mann_kendall'` was documented but never implemented** — it fell through to the `else` branch and raised `ValueError`. It now returns Sen's slope, intercept and magnitude plus `tau`, Kendall's rank correlation with time, which is scale-free and so comparable across bands and sensors. `ee.Reducer.kendallsCorrelation()` also offers a `p-value` band, deliberately not returned: it comes back fully masked at every series length tested (n = 8 to 60, including trends `scipy.stats.kendalltau` scores below 1e-20), and a fully masked band silently masks whatever it is combined with. The `ValueError` for an unknown method now lists the valid ones.
+
+### Changed
+
+- `book/reference/indices.md`: the overview table now matches the code (110 variables, not 88) and documents the new bands. The per-section counts and a few listed-but-unimplemented indices further down that page are still out of sync and pending a separate revision.
+- Dropped `pycrs` from the dependencies: it was declared but never imported anywhere in the package. Removed the unused `import fiona` from `ndvi2gif.py` as well, though `fiona` stays in the dependencies because geopandas uses it as a file engine.
+
 ## [1.4.0] - 2026-08-22
 
 ### Added

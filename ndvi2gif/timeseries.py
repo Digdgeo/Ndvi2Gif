@@ -3159,6 +3159,13 @@ class SpatialTrendAnalyzer:
             * intercept: Y-intercept
             * magnitude: Total change over period
             
+            ``method='mann_kendall'`` adds one more band:
+            
+            * tau: Kendall's tau, the rank correlation with time. Ranges from
+              -1 (strictly decreasing) to +1 (strictly increasing); 0 means no
+              monotonic trend. Unlike the slope it is scale-free, so it
+              compares across bands and sensors
+            
         Examples
         --------
         >>> # Calculate linear trends
@@ -3176,7 +3183,9 @@ class SpatialTrendAnalyzer:
         # Create collection with time bands
         images_list = []
         
-        for year_idx, year in enumerate(range(self.processor.start_year, self.processor.end_year)):
+        # end_year is inclusive, like get_year_composite(). Using an exclusive
+        # range here silently dropped the final year from every trend map
+        for year_idx, year in enumerate(range(self.processor.start_year, self.processor.end_year + 1)):
             for period_idx in range(self.processor.periods):
                 # Get composite
                 composite = self.processor.get_period_composite(year, period_idx)
@@ -3235,9 +3244,34 @@ class SpatialTrendAnalyzer:
             total_time = self.processor.end_year - self.processor.start_year
             magnitude = trend_image.select('slope').multiply(total_time).rename('magnitude')
             trend_image = trend_image.addBands(magnitude)
-            
+
+        elif method == 'mann_kendall':
+            # Mann-Kendall is a significance test, not a slope estimator: it says
+            # whether a monotonic trend is real, and Sen's slope is its usual
+            # companion for the magnitude. Both are returned, so this method gives
+            # the same slope/intercept/magnitude as 'sen' plus the significance.
+            sens = collection.select(['time', 'nd']).reduce(ee.Reducer.sensSlope())
+            trend_image = sens.select(['offset', 'slope'], ['intercept', 'slope'])
+
+            total_time = self.processor.end_year - self.processor.start_year
+            magnitude = trend_image.select('slope').multiply(total_time).rename('magnitude')
+
+            # Only tau is kept. ee.Reducer.kendallsCorrelation() also advertises a
+            # 'p-value' band, but it comes back fully masked at every series length
+            # tested (n = 8 to 60, including trends scipy scores at p < 1e-20), and a
+            # fully masked band silently masks anything it is combined with. Judge
+            # significance from tau and the length of the series instead
+            kendall = collection.select(['time', 'nd']).reduce(
+                ee.Reducer.kendallsCorrelation(2)
+            ).select(['tau'])
+
+            trend_image = trend_image.addBands([magnitude, kendall])
+
         else:
-            raise ValueError(f"Method '{method}' not supported")
+            raise ValueError(
+                f"Method '{method}' not supported. Available methods are: "
+                "'linear', 'sen', 'mann_kendall'"
+            )
         
         # Mask pixels with insufficient observations
         observation_count = collection.select('nd').count()
@@ -3248,7 +3282,7 @@ class SpatialTrendAnalyzer:
         
         # Export if requested
         if export:
-            filename = f'{self.processor.sat}_{self.processor.index}_trend_{method}_{self.processor.start_year}_{self.processor.end_year-1}.tif'
+            filename = f'{self.processor.sat}_{self.processor.index}_trend_{method}_{self.processor.start_year}_{self.processor.end_year}.tif'
             print(f"Exporting trend map as {filename}")
             self.processor.get_export_single(trend_image, name=filename, scale=scale)
 

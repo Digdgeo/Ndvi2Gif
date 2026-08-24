@@ -14,11 +14,21 @@ open community resource.
 
 | Category | Count | Platforms | Description |
 |----------|-------|-----------|-------------|
-| **Optical Vegetation** | 40 | S2, S3, Landsat, MODIS | NDVI, EVI, SAVI, and derivatives |
+| **Optical Vegetation** | 27 | S2, S3, Landsat, MODIS | NDVI, EVI, SAVI, and derivatives |
+| **Sentinel-2 Exclusive** | 9 | S2 | Red edge indices |
+| **Sentinel-3 Exclusive** | 10 | S3 | OLCI water quality indices |
+| **Raw Reflectance Bands** | 9 | S2, Landsat, MODIS | Single bands as surface reflectance |
 | **SAR Vegetation** | 7 | Sentinel-1 | Radar-based vegetation indices |
-| **ERA5 Climate** | 40 | ERA5-Land | Temperature, precipitation, soil, radiation |
+| **ERA5 Climate** | 47 | ERA5-Land | Temperature, precipitation, soil, radiation |
 | **CHIRPS** | 1 | CHIRPS | High-resolution precipitation |
-| **Total** | **88** | 7 platforms | Complete variable library |
+| **Total** | **110** | 7 platforms | Complete variable library |
+
+```{warning}
+The per-section counts further down this page, and a handful of the indices
+listed in them, are out of sync with the code and are being revised. Check
+`NdviSeasonality(sat=...).get_available_indices()` for the authoritative list
+of what a given sensor accepts.
+```
 
 ---
 
@@ -528,6 +538,61 @@ index='cyanobacteria'
 
 ---
 
+## Raw Reflectance Bands (9)
+
+Compatible with: **Sentinel-2**, **Landsat 4-9**, **MODIS**
+
+Spectral indices are ratios, so they cancel out multiplicative changes in
+brightness: a pixel can keep exactly the same NDVI while its reflectance
+drifts. When the question is about the radiometry itself rather than about
+vegetation, the bands are available as regular index names.
+
+```python
+index='blue'   # or 'green', 'red', 'nir', 'swir1', 'swir2'
+index='red_edge1'   # or 'red_edge2', 'red_edge3' — Sentinel-2 only
+```
+
+**Units**: surface reflectance, 0 to 1, on every sensor. Sentinel-2 and MODIS
+store reflectance as integers multiplied by 10000 and are rescaled on the fly;
+Landsat is already rescaled by its own scaling functions. The same numeric
+threshold therefore means the same thing whichever sensor produced it.
+
+**Not available on Sentinel-3**, whose bands are top-of-atmosphere radiances
+with a different band set, and not on Sentinel-1, which has `vv` and `vh`.
+
+**Typical use — radiometric stability**: combined with the dispersion reducers,
+the bands map how invariant each pixel is over a time series, which is how
+pseudo-invariant features (PIFs) are chosen for relative radiometric
+normalization:
+
+```python
+# Within-year dispersion of SWIR1, one composite per year
+stability = NdviSeasonality(
+    roi=roi, start_year=2018, end_year=2025,
+    periods=1, sat='S2', index='swir1', key='std'
+).get_year_composite()
+
+# How many observations each pixel is based on
+n_obs = NdviSeasonality(
+    roi=roi, start_year=2018, end_year=2025,
+    periods=1, sat='S2', index='swir1', key='count'
+).get_year_composite()
+```
+
+| Name | Band | S2 | Landsat | MODIS |
+|------|------|----|---------|-------|
+| `blue` | Blue (~490 nm) | ✓ | ✓ | ✓ |
+| `green` | Green (~560 nm) | ✓ | ✓ | ✓ |
+| `red` | Red (~665 nm) | ✓ | ✓ | ✓ |
+| `nir` | NIR (~840 nm) | ✓ | ✓ | ✓ |
+| `swir1` | SWIR 1 (~1610 nm) | ✓ | ✓ | ✓ |
+| `swir2` | SWIR 2 (~2190 nm) | ✓ | ✓ | ✓ |
+| `red_edge1` | Red Edge 1 (~705 nm) | ✓ | ✗ | ✗ |
+| `red_edge2` | Red Edge 2 (~740 nm) | ✓ | ✗ | ✗ |
+| `red_edge3` | Red Edge 3 (~783 nm) | ✓ | ✗ | ✗ |
+
+---
+
 ## SAR Indices (7)
 
 Compatible with: **Sentinel-1** (VV + VH polarizations)
@@ -940,6 +1005,7 @@ soil = NdviSeasonality(
 |------------|----|----|---------|-------|----|-|--------|
 | Optical (basic) | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ |
 | Red Edge | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Raw reflectance bands | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ |
 | SAR | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | Climate | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
 

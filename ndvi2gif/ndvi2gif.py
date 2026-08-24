@@ -60,7 +60,6 @@ import geemap
 import requests
 import zipfile
 import geopandas as gpd
-import fiona
 from geemap import zonal_statistics
 from io import BytesIO
 import calendar
@@ -266,7 +265,7 @@ class NdviSeasonality:
         
         Default is 'S2'.
         
-    key : {'max', 'min', 'median', 'mean', 'sum', 'percentile', 'std', 'variance', 'range', 'cv'}, optional
+    key : {'max', 'min', 'median', 'mean', 'sum', 'percentile', 'std', 'variance', 'range', 'cv', 'count'}, optional
         Statistical reducer for temporal aggregation:
 
         * ``'max'`` : Maximum value (vegetation peak detection)
@@ -280,6 +279,8 @@ class NdviSeasonality:
         * ``'range'`` : Maximum minus minimum (amplitude)
         * ``'cv'`` : Coefficient of variation, std divided by mean.
           Only meaningful for indices that stay positive
+        * ``'count'`` : Number of valid observations per pixel (data
+          availability, not a value statistic)
 
         Default is 'max'.
         
@@ -511,10 +512,14 @@ class NdviSeasonality:
             - 'cv': Coefficient of variation (std / mean). Only meaningful for
               indices that stay positive; it is unstable when the mean is close
               to zero and negative for Sentinel-1 backscatter in dB
+            - 'count': Number of valid (non-masked) observations per pixel in
+              the period. Not a value statistic but a quality layer: dispersion
+              computed from three observations means very little, so 'count'
+              tells which parts of the result can be trusted
 
-            The last four are dispersion statistics: instead of describing the
-            typical level of the index, they describe how much it varies inside
-            each period, which is useful to detect phenological change,
+            The dispersion statistics ('std', 'variance', 'range' and 'cv') do
+            not describe the typical level of the index but how much it varies
+            inside each period, which is useful to detect phenological change,
             disturbances or unstable surfaces such as flooded areas.
 
             Default is 'max'.
@@ -756,7 +761,7 @@ class NdviSeasonality:
         self.start_year = start_year
         self.end_year = end_year
         valid_keys = ['max', 'min', 'median', 'percentile', 'mean', 'sum',
-                      'std', 'variance', 'range', 'cv']
+                      'std', 'variance', 'range', 'cv', 'count']
         if key not in valid_keys:
             raise ValueError(
                 f"Statistic '{key}' is not supported. Available statistics (key) are: {valid_keys}"
@@ -816,6 +821,19 @@ class NdviSeasonality:
             'fai'
         }
 
+        # Raw reflectance bands exposed as selectable "indices". Spectral
+        # indices are ratios and cancel out multiplicative brightness changes,
+        # so NDVI can stay constant while reflectance drifts. Radiometric work
+        # (selecting pseudo-invariant features, for instance) needs the bands
+        # themselves. Sentinel-3 is left out on purpose: its bands are TOA
+        # radiances with a different band set, so they are not reflectance
+        self.raw_band_indices = {
+            'blue', 'green', 'red', 'nir', 'swir1', 'swir2'
+        }
+
+        # Red edge bands, only present in Sentinel-2
+        self.s2_rededge_bands = {'red_edge1', 'red_edge2', 'red_edge3'}
+
         # SAR indices (Sentinel-1)
         self.s1_indices = {
             'rvi', 'vv', 'vh', 'vv_vh_ratio', 'dpsvi', 'rfdi', 'vsdi'
@@ -865,9 +883,11 @@ class NdviSeasonality:
 
         # Final sensor-to-indices mapping
         self.sensor_indices = {
-            'S2': self.optical_indices | self.s2_exclusive_indices | self.swir_optical_indices,
-            'Landsat': self.optical_indices | self.swir_optical_indices,
-            'MODIS': self.optical_indices | self.swir_optical_indices,
+            'S2': (self.optical_indices | self.s2_exclusive_indices
+                   | self.swir_optical_indices | self.raw_band_indices
+                   | self.s2_rededge_bands),
+            'Landsat': self.optical_indices | self.swir_optical_indices | self.raw_band_indices,
+            'MODIS': self.optical_indices | self.swir_optical_indices | self.raw_band_indices,
             'S1': self.s1_indices,
             'S3': self.optical_indices | self.s3_exclusive_indices,
             'ERA5': self.era5_variables,
@@ -880,7 +900,13 @@ class NdviSeasonality:
             raise ValueError(f"Satellite '{sat}' is not supported. Available satellites are: {available_sats}")
         
         self.sat = sat
-        
+
+        # Factor that turns the stored band values into surface reflectance
+        # (0-1), used by get_raw_band. Landsat is already rescaled in
+        # scale_OLI / scale_ETM, while Sentinel-2 and MODIS store reflectance
+        # as integers multiplied by 10000
+        self.reflectance_scale = {'S2': 1e-4, 'MODIS': 1e-4}.get(sat, 1.0)
+
         # Validate index for selected satellite
         available_indices = self.sensor_indices[self.sat]
         if index not in available_indices:
@@ -914,6 +940,17 @@ class NdviSeasonality:
 
             # FAI - Floating Algae Index (S2, Landsat, MODIS)
             'fai': self.get_fai,
+
+            # Raw reflectance bands (S2, Landsat, MODIS)
+            'blue': lambda image: self.get_raw_band(image, 'Blue'),
+            'green': lambda image: self.get_raw_band(image, 'Green'),
+            'red': lambda image: self.get_raw_band(image, 'Red'),
+            'nir': lambda image: self.get_raw_band(image, 'Nir'),
+            'swir1': lambda image: self.get_raw_band(image, 'Swir1'),
+            'swir2': lambda image: self.get_raw_band(image, 'Swir2'),
+            'red_edge1': lambda image: self.get_raw_band(image, 'Red_Edge1'),
+            'red_edge2': lambda image: self.get_raw_band(image, 'Red_Edge2'),
+            'red_edge3': lambda image: self.get_raw_band(image, 'Red_Edge3'),
 
             # Sentinel-3 OLCI specific indices
             'oci': self.get_oci, 'tsi': self.get_tsi, 'cdom': self.get_cdom,
@@ -1672,6 +1709,11 @@ class NdviSeasonality:
         period_stats['range'] = period_stats['max'].subtract(period_stats['min'])
         period_stats['cv'] = period_stats['std'].divide(period_stats['mean'])
 
+        # Valid observations per pixel. ee.ImageCollection has no count()
+        # shortcut, so reduce() is used and its suffix stripped like above
+        period_stats['count'] = self._strip_reducer_suffix(
+            filtered_collection.reduce(ee.Reducer.count()), 'count')
+
         # Return the composite corresponding to the user-specified statistical method
         return period_stats[self.key]
 
@@ -2115,6 +2157,65 @@ class NdviSeasonality:
 
     
     # Index calculation methods (same as original - keeping all of them)
+    def get_raw_band(self, image, band):
+        """
+        Return a single reflectance band through the regular index machinery.
+
+        Spectral indices are ratios, so they cancel out multiplicative changes
+        in brightness: a pixel can keep its NDVI unchanged while its actual
+        reflectance drifts. Radiometric work needs the bands themselves. The
+        typical case is selecting pseudo-invariant features (PIFs) for relative
+        radiometric normalization, where the criterion is per-band reflectance
+        stability, not index stability.
+
+        The value is rescaled to surface reflectance (0-1) with
+        ``self.reflectance_scale``, so the same threshold means the same thing
+        on every sensor: Sentinel-2 and MODIS store reflectance as integers
+        multiplied by 10000, while Landsat is already rescaled by
+        :func:`scale_OLI` / :func:`scale_ETM`.
+
+        Available as ``index='blue'``, ``'green'``, ``'red'``, ``'nir'``,
+        ``'swir1'``, ``'swir2'`` on Sentinel-2, Landsat and MODIS, plus
+        ``'red_edge1'``, ``'red_edge2'`` and ``'red_edge3'`` on Sentinel-2.
+        Sentinel-3 is not supported: its bands are TOA radiances.
+
+        Parameters
+        ----------
+        image : ee.Image
+            Image with standardized band names (Blue, Green, Red, Nir, Swir1,
+            Swir2, Red_Edge1-3).
+        band : str
+            Standardized band name to extract.
+
+        Returns
+        -------
+        ee.Image
+            Single-band image of surface reflectance, renamed to ``'nd'`` to
+            match the band bookkeeping of :meth:`get_year_composite`.
+
+        Examples
+        --------
+        Map how stable SWIR1 is over a whole Sentinel-2 series, one composite
+        per year covering the full year::
+
+            >>> n = NdviSeasonality(roi=roi, start_year=2018, end_year=2025,
+            ...                     periods=1, sat='S2', index='swir1',
+            ...                     key='std')
+            >>> within_year = n.get_year_composite()
+
+        Combine it with the between-year dispersion of the annual means::
+
+            >>> m = NdviSeasonality(roi=roi, start_year=2018, end_year=2025,
+            ...                     periods=1, sat='S2', index='swir1',
+            ...                     key='mean')
+            >>> between_year = m.get_year_composite().reduce(ee.Reducer.stdDev())
+
+        See Also
+        --------
+        get_available_indices : Lists the indices and bands available per sensor
+        """
+        return image.select(band).multiply(self.reflectance_scale).rename(['nd'])
+
     def get_ndvi(self, image):
         """
         Normalized Difference Vegetation Index - Most widely used vegetation index.

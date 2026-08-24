@@ -17,8 +17,12 @@ import numpy as np
 # Statistical reducers accepted by NdviSeasonality(key=...)
 VALID_KEYS = {
     "max", "min", "median", "mean", "sum", "percentile",
-    "std", "variance", "range", "cv",
+    "std", "variance", "range", "cv", "count",
 }
+
+# Raw reflectance bands selectable through index=...
+RAW_BANDS = {"blue", "green", "red", "nir", "swir1", "swir2"}
+S2_REDEDGE_BANDS = {"red_edge1", "red_edge2", "red_edge3"}
 
 
 # ---------------------------------------------------------------------
@@ -122,6 +126,40 @@ def test_core_indices_available():
     available = set(inst.d.keys())
     missing = expected - available
     assert not missing, f"Missing index methods: {missing}"
+
+
+def test_raw_bands_available_per_sensor():
+    """Raw reflectance bands are selectable on S2/Landsat/MODIS, not on S1/S3."""
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+    inst = NdviSeasonality(index="swir1")
+
+    assert RAW_BANDS | S2_REDEDGE_BANDS <= set(inst.d.keys())
+    assert RAW_BANDS | S2_REDEDGE_BANDS <= inst.sensor_indices["S2"]
+
+    for sat in ("Landsat", "MODIS"):
+        assert RAW_BANDS <= inst.sensor_indices[sat]
+        # Red edge only exists in Sentinel-2
+        assert not (S2_REDEDGE_BANDS & inst.sensor_indices[sat])
+
+    # Sentinel-3 carries TOA radiances and Sentinel-1 backscatter, so neither
+    # should expose bands that claim to be surface reflectance
+    for sat in ("S1", "S3"):
+        assert not (RAW_BANDS & inst.sensor_indices[sat])
+
+    for sat, index in [("Landsat", "red_edge1"), ("S3", "swir1"), ("S1", "red")]:
+        with pytest.raises(ValueError):
+            NdviSeasonality(sat=sat, index=index)
+
+
+def test_raw_band_reflectance_scale():
+    """Scale factor brings every sensor to reflectance in 0-1."""
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    # S2 and MODIS store reflectance as integers x 10000
+    assert NdviSeasonality(sat="S2", index="red").reflectance_scale == pytest.approx(1e-4)
+    assert NdviSeasonality(sat="MODIS", index="red").reflectance_scale == pytest.approx(1e-4)
+    # Landsat is already rescaled by scale_OLI / scale_ETM
+    assert NdviSeasonality(sat="Landsat", index="red").reflectance_scale == 1.0
 
 
 def test_era5_variables_available():
@@ -298,6 +336,44 @@ def test_integration_dispersion_reducers():
         )
         assert means["std"][band] > 0
         assert means["variance"][band] > 0
+
+
+@pytest.mark.ee
+def test_integration_raw_bands_and_count():
+    """Raw bands come back as reflectance and key='count' as observation counts."""
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
+
+    def median_of(sat, index, key):
+        inst = NdviSeasonality(
+            roi=roi, periods=1, start_year=2021, end_year=2021,
+            sat=sat, index=index, key=key,
+        )
+        composite = inst.get_year_composite().first()
+        assert composite.bandNames().getInfo() == ["p1"]
+        scale = 60 if sat == "S2" else 90
+        return composite.reduceRegion(
+            ee.Reducer.median(), roi, scale, maxPixels=1e9
+        ).getInfo()["p1"]
+
+    # Reflectance, not the raw 0-10000 integers Sentinel-2 stores
+    s2_red = median_of("S2", "red", "mean")
+    assert 0.0 < s2_red < 1.0
+
+    # Landsat is scaled elsewhere, so both sensors must land on the same range
+    landsat_red = median_of("Landsat", "red", "mean")
+    assert 0.0 < landsat_red < 1.0
+
+    # Dispersion of a band is small compared with its level on a one-year window
+    s2_red_std = median_of("S2", "red", "std")
+    assert 0.0 < s2_red_std < s2_red
+
+    # count is a number of images, so it must be a positive integer
+    n_obs = median_of("S2", "red", "count")
+    assert n_obs >= 1
+    assert n_obs == pytest.approx(round(n_obs), abs=1e-6)
 
 
 if __name__ == "__main__":

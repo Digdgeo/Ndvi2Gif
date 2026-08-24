@@ -27,13 +27,17 @@ Built on top of [Google Earth Engine](https://github.com/google/earthengine-api)
 
 ---
 
-## ✨ What's New in v1.4.0
+## ✨ What's New in v1.5.0
 
-**Dispersion reducers** — four new `key` options (`'std'`, `'variance'`, `'range'`, `'cv'`) that map how much an index **varies** inside each period instead of its typical level, useful for phenological change, disturbances and unstable surfaces such as flooded areas. They work with every sensor and index, and the composites keep the usual period band names, so they export, animate and analyse like any other.
+**Raw reflectance bands** — the standardized bands are now selectable through `index=` on Sentinel-2, Landsat and MODIS (`'blue'`, `'green'`, `'red'`, `'nir'`, `'swir1'`, `'swir2'`, plus `'red_edge1-3'` on S2), returned as surface reflectance in 0–1 on every sensor. Spectral indices are ratios and cancel out changes in brightness, so a pixel can hold exactly the same NDVI while its reflectance drifts; radiometric work needs the bands themselves. Combined with the dispersion reducers they map how invariant each pixel is across a series — the basis for picking pseudo-invariant features.
+
+**`key='count'`** — valid observations per pixel: the quality layer that says which parts of a dispersion map can be trusted.
+
+Previously, in v1.4.0: **dispersion reducers** — four `key` options (`'std'`, `'variance'`, `'range'`, `'cv'`) that map how much an index **varies** inside each period instead of its typical level, useful for phenological change, disturbances and unstable surfaces such as flooded areas. They work with every sensor and index, and the composites keep the usual period band names, so they export, animate and analyse like any other.
 
 **Downloadable water masks** — `HydroperiodAnalyzer.get_water_masks_stack()` flattens the per-date binary masks into a single `uint8` image (one band per acquisition date), and `include_masks=True` sends them to Drive or to an Earth Engine asset alongside the hydroperiod. Cloudy pixels and pixels no satellite ever saw get their own codes, so a time series can tell them apart.
 
-Previously, in v1.3.0: `SpatialPhenologyAnalyzer`, GEE-native per-pixel phenology rasters (SOS/POS/EOS) with threshold, derivative and harmonic methods. See [CHANGELOG](CHANGELOG.md) for details.
+And in v1.3.0: `SpatialPhenologyAnalyzer`, GEE-native per-pixel phenology rasters (SOS/POS/EOS) with threshold, derivative and harmonic methods. See [CHANGELOG](CHANGELOG.md) for details.
 
 ---
 

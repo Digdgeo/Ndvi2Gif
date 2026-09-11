@@ -16,13 +16,6 @@ with its predecessor to the midpoint with its successor (boundaries at day 0
 and day 365 for the first and last scenes). Weighted flood and valid days are
 then accumulated per pixel and optionally normalised to a full year.
 
-References
-----------
-Bustamante, J., Aragonés, D., Afán, I., Luque, C.J., Pérez-Vázquez, A.,
-Castellanos, E.M., Díaz-Delgado, R. (2016). Predictive models of floristic
-composition based on flooding frequency in Mediterranean wetlands.
-Remote Sensing, 8(9), 776.
-
 Author: Diego García Díaz
 """
 

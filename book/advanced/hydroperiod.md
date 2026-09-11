@@ -607,8 +607,6 @@ All `compute_*` methods return `ee.Image` objects immediately — no computation
 
 ### Methodology and context
 
-Bustamante, J., Aragonés, D., Afán, I., Luque, C.J., Pérez-Vázquez, A., Castellanos, E.M., Díaz-Delgado, R. (2016). Predictive models of floristic composition based on flooding frequency in Mediterranean wetlands. *Remote Sensing*, 8(9), 776. https://doi.org/10.3390/rs8090776
-
 Xu, H. (2006). Modification of normalised difference water index (NDWI) to enhance open water features in remotely sensed imagery. *International Journal of Remote Sensing*, 27(14), 3025–3033.
 
 McFeeters, S.K. (1996). The use of the Normalized Difference Water Index (NDWI) in the delineation of open water features. *International Journal of Remote Sensing*, 17(7), 1425–1432.

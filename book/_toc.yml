@@ -47,6 +47,8 @@ parts:
         title: "Hydroperiod Analysis"
       - file: notebooks/06_stable_pixels
         title: "Stable Pixels & PIF Selection"
+      - file: notebooks/07_multisensor_classification
+        title: "Multi-sensor Classification Under Clouds"
 
   - caption: Reference
     chapters:

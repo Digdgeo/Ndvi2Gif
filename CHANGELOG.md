@@ -21,10 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | EVI | 0.14 | 0.40 → 0.13 | 0.45 → 0.15 |
 | LAI | 0.38 | 1.38 → 0.35 | 1.49 → 0.42 |
 | AVI | 0.25 | 550 → 0.25 | 347 → 0.26 |
-| WI2015 | 1.5 | −2255 → 1.5 | −2023 → 1.5 |
 | CRI1 | 3.2 | 0.0 → 2.5 | 0.0 → 4.4 |
 
-Also affected: `cri2`, `fai`, `mcari` and `ireci`, and the magnitude (not the sign) of `awei`/`aweinsh`. Ratios of differences such as `wdrvi`, `psri`, `mtci`, `reip` and `s2rep` are scale-free and do not change. Results computed with these indices on Sentinel-2 or MODIS with earlier versions should be recomputed. The raw bands (`index='red'`...) were already rescaled and do not change.
+Also affected: `wi2015` (whose coefficients were also wrong, see *Fixed*), `cri2`, `fai`, `mcari` and `ireci`, and the magnitude (not the sign) of `awei`/`aweinsh`. Ratios of differences such as `wdrvi`, `psri`, `mtci`, `reip` and `s2rep` are scale-free and do not change. Results computed with these indices on Sentinel-2 or MODIS with earlier versions should be recomputed. The raw bands (`index='red'`...) were already rescaled and do not change.
 
 ### ⚠️ Values change for Sentinel-1
 
@@ -80,9 +79,16 @@ Also affected: `cri2`, `fai`, `mcari` and `ireci`, and the magnitude (not the si
 - **`LandCoverClassifier` ignored `class_property`** outside `add_training_data()`: training and accuracy assessment always used `'class'`, so labels stored under any other name made training fail.
 - `LandCoverClassifier` temporal statistics selected an index's bands with the pattern `<index>_.*`, so `vv` also caught the `vv_vh_ratio` bands and mixed them into the `vv` mean, std, max and min. The pattern now requires the year after the index name.
 
-### Added
+### Documentation
+
+- **New tutorial: multi-sensor classification under persistent clouds** (`book/notebooks/07_multisensor_classification.ipynb`). Tawau Hills Park (Sabah, Borneo): natural forest versus oil palm with Sentinel-2, Sentinel-1 and both, compared on the same points and split, with gap filling, feature importance and `export_model()`.
+- **`book/reference/indices.md` rebuilt from the code.** It documented 19 indices that do not exist, missed about 40 that do, gave formulas that did not match the implementation and made up its section counts. It now has one table per band group (visible/NIR, SWIR, thermal, Sentinel-2 red edge, Sentinel-3, raw bands, SAR, ERA5-Land, CHIRPS) with the formula as implemented, a verified reference and notes where an implementation departs from the published index — 111 variables in total.
+- The SAR processing and water quality pages describe the dB/linear handling, `input_format`, and which water indices each sensor supports.
+
+### Tests
 
 - Tests for `HydroperiodAnalyzer`, which had none: hydrological-year bounds, index validation, and an Earth Engine integration test over the Doñana marshes checking that same-day tiles are mosaicked, that the midpoint weights tile the cycle from day 0 to 365, that `0 <= hydroperiod <= valid_days <= 365`, that `first_flood_doy <= last_flood_doy`, and that the downloadable mask stack is `uint8` with only the codes 0, 1, 2 and 255.
+- New checks run every index registered for each sensor on a real image of it, compare index formulas against fixed reflectances, verify that the water indices are positive over water and negative over land, and that S2, Landsat and MODIS give comparable SAVI/EVI.
 
 ## [1.5.1] - 2026-09-18
 

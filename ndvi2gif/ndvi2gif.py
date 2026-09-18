@@ -2464,7 +2464,7 @@ class NdviSeasonality:
         Geophysical Research Letters, 34(20), L20405.
         """
         return image.expression(
-            '(NIR - (SWIR1 + SWIR2)) / (NIR + (SWIR1 + SWIR2))', {
+            '(NIR - (SWIR1 - SWIR2)) / (NIR + (SWIR1 - SWIR2))', {
             'NIR': image.select('Nir'),
             'SWIR1': image.select('Swir1'),
             'SWIR2': image.select('Swir2')
@@ -2788,36 +2788,24 @@ class NdviSeasonality:
 
     def get_wi2015(self, image):
         """
-        Water Index 2015 (WI2015) - Índice de Agua 2015
-        
-        Índice optimizado para detectar agua en diferentes condiciones, incluyendo
-        aguas turbias y con sedimentos. Desarrollado específicamente para discriminar
-        agua de otros tipos de cobertura usando Landsat.
-        
-        NOTA IMPORTANTE: Los coeficientes originales del paper están diseñados para
-        valores de reflectancia sin escalar (Digital Numbers). Como estamos trabajando
-        con reflectancia escalada [0,1], debemos ajustar los coeficientes.
-        
-        Fórmula original (para DN sin escalar):
-        WI2015 = 1.7204 + 171*G + 3*R - 70*NIR - 45*SWIR1 - 71*SWIR2
-        
-        Fórmula ajustada para reflectancia [0,1]:
-        WI2015 = 1.7204 + 1.71*G + 0.03*R - 0.70*NIR - 0.45*SWIR1 - 0.71*SWIR2
-        
-        Interpretación:
-        - Valores > 0: Agua
-        - Valores < 0: No agua
-        - Valores más positivos indican mayor probabilidad de agua
-        
-        Referencias
-        -----------
+        Water Index 2015 (WI2015) - Linear water index fitted on Landsat surface reflectance.
+
+        ``1.7204 + 171*Green + 3*Red - 70*NIR - 45*SWIR1 - 71*SWIR2`` on
+        surface reflectance in 0-1, as published. Positive values are water.
+        Before 1.6.0 the coefficients were divided by 100 on the belief that
+        the original ones were meant for unscaled digital numbers; the
+        constant was left as is, so the index sat around 1.5 everywhere and
+        did not separate water from land.
+
+        References
+        ----------
         Fisher, A., Flood, N., Danaher, T. (2016). 
         Comparing Landsat water index methods for automated water classification 
         in eastern Australia. Remote Sensing of Environment, 175, 167-182.
+        https://doi.org/10.1016/j.rse.2015.12.055
         """
-        # Fórmula con coeficientes ajustados para reflectancia escalada [0,1]
         return image.expression(
-            '1.7204 + 1.71 * Green + 0.03 * Red - 0.70 * NIR - 0.45 * SWIR1 - 0.71 * SWIR2', {
+            '1.7204 + 171 * Green + 3 * Red - 70 * NIR - 45 * SWIR1 - 71 * SWIR2', {
             'Green': image.select('Green'),
             'Red': image.select('Red'), 
             'NIR': image.select('Nir'),

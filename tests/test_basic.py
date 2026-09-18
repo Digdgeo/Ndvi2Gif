@@ -799,6 +799,10 @@ def test_integration_index_formulas_on_known_reflectance():
         "aweinsh": 4 * (g - s1) - (0.25 * n + 2.75 * s2),
         "awei": b + 2.5 * g - 1.5 * (n + s1) - 0.25 * s2,
         "mndwi": (g - s1) / (g + s1),
+        # Fisher et al. (2016) coefficients, on reflectance in 0-1
+        "wi2015": 1.7204 + 171 * g + 3 * r - 70 * n - 45 * s1 - 71 * s2,
+        # Wang & Qu (2007) use the SWIR difference, not the sum
+        "nmi": (n - (s1 - s2)) / (n + (s1 - s2)),
     }
     inst = NdviSeasonality(sat="S2", index="ndvi")
     point = ee.Geometry.Point([0, 0])
@@ -881,6 +885,35 @@ def test_integration_sar_indices_on_linear_power():
 
     with pytest.raises(ValueError, match="input_format"):
         S1ARDProcessor(input_format="dB")
+
+
+@pytest.mark.ee
+def test_integration_water_indices_split_water_and_land():
+    """Every HydroperiodAnalyzer water index is positive on water, negative on land.
+
+    The analyzer thresholds them at 0. Before 1.6.0 wi2015 sat around 1.5
+    everywhere and aweinsh had a flipped term.
+    """
+    ee = _require_ee()
+    import contextlib, io
+    from ndvi2gif import NdviSeasonality, HydroperiodAnalyzer
+
+    # Guadalquivir mouth: sea, river and land
+    roi = ee.Geometry.Rectangle([-6.45, 36.75, -6.25, 36.95])
+    worldcover = ee.ImageCollection("ESA/WorldCover/v200").first()
+    with contextlib.redirect_stdout(io.StringIO()):
+        inst = NdviSeasonality(roi=roi, sat="S2", start_year=2021, end_year=2021)
+    summer = inst.ndvi_col.filterDate("2021-06-01", "2021-09-01").median()
+
+    for index in HydroperiodAnalyzer.WATER_INDICES:
+        value = ee.Image(inst.d[index](summer)).rename("v")
+        medians = ee.Dictionary({
+            name: value.updateMask(mask).reduceRegion(
+                ee.Reducer.median(), roi, 60, maxPixels=1e9).get("v")
+            for name, mask in (("water", worldcover.eq(80)),
+                               ("land", worldcover.neq(80)))
+        }).getInfo()
+        assert medians["water"] > 0 > medians["land"], (index, medians)
 
 
 if __name__ == "__main__":

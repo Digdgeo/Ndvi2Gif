@@ -3197,8 +3197,11 @@ class SpatialTrendAnalyzer:
                 # Add constant band for regression
                 constant = ee.Image.constant(1).rename('constant')
                 
-                # Combine bands
-                composite_with_vars = composite.select(['nd']).addBands([constant, time_band])
+                # Combine bands. The composite band is only called 'nd' for
+                # optical indices with a plain reducer: Sentinel-1 names it
+                # after the index ('VH', 'RVI'...) and key='percentile' appends
+                # '_p<N>', so it is renamed to the name used below
+                composite_with_vars = composite.select([0]).rename('nd').addBands([constant, time_band])
                 
                 images_list.append(composite_with_vars)
         

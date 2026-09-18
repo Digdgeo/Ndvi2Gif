@@ -1980,8 +1980,10 @@ class NdviSeasonality:
         1. Clear previous results (``self.imagelist = []``)
         2. For each year in range:
 
-            a. Count the scenes of every period (one server call per year)
-               and skip the year if none of its periods has any
+            a. Count the scenes of every period (one server call per year),
+               store them in ``self.period_scene_counts`` as
+               ``{year: [count per period]}``, and skip the year if none of
+               its periods has any
             b. Optionally count images per period (granules or unique dates)
             c. Process all periods using :meth:`get_period_composite`, which
                returns a placeholder band for the periods without images
@@ -2081,6 +2083,7 @@ class NdviSeasonality:
 
         # limpiar resultados previos
         self.imagelist = []
+        self.period_scene_counts = {}
         rows = []
 
         # recorrer años (end_year INCLUSIVO)
@@ -2093,6 +2096,7 @@ class NdviSeasonality:
                 self.ndvi_col.filterDate(f"{year}{start}", f"{year}{end}").size()
                 for start, end in self.period_dates
             ]).getInfo()
+            self.period_scene_counts[year] = scene_counts
 
             if sum(scene_counts) == 0:
                 print(f"Year {year}: No data available, skipping")

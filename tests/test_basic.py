@@ -427,5 +427,66 @@ def test_integration_empty_periods_keep_band_order():
     assert feb == {"february_min": 0, "february_max": 0}
 
 
+@pytest.mark.ee
+def test_integration_classifier_stack_years_and_empty_periods():
+    """The feature stack covers end_year, tracks skipped years, drops empty periods.
+
+    Sentinel-2 has no scene over this ROI in 2014 and none in winter or spring
+    2015, so 2014 is skipped by get_year_composite and the 2015 image sits at
+    position 0 of the collection.
+    """
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+    from ndvi2gif.clasification import LandCoverClassifier
+
+    roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
+    inst = NdviSeasonality(
+        roi=roi, periods=4, start_year=2014, end_year=2016,
+        sat="S2", index="ndvi", key="median",
+    )
+    clf = LandCoverClassifier(inst)
+    stack = clf.create_feature_stack(
+        indices=["ndvi"], include_statistics=False, normalize=False
+    )
+
+    assert stack.bandNames().getInfo() == [
+        "ndvi_2015_summer", "ndvi_2015_autumn",
+        "ndvi_2016_winter", "ndvi_2016_spring",
+        "ndvi_2016_summer", "ndvi_2016_autumn",
+    ]
+
+    # Each band holds the year in its name, not the next year with data
+    expected = inst.get_period_composite(2016, 2)
+    diff = stack.select("ndvi_2016_summer").subtract(expected).abs()
+    max_diff = diff.reduceRegion(
+        ee.Reducer.max(), roi, 200, maxPixels=1e9
+    ).getInfo()
+    assert max_diff["ndvi_2016_summer"] == pytest.approx(0, abs=1e-6)
+
+
+@pytest.mark.ee
+def test_integration_pixel_trends_percentile_band_name():
+    """Trend maps work when the composite band is not called 'nd'."""
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+    from ndvi2gif.timeseries import SpatialTrendAnalyzer
+
+    roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
+    inst = NdviSeasonality(
+        roi=roi, periods=4, start_year=2019, end_year=2021,
+        sat="S2", index="ndvi", key="percentile", percentile=90,
+    )
+    assert inst.get_period_composite(2019, 0).bandNames().getInfo() == ["nd_p90"]
+
+    trend = SpatialTrendAnalyzer(inst).calculate_pixel_trends(
+        method="linear", min_observations=5
+    )
+    assert trend.bandNames().getInfo() == ["slope", "intercept", "magnitude"]
+    stats = trend.reduceRegion(
+        ee.Reducer.count(), roi, 200, maxPixels=1e9
+    ).getInfo()
+    assert stats["slope"] > 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

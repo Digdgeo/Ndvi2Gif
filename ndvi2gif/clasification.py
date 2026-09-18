@@ -52,7 +52,7 @@ class LandCoverClassifier:
     start_year : int
         First year of the analysis.
     end_year : int
-        Last year (exclusive) of the analysis.
+        Last year (inclusive) of the analysis.
     sat : str
         Satellite name used (e.g., 'S2', 'L8').
     """
@@ -92,7 +92,7 @@ class LandCoverClassifier:
         self.sat = self.processor.sat
         
         print(f"LandCoverClassifier initialized for {self.sat}")
-        print(f"Period: {self.start_year}-{self.end_year-1}, {self.periods} periods/year")
+        print(f"Period: {self.start_year}-{self.end_year}, {self.periods} periods/year")
     
     def create_feature_stack(self,
                            indices: List[str] = None,
@@ -145,18 +145,29 @@ class LandCoverClassifier:
             self.processor.index = idx_name
             
             # Generate composites
-            collection = self.processor.get_year_composite()
-            
-            # Convert to list for iteration
-            img_list = collection.toList(100)
-            
-            # Stack all years
-            for year_idx in range(self.end_year - self.start_year):
-                year = self.start_year + year_idx
-                year_image = ee.Image(img_list.get(year_idx))
-                
+            self.processor.get_year_composite()
+
+            # get_year_composite skips the years without any image, so the
+            # position of an image in the collection is not its year offset.
+            # Pair each image with its year from the per-year scene counts,
+            # which list every year in the same order
+            years_with_data = [
+                year for year, counts in self.processor.period_scene_counts.items()
+                if sum(counts) > 0
+            ]
+
+            # Stack all years (end_year is inclusive, like get_year_composite)
+            for year, year_image in zip(years_with_data, self.processor.imagelist):
+                counts = self.processor.period_scene_counts[year]
+
                 # Rename bands with descriptive names
-                for period_name in self.processor.period_names:
+                for period_idx, period_name in enumerate(self.processor.period_names):
+                    # An empty period comes back as a fully masked band, and a
+                    # single masked band masks every pixel on sampling and
+                    # classification, so it is left out of the stack
+                    if counts[period_idx] == 0:
+                        print(f"    Skipping {idx_name} {year} {period_name}: no images")
+                        continue
                     band = year_image.select(period_name)
                     band_name = f"{idx_name}_{year}_{period_name}"
                     feature_bands.append(band.rename(band_name))

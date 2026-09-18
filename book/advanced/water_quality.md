@@ -20,7 +20,7 @@ Reservoirs are heterogeneous systems: shorelines move with the water level, turb
 | `ndwi` | `(Green − NIR) / (Green + NIR)` | Classic water detection |
 | `mndwi` | `(Green − SWIR1) / (Green + SWIR1)` | **Default water mask** — more robust |
 | `awei` / `aweinsh` | Multi-band (Blue, Green, NIR, SWIR1, SWIR2) | Automatic water extraction |
-| `wi2015` | NIR + SWIR1 + SWIR2 linear combination | Complementary water index |
+| `wi2015` | Linear combination of Green, Red, NIR, SWIR1, SWIR2 (Fisher et al. 2016) | Complementary water index |
 | `ndci` | `(RedEdge1 − Red) / (RedEdge1 + Red)` | **Chlorophyll-a proxy — Sentinel-2 only** |
 
 NDCI exploits the Red-Edge band B5 (705 nm), exclusive to Sentinel-2 among the sensors ndvi2gif supports, and is sensitive to chlorophyll-a concentration and potential cyanobacterial blooms.
@@ -270,15 +270,15 @@ The Mann-Kendall test is non-parametric and robust to the seasonal structure of 
 
 | Key | Name | Bands | Sensors | Purpose |
 |---|---|---|---|---|
-| `ndwi` | NDWI (Gao 1996) | Green, NIR | All optical | Water detection (classic) |
-| `mndwi` | Modified NDWI (Xu 2006) | Green, SWIR1 | All optical | **Recommended water mask** |
-| `awei` | AWEI shade (Feyisa 2014) | Blue, Green, NIR, SWIR1, SWIR2 | All optical | Automatic water extraction, shadowed terrain |
-| `aweinsh` | AWEI no-shadow (Feyisa 2014) | Green, NIR, SWIR1, SWIR2 | All optical | Automatic water extraction, flat terrain |
-| `wi2015` | Water Index 2015 (Fisher 2016) | NIR, SWIR1, SWIR2 | All optical | Complementary water index |
+| `ndwi` | NDWI (McFeeters 1996) | Green, NIR | All optical | Water detection (classic) |
+| `mndwi` | Modified NDWI (Xu 2006) | Green, SWIR1 | S2, Landsat, MODIS | **Recommended water mask** |
+| `awei` | AWEI shade (Feyisa 2014) | Blue, Green, NIR, SWIR1, SWIR2 | S2, Landsat, MODIS | Automatic water extraction, shadowed terrain |
+| `aweinsh` | AWEI no-shadow (Feyisa 2014) | Green, NIR, SWIR1, SWIR2 | S2, Landsat, MODIS | Automatic water extraction, flat terrain |
+| `wi2015` | Water Index 2015 (Fisher 2016) | Green, Red, NIR, SWIR1, SWIR2 | S2, Landsat, MODIS | Complementary water index |
 | `ndci` | NDCI (Mishra & Mishra 2012) | RedEdge1, Red | **S2 only** | Chlorophyll-a / cyanobacteria |
-| `ndmi` | NDMI (Gao 1996) | NIR, SWIR1 | All optical | Moisture (riparian/aquatic vegetation) |
+| `ndmi` | NDMI (Gao 1996) | NIR, SWIR1 | S2, Landsat, MODIS | Moisture (riparian/aquatic vegetation) |
 
-Sentinel-3 OLCI (300 m) adds dedicated water-quality indices — `oci`, `tsi`, `cdom`, `turbidity`, `spm`, `kd490`, `floating_algae` — useful for large lakes and reservoirs where the coarser resolution is acceptable.
+Sentinel-3 OLCI (300 m) has no SWIR bands, so of the indices above it only offers `ndwi`. It adds dedicated water-quality indices instead — `oci`, `tsi`, `cdom`, `turbidity`, `spm`, `kd490`, `floating_algae` — useful for large lakes and reservoirs where the coarser resolution is acceptable. See the [indices reference](../reference/indices.md#sentinel-3-olci-water-quality-indices).
 
 ---
 

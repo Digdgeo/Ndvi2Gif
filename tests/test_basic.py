@@ -940,5 +940,32 @@ def test_integration_s1_ard_dem_has_real_slopes():
         S1ARDProcessor(dem="COPERNICUS_90")
 
 
+@pytest.mark.ee
+def test_integration_training_split_independent_of_stack():
+    """The same points and seed give the same train/validation split on any stack."""
+    ee = _require_ee()
+    import contextlib, io
+    from ndvi2gif import NdviSeasonality, LandCoverClassifier
+
+    roi = ee.Geometry.Rectangle([-6.45, 36.95, -6.25, 37.10])
+    worldcover = ee.ImageCollection("ESA/WorldCover/v200").first().rename("landcover")
+    points = worldcover.stratifiedSample(
+        numPoints=30, classBand="landcover", region=roi, scale=30, seed=1,
+        geometries=True)
+
+    splits = []
+    for indices in (["ndvi"], ["ndvi", "ndwi", "ndmi"]):
+        with contextlib.redirect_stdout(io.StringIO()):
+            inst = NdviSeasonality(roi=roi, sat="S2", periods=4, start_year=2021,
+                                   end_year=2021, key="median")
+            clf = LandCoverClassifier(inst)
+            clf.create_feature_stack(indices=indices, include_statistics=False,
+                                     normalize=False)
+            clf.add_training_data(training_points=points, class_property="landcover")
+        splits.append(sorted(clf.validation_data.aggregate_array("random").getInfo()))
+
+    assert splits[0] and splits[0] == splits[1]
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

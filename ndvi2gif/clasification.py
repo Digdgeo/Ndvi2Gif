@@ -524,7 +524,9 @@ class LandCoverClassifier:
                          training_points: Union[str, ee.FeatureCollection] = None,
                          training_polygons: Union[str, ee.FeatureCollection] = None,
                          class_property: str = 'class',
-                         points_per_class: int = 100) -> None:
+                         points_per_class: int = 100,
+                         train_fraction: float = 0.7,
+                         seed: int = 0) -> None:
         """
         Add training data for supervised classification.
         
@@ -538,6 +540,14 @@ class LandCoverClassifier:
             Property containing class values
         points_per_class : int
             If using polygons, number of points to sample per class
+        train_fraction : float
+            Share of the samples used for training; the rest is kept for
+            validation. Default 0.7.
+        seed : int
+            Seed of the random train/validation split. The split is drawn on
+            the samples before reading the feature stack, so the same points
+            and seed give the same split whatever the stack — which is what
+            makes classifiers built on different stacks comparable.
 
         Raises
         ------
@@ -586,10 +596,16 @@ class LandCoverClassifier:
         else:
             raise ValueError("Provide either training_points or training_polygons")
         
+        # Draw the train/validation split on the samples themselves, before
+        # reading the stack: drawn afterwards (as before 1.6.0) it depended on
+        # the stack's bands, and two stacks sampled at the same points got
+        # different splits
+        training_fc = ee.FeatureCollection(training_fc).randomColumn('random', seed)
+
         # Sample feature values at training locations
         self.training_data = self.feature_stack.sampleRegions(
             collection=training_fc,
-            properties=[class_property],
+            properties=[class_property, 'random'],
             scale=self.scale
         )
         
@@ -597,10 +613,9 @@ class LandCoverClassifier:
         sample_count = self.training_data.size().getInfo()
         print(f"Training data loaded: {sample_count} samples")
         
-        # Split train/validation (70/30)
-        self.training_data = self.training_data.randomColumn('random')
-        training_split = self.training_data.filter(ee.Filter.lt('random', 0.7))
-        validation_split = self.training_data.filter(ee.Filter.gte('random', 0.7))
+        # Split train/validation
+        training_split = self.training_data.filter(ee.Filter.lt('random', train_fraction))
+        validation_split = self.training_data.filter(ee.Filter.gte('random', train_fraction))
         
         self.training_data = training_split
         self.validation_data = validation_split
@@ -626,7 +641,10 @@ class LandCoverClassifier:
             - 'naive_bayes': Naive Bayes
             - 'gradient_tree': Gradient Tree Boost
         train_fraction : float
-            Fraction of data for training (rest for validation)
+            Has no effect, and never had: the split is made when the samples
+            are loaded, with ``add_training_data(train_fraction=...)``. Kept
+            so existing calls do not break; a value other than 0.7 prints a
+            warning.
         params : dict
             Algorithm-specific parameters
             
@@ -645,6 +663,10 @@ class LandCoverClassifier:
         """
         if self.training_data is None:
             raise ValueError("Add training data first using add_training_data()")
+
+        if train_fraction != 0.7:
+            print("Warning: classify_supervised(train_fraction=...) has no effect; "
+                  "pass it to add_training_data() instead.")
         
         print(f"Training {algorithm} classifier...")
         

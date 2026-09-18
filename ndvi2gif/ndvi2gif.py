@@ -2005,6 +2005,7 @@ class NdviSeasonality:
             If ``return_counts=True``, returns a tuple containing the
             ImageCollection and a list of dictionaries. Each dictionary
             has the following keys:
+
                 * year : int
                 * period_idx : int
                 * period_name : str
@@ -2039,6 +2040,7 @@ class NdviSeasonality:
         Each band is renamed to its period name before the periods are
         combined, so a missing period can never shift the names of the
         following ones. Band names use period names:
+
             * 4 periods: ``['winter', 'spring', 'summer', 'autumn']``
             * 12 periods: ``['january', 'february', ..., 'december']``
             * Custom: ``['p1', 'p2', ..., 'pN']``

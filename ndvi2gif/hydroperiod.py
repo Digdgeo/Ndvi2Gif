@@ -361,10 +361,9 @@ class HydroperiodAnalyzer:
             Value for pixels observed but masked as cloud/shadow. Default ``2``.
         nodata : int
             Value for pixels no scene covered, and for everything outside the
-            ROI. Default ``255``.
-
-        Both must be integers in ``[0, 255]``, different from 0, from 1 and
-        from each other.
+            ROI. Default ``255``. Both ``masked_value`` and ``nodata`` must
+            be integers in ``[0, 255]``, different from 0, from 1 and from
+            each other.
 
         Returns
         -------

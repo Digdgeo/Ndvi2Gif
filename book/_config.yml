@@ -78,6 +78,9 @@ sphinx:
       earthengine:
         - https://developers.google.com/earth-engine/apidocs
         - null
+    # Anchors for headings down to ###, so pages can link to their own
+    # sections with [text](#section-title)
+    myst_heading_anchors: 3
     napoleon_google_docstring: false
     napoleon_numpy_docstring: true
     copybutton_prompt_text: ">>> |\\.\\.\\. |\\$ |In \\[\\d*\\]: | {2,5}\\.\\.\\.: | {5,8}: "

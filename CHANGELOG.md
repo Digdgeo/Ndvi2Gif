@@ -9,6 +9,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`get_year_composite()` shifted the band names of every period after an empty one.** A period without a single image (scenes dropped by the cloud filter, a sensor not yet in orbit, acquisition gaps) was dropped, and the remaining bands were then named after the *first* N periods. With monthly Sentinel-2 composites over Doñana in 2017, where February and March have no scenes, the year came out with 10 bands: April's data was labelled `february`, May's `march`, and so on. Reducing a multi-year collection band by band then mixed different months without any error. Every year now has exactly one band per period, always under its own name: an empty period is a fully masked band (exported as nodata), or zeros for `key='count'`, since zero valid observations is a real value there. `get_period_composite()` returns the same placeholder, so the time-series and classification tools that call it get it too.
+
+### Changed
+
+- `get_period_composite()` now always returns a float band (32-bit integer for `key='count'`), so that bands with and without data can be exported together.
+- `get_year_composite()` checks data availability with one server call per year instead of one per period (10 calls instead of 120 for 10 years of monthly composites). Periods without images are reported by name.
+
 ## [1.5.0] - 2026-08-24
 
 ### Added

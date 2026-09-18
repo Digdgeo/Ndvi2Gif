@@ -1641,9 +1641,12 @@ class NdviSeasonality:
         Returns
         -------
         ee.Image
-            Single-band composite image with the selected index values.
-            Band name depends on reducer type.
-            
+            Single-band composite image with the selected index values, cast
+            to float (to 32-bit integer for ``key='count'``). Band name depends
+            on reducer type (see :meth:`_composite_band_name`). A period with
+            no images still returns one band: fully masked, or 0 everywhere
+            for ``key='count'``.
+
         Notes
         -----
         Processing workflow:
@@ -1652,10 +1655,11 @@ class NdviSeasonality:
         2. Filter satellite collection to date range
         3. Apply index calculation (``self.d[self.index]``)
         4. Apply statistical reducer (max/median/mean/percentile)
-        5. Return composite image
-        
+        5. Return composite image, or a placeholder band if the period has
+           no images
+
         The method assumes valid inputs as validation occurs during
-        initialization. Empty images may result if no data is available.
+        initialization.
         
         Examples
         --------
@@ -1714,8 +1718,52 @@ class NdviSeasonality:
         period_stats['count'] = self._strip_reducer_suffix(
             filtered_collection.reduce(ee.Reducer.count()), 'count')
 
+        # A period without a single image (clouds filtered out at scene level,
+        # sensor not yet in orbit, acquisition gaps...) reduces to an image with
+        # no bands. Return a placeholder band instead so every period always
+        # yields exactly one band: masked for the value reducers, and 0 for
+        # 'count', since zero valid observations is a real value there.
+        # Both branches are cast to the same type because Export refuses
+        # images whose bands have different data types
+        band_name = self._composite_band_name()
+        if self.key == 'count':
+            composite = period_stats['count'].toInt32()
+            empty = ee.Image.constant(0).toInt32().rename(band_name)
+        else:
+            composite = period_stats[self.key].toFloat()
+            empty = (ee.Image.constant(0).toFloat().rename(band_name)
+                     .updateMask(ee.Image.constant(0)))
+
         # Return the composite corresponding to the user-specified statistical method
-        return period_stats[self.key]
+        return ee.Image(ee.Algorithms.If(
+            filtered_collection.size().gt(0), composite, empty))
+
+    def _composite_band_name(self):
+        """
+        Band name of the single band returned by :meth:`get_period_composite`.
+
+        Index functions name their output ``'nd'`` on the optical and climate
+        datasets and after the index on Sentinel-1 (``'VH'``, ``'RVI'``...).
+        The percentile reducer appends ``'_p<percentile>'`` to it; the other
+        reducers keep the name unchanged.
+
+        Returns
+        -------
+        str
+            Band name, e.g. ``'nd'``, ``'nd_p90'`` or ``'VH_p90'``.
+        """
+        if self.sat == 'S1':
+            sar_names = {
+                'vv': 'VV', 'vh': 'VH', 'rvi': 'RVI', 'vv_vh_ratio': 'RATIO',
+                'dpsvi': 'DPSVI', 'rfdi': 'RFDI', 'vsdi': 'VSDI',
+            }
+            base = sar_names.get(self.index, 'VH')
+        else:
+            base = 'nd'
+
+        if self.key == 'percentile':
+            return f'{base}_p{self.percentile}'
+        return base
 
     @staticmethod
     def _strip_reducer_suffix(image, reducer_name):
@@ -1907,8 +1955,9 @@ class NdviSeasonality:
         -------
         ee.ImageCollection
             Collection of multi-band composite images, one per year.
-            Each image contains bands named after temporal periods.
-            Band count equals successful periods with available data.
+            Each image has exactly one band per temporal period, named after
+            it, so every year shares the same bands. A period without images
+            is kept as a fully masked band (all zeros for ``key='count'``).
         (ee.ImageCollection, list of dict), optional
             If ``return_counts=True``, returns a tuple containing the
             ImageCollection and a list of dictionaries. Each dictionary
@@ -1928,30 +1977,23 @@ class NdviSeasonality:
         -----
         Processing workflow:
 
-        1. Generate dynamic band names based on satellite and reducer
-        2. Clear previous results (``self.imagelist = []``)
-        3. For each year in range:
-            
-            a. Process all periods using :meth:`get_period_composite`
-            b. Validate data availability
-            c. Optionally count images per period (granules or unique dates)
-            d. Combine into multi-band image
-            e. Rename bands to period names
-            
-        4. Return ImageCollection from processed images
-        5. Optionally return image counts if ``return_counts=True``
+        1. Clear previous results (``self.imagelist = []``)
+        2. For each year in range:
 
-        Band naming conventions:
+            a. Count the scenes of every period (one server call per year)
+               and skip the year if none of its periods has any
+            b. Optionally count images per period (granules or unique dates)
+            c. Process all periods using :meth:`get_period_composite`, which
+               returns a placeholder band for the periods without images
+            d. Rename each period band to its period name
+            e. Combine into multi-band image
 
-        **Optical satellites** (S2, Landsat, MODIS, S3):
-            * Standard: ``['nd', 'nd_1', 'nd_2', ...]``
-            * Percentile: ``['nd_p90', 'nd_p90_1', ...]``
-            
-        **SAR satellite** (S1):
-            * Named by index: ``['VH', 'VH_1', ...]``, ``['RVI', 'RVI_1', ...]``
-            * Percentile: ``['VH_p90', 'VH_p90_1', ...]``
+        3. Return ImageCollection from processed images
+        4. Optionally return image counts if ``return_counts=True``
 
-        Final band names use period names:
+        Each band is renamed to its period name before the periods are
+        combined, so a missing period can never shift the names of the
+        following ones. Band names use period names:
             * 4 periods: ``['winter', 'spring', 'summer', 'autumn']``
             * 12 periods: ``['january', 'february', ..., 'december']``
             * Custom: ``['p1', 'p2', ..., 'pN']``
@@ -1982,7 +2024,8 @@ class NdviSeasonality:
 
         Warnings
         --------
-        Years with insufficient data are skipped with console warnings.
+        Years without a single image in any period are skipped with a console
+        warning. Periods without images are reported and filled, not dropped.
         Large time ranges may approach computation limits.
 
         See Also
@@ -2036,90 +2079,60 @@ class NdviSeasonality:
                 # fallback
                 return ic.size()
 
-        # --- nombres de bandas como en tu versión original ---
-        if self.sat != 'S1':
-            if self.key == 'percentile':
-                base_bands = [f'nd_p{self.percentile}'] + [f'nd_p{self.percentile}_{i}' for i in range(1, self.periods)]
-            else:
-                base_bands = ['nd'] + [f'nd_{i}' for i in range(1, self.periods)]
-        else:
-            if self.index == 'vv':
-                band_prefix = 'VV'
-            elif self.index == 'vh':
-                band_prefix = 'VH'
-            elif self.index == 'rvi':
-                band_prefix = 'RVI'
-            elif self.index == 'vv_vh_ratio':
-                band_prefix = 'RATIO'
-            elif self.index == 'dpsvi':
-                band_prefix = 'DPSVI'
-            elif self.index == 'rfdi':
-                band_prefix = 'RFDI'
-            elif self.index == 'vsdi':
-                band_prefix = 'VSDI'
-            else:
-                band_prefix = 'VH'
-                print(f"Warning: Unknown SAR index '{self.index}', using VH as fallback")
-
-            if self.key == 'percentile':
-                base_bands = [f'{band_prefix}_p{self.percentile}'] + [f'{band_prefix}_p{self.percentile}_{i}' for i in range(1, self.periods)]
-            else:
-                base_bands = [band_prefix] + [f'{band_prefix}_{i}' for i in range(1, self.periods)]
-
         # limpiar resultados previos
         self.imagelist = []
         rows = []
 
         # recorrer años (end_year INCLUSIVO)
         for year in range(self.start_year, self.end_year + 1):
-            period_images = []
-            successful_periods = 0
+            # Escenas por periodo en una sola llamada al servidor. Solo se usa
+            # para informar de los periodos vacíos y saltar los años sin datos:
+            # get_period_composite ya devuelve una banda de relleno cuando un
+            # periodo no tiene imágenes
+            scene_counts = ee.List([
+                self.ndvi_col.filterDate(f"{year}{start}", f"{year}{end}").size()
+                for start, end in self.period_dates
+            ]).getInfo()
 
-            for period_idx in range(self.periods):
-                try:
-                    # composite del periodo
-                    period_composite = self.get_period_composite(year, period_idx)
-
-                    # contar SIEMPRE (aunque luego el composite no tenga datos)
-                    if return_counts:
-                        n = _count_images_for_period(year, period_idx).getInfo()
-                        rows.append({
-                            'year': year,
-                            'period_idx': period_idx,
-                            'period_name': self.period_names[period_idx],
-                            'images_count': int(n),
-                            'cloud_filter': bool(self.cloud_filter),
-                            'sat': self.sat,
-                            'index': self.index,
-                            'key': self.key,
-                            'percentile': self.percentile if self.key == 'percentile' else None,
-                            'count_mode': count_mode
-                        })
-
-                    # verificar datos en el composite
-                    band_count = period_composite.bandNames().size()
-                    if band_count.getInfo() > 0:
-                        period_images.append(period_composite)
-                        successful_periods += 1
-                    else:
-                        print(f"No data for period {period_idx + 1} in year {year}")
-                        continue
-
-                except Exception as e:
-                    print(f"Error processing period {period_idx + 1} in year {year}: {str(e)}")
-                    continue
-
-            if successful_periods > 0:
-                composite = ee.Image.cat(period_images).clip(self.roi)
-                actual_base_bands = base_bands[:successful_periods]
-                actual_period_names = self.period_names[:successful_periods]
-                compositer = composite.select(actual_base_bands, actual_period_names).set(
-                    'system:time_start', ee.Date(str(year)).millis()
-                )
-                self.imagelist.append(compositer)
-                print(f"Year {year}: Successfully processed {successful_periods} periods using {self.index} index")
-            else:
+            if sum(scene_counts) == 0:
                 print(f"Year {year}: No data available, skipping")
+                continue
+
+            period_images = []
+            for period_idx in range(self.periods):
+                period_name = self.period_names[period_idx]
+
+                # contar SIEMPRE (aunque luego el composite no tenga datos)
+                if return_counts:
+                    n = _count_images_for_period(year, period_idx).getInfo()
+                    rows.append({
+                        'year': year,
+                        'period_idx': period_idx,
+                        'period_name': period_name,
+                        'images_count': int(n),
+                        'cloud_filter': bool(self.cloud_filter),
+                        'sat': self.sat,
+                        'index': self.index,
+                        'key': self.key,
+                        'percentile': self.percentile if self.key == 'percentile' else None,
+                        'count_mode': count_mode
+                    })
+
+                if scene_counts[period_idx] == 0:
+                    fill = "zeros" if self.key == 'count' else "a masked band"
+                    print(f"No data for period {period_idx + 1} ({period_name}) in year {year}, filled with {fill}")
+
+                # Renombrar cada periodo antes de unirlos, para que el nombre de
+                # la banda no dependa de su posición en la imagen
+                period_composite = self.get_period_composite(year, period_idx)
+                period_images.append(period_composite.select([0]).rename(period_name))
+
+            compositer = ee.Image.cat(period_images).clip(self.roi).set(
+                'system:time_start', ee.Date(str(year)).millis()
+            )
+            self.imagelist.append(compositer)
+            n_valid = sum(1 for c in scene_counts if c > 0)
+            print(f"Year {year}: {n_valid}/{self.periods} periods with data using {self.index} index")
 
         collection = ee.ImageCollection.fromImages(self.imagelist)
 

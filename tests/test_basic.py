@@ -376,5 +376,56 @@ def test_integration_raw_bands_and_count():
     assert n_obs == pytest.approx(round(n_obs), abs=1e-6)
 
 
+@pytest.mark.ee
+def test_integration_empty_periods_keep_band_order():
+    """A period without images is kept as a band and does not shift the rest.
+
+    Sentinel-2 has no scene over this Doñana ROI in February and March 2017,
+    while January and April onwards do have data.
+    """
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
+
+    def pixel_count(image):
+        return image.reduceRegion(
+            ee.Reducer.count(), roi, 200, maxPixels=1e9
+        ).getInfo()
+
+    inst = NdviSeasonality(
+        roi=roi, periods=12, start_year=2017, end_year=2017,
+        sat="S2", index="ndvi", key="median",
+    )
+    composite = inst.get_year_composite().first()
+    assert composite.bandNames().getInfo() == inst.period_names
+
+    counts = pixel_count(composite)
+    assert counts["january"] > 0
+    assert counts["february"] == 0
+    assert counts["march"] == 0
+    assert counts["april"] > 0
+
+    # The 'april' band holds April, not the next period with data moved up
+    april = inst.get_period_composite(2017, 3)
+    diff = composite.select("april").subtract(april).abs()
+    max_diff = diff.reduceRegion(
+        ee.Reducer.max(), roi, 200, maxPixels=1e9
+    ).getInfo()
+    assert max_diff["april"] == pytest.approx(0, abs=1e-6)
+
+    # With key='count' an empty period is zero observations, not nodata
+    inst = NdviSeasonality(
+        roi=roi, periods=12, start_year=2017, end_year=2017,
+        sat="S2", index="ndvi", key="count",
+    )
+    composite = inst.get_year_composite().first()
+    assert composite.bandNames().getInfo() == inst.period_names
+    feb = composite.select("february").reduceRegion(
+        ee.Reducer.minMax(), roi, 200, maxPixels=1e9
+    ).getInfo()
+    assert feb == {"february_min": 0, "february_max": 0}
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

@@ -73,6 +73,7 @@ processor = S1ARDProcessor(
     terrain_correction=True,
     terrain_flattening_model='VOLUME',
     dem='COPERNICUS_30',
+    input_format='DB',   # COPERNICUS/S1_GRD is served in dB
     format='LINEAR',
 )
 
@@ -131,11 +132,17 @@ The VOLUME model uses the full local-incidence-angle formulation (Vollrath et al
 | DEM | Resolution | Notes |
 |---|---|---|
 | `COPERNICUS_30` | 30 m | **Recommended default** — best global quality, covers high latitudes |
-| `COPERNICUS_90` | 90 m | Faster, use for very large ROIs |
 | `SRTM_30` | 30 m | Classic, no coverage above 60°N / below 56°S |
 | `SRTM_90` | 90 m | Classic, same latitude limits |
 
 The correction factor is clamped to the `[0.5, 2.0]` range to prevent overcorrection in very steep terrain where the angular geometry becomes unstable.
+
+```{warning}
+Before **v1.6.0** terrain correction had no real effect with the default DEM: the Copernicus
+tiles were mosaicked without their projection, so the slope came out near zero — and part of
+every scene was masked. It also multiplied dB values by the correction factor, which is only
+meaningful on linear power. Both are fixed; `vv`/`vh` on sloping terrain change accordingly.
+```
 
 ---
 
@@ -232,15 +239,23 @@ Map
 
 ## Format: linear vs decibel
 
-Keep the internal format in `'LINEAR'` during pipeline processing — SAR indices (`RVI`, `DPSVI`, `VV_VH_ratio`, etc.) must be computed on linear power, not on logarithms. `NdviSeasonality` enforces this automatically.
-
-Convert to decibel at the end if you want to visualise VV or VH directly:
+Earth Engine serves `COPERNICUS/S1_GRD` in **dB**, but terrain correction (a multiplicative
+factor) and speckle filtering (statistics of intensity) need **linear power**. The processor
+therefore converts its input first — `input_format='DB'` by default; pass
+`input_format='LINEAR'` for `COPERNICUS/S1_GRD_FLOAT` — and returns whatever `format` asks for:
 
 ```python
-processor = S1ARDProcessor(format='DB')  # applies 10·log10 at the end
+processor = S1ARDProcessor(format='LINEAR')  # linear power out
+processor = S1ARDProcessor(format='DB')      # 10·log10 applied at the end
 ```
 
-`format='DB'` compresses dynamic range for display but is **not interchangeable** with linear for downstream arithmetic.
+`format='DB'` compresses dynamic range for display but is **not interchangeable** with linear
+for downstream arithmetic.
+
+`NdviSeasonality` handles this for you: its Sentinel-1 collection is in dB, so `vv` and `vh`
+come out in the usual scale, and the polarimetric indices (`rvi`, `vv_vh_ratio`, `rfdi`,
+`dpsvi`) convert to linear power before applying their formulas. See the
+[indices reference](../reference/indices.md#sar-indices) for the formulas.
 
 ---
 
@@ -297,8 +312,9 @@ This isolates whether a problem comes from the DEM/angle geometry or from the sp
 | `speckle_filter_kernel_size` | int (odd) | `7` | Filter kernel size in pixels |
 | `terrain_correction` | bool | `True` | Apply radiometric terrain correction |
 | `terrain_flattening_model` | str | `'VOLUME'` | `'VOLUME'` (vegetation) or `'SURFACE'` (bare soil/water) |
-| `dem` | str | `'COPERNICUS_30'` | `'COPERNICUS_30'`, `'COPERNICUS_90'`, `'SRTM_30'`, `'SRTM_90'` |
-| `format` | str | `'LINEAR'` | `'LINEAR'` (for indices) or `'DB'` (for visualisation) |
+| `dem` | str | `'COPERNICUS_30'` | `'COPERNICUS_30'`, `'SRTM_30'`, `'SRTM_90'` |
+| `format` | str | `'LINEAR'` | Output scale: `'LINEAR'` (for indices) or `'DB'` (for visualisation) |
+| `input_format` | str | `'DB'` | Scale of the input VV/VH: `'DB'` (`COPERNICUS/S1_GRD`) or `'LINEAR'` (`S1_GRD_FLOAT`) |
 
 ### Methods
 
@@ -307,6 +323,7 @@ This isolates whether a problem comes from the DEM/angle geometry or from the sp
 | `process_image(image)` | `ee.Image` | Full pipeline: terrain correction → speckle filter → format conversion |
 | `apply_terrain_correction(image)` | `ee.Image` | Only the RTC step |
 | `apply_speckle_filter(image)` | `ee.Image` | Only the speckle step (routes to the selected filter) |
+| `from_db(image)` | `ee.Image` | Convert VV and VH from decibel to linear |
 | `to_db(image)` | `ee.Image` | Convert VV and VH from linear to decibel |
 
 ### `NdviSeasonality` SAR-specific parameters

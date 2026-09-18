@@ -46,7 +46,7 @@ class S1ARDProcessor:
         Enable radiometric terrain correction. Default is True.
     terrain_flattening_model : {'VOLUME', 'SURFACE'}
         Scattering model for terrain correction. Default is 'VOLUME'.
-    dem : {'COPERNICUS_30', 'COPERNICUS_90', 'SRTM_30', 'SRTM_90'}
+    dem : {'COPERNICUS_30', 'SRTM_30', 'SRTM_90'}
         Digital Elevation Model. Default is 'COPERNICUS_30'.
     format : {'LINEAR', 'DB'}
         Output format. Default is 'LINEAR'.
@@ -117,7 +117,6 @@ class S1ARDProcessor:
             Digital Elevation Model to use for terrain correction:
             
             - 'COPERNICUS_30': Copernicus DEM at 30m resolution (recommended)
-            - 'COPERNICUS_90': Copernicus DEM at 90m resolution
             - 'SRTM_30': SRTM at 30m resolution
             - 'SRTM_90': SRTM at 90m resolution
             
@@ -205,13 +204,22 @@ class S1ARDProcessor:
         Copernicus DEM is generally recommended over SRTM for better quality
         and global coverage including high latitude regions.
         """
-        dem_dict = {
-            'COPERNICUS_30': ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM').mosaic(),
-            'COPERNICUS_90': ee.Image('COPERNICUS/DEM/GLO90').select('DEM'),
-            'SRTM_30': ee.Image('USGS/SRTMGL1_003'),
-            'SRTM_90': ee.Image('CGIAR/SRTM90_V4')
-        }
-        return dem_dict.get(self.dem, dem_dict['COPERNICUS_30'])
+        if self.dem == 'COPERNICUS_30':
+            # The Copernicus DEM is a collection of tiles. A mosaic takes the
+            # default projection (WGS84 at 1 degree), and ee.Terrain.slope
+            # works on neighbouring pixels in that projection: before 1.6.0
+            # the slope came out near zero and masked part of every scene, so
+            # terrain correction had no effect. The tiles' own projection
+            # restores the 30 m grid
+            tiles = ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM')
+            return tiles.mosaic().setDefaultProjection(tiles.first().projection())
+        if self.dem == 'SRTM_30':
+            return ee.Image('USGS/SRTMGL1_003')
+        if self.dem == 'SRTM_90':
+            return ee.Image('CGIAR/SRTM90_V4')
+        raise ValueError(
+            f"Unknown DEM {self.dem!r}. Choose 'COPERNICUS_30', 'SRTM_30' or 'SRTM_90'."
+        )
     
     def apply_terrain_correction(self, image):
         """

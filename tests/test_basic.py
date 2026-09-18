@@ -916,5 +916,29 @@ def test_integration_water_indices_split_water_and_land():
         assert medians["water"] > 0 > medians["land"], (index, medians)
 
 
+@pytest.mark.ee
+def test_integration_s1_ard_dem_has_real_slopes():
+    """The terrain-correction DEM keeps its 30 m grid, so slopes are real.
+
+    Mosaicking the Copernicus tiles without their projection, as before
+    1.6.0, gave a slope of about 0.07 degrees everywhere and masked part of
+    each scene, so terrain correction did nothing.
+    """
+    ee = _require_ee()
+    from ndvi2gif import S1ARDProcessor
+
+    sierra_nevada = ee.Geometry.Rectangle([-3.35, 37.03, -3.28, 37.08])
+    slope = ee.Terrain.slope(S1ARDProcessor().dem_ee)
+    stats = slope.reduceRegion(
+        ee.Reducer.mean().combine(ee.Reducer.max(), None, True),
+        sierra_nevada, 90, maxPixels=1e9,
+    ).getInfo()
+    assert stats["slope_max"] > 30
+    assert stats["slope_mean"] > 10
+
+    with pytest.raises(ValueError, match="Unknown DEM"):
+        S1ARDProcessor(dem="COPERNICUS_90")
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

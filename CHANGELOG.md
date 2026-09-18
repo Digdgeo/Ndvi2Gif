@@ -42,6 +42,8 @@ Also affected: `cri2`, `fai`, `mcari` and `ireci`, and the magnitude (not the si
 
   Periasamy's original DPSVI needs the maximum VV of the whole scene, so it is not a per-pixel index; the modified form is used and documented as such.
 - `vsdi` is unchanged but now documented as **experimental**: no publication defining it has been found (it was attributed to Periasamy 2018, who does not define it).
+- **Terrain correction had no effect with the default DEM, and masked a third of the scene in hilly areas.** The Copernicus 30 m DEM is a collection of tiles, and its mosaic took Earth Engine's default projection (WGS84 at 1°), so `ee.Terrain.slope` came out around 0.07° everywhere it was not masked. Over Tawau Hills Park (Borneo) that left 34% of every Sentinel-1 composite empty. The mosaic now keeps the tiles' own 30 m projection (slopes up to 49° there, full coverage).
+- `S1ARDProcessor(dem='COPERNICUS_90')` pointed to an asset that does not exist in Earth Engine, and an unknown DEM name silently fell back to `COPERNICUS_30`. The option is removed and unknown names raise a `ValueError`.
 - `S1ARDProcessor.process_image()` returned an `ee.Element` instead of an `ee.Image` when called directly on an image.
 
 ### Added

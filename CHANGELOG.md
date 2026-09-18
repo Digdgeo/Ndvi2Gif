@@ -9,6 +9,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`index='cig'` (Chlorophyll Index Green) was unreachable.** Its method was in the dispatch dictionary but the index was never registered for any sensor, so the constructor rejected it with `ValueError`. It only needs the green and NIR bands, so it is now available on every optical sensor (Sentinel-2, Landsat, MODIS, Sentinel-3), like `gndvi`. A new test fails if any index in the dispatch dictionary is left without a sensor again.
+
+### Added
+
+- Tests for `HydroperiodAnalyzer`, which had none: hydrological-year bounds, index validation, and an Earth Engine integration test over the Doñana marshes checking that same-day tiles are mosaicked, that the midpoint weights tile the cycle from day 0 to 365, that `0 <= hydroperiod <= valid_days <= 365`, that `first_flood_doy <= last_flood_doy`, and that the downloadable mask stack is `uint8` with only the codes 0, 1, 2 and 255.
+
 ## [1.5.1] - 2026-09-18
 
 ### Fixed

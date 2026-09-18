@@ -128,6 +128,23 @@ def test_core_indices_available():
     assert not missing, f"Missing index methods: {missing}"
 
 
+def test_every_index_is_reachable():
+    """Every index in the dispatch dict is registered for at least one sensor.
+
+    An index missing from sensor_indices is rejected by the constructor, so its
+    method can never run ('cig' was in that state until 1.6.0).
+    """
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+    inst = NdviSeasonality()
+
+    reachable = set().union(*inst.sensor_indices.values())
+    assert set(inst.d) - reachable == set()
+    assert reachable - set(inst.d) == set()
+
+    for sat in ("S2", "Landsat", "MODIS", "S3"):
+        assert NdviSeasonality(sat=sat, index="cig").index == "cig"
+
+
 def test_raw_bands_available_per_sensor():
     """Raw reflectance bands are selectable on S2/Landsat/MODIS, not on S1/S3."""
     from ndvi2gif.ndvi2gif import NdviSeasonality
@@ -199,6 +216,42 @@ def test_chirps_precipitation_available():
     # Check that CHIRPS variables are mapped to the satellite
     chirps_vars = inst.sensor_indices["CHIRPS"]
     assert "precipitation" in chirps_vars
+
+
+# ---------------------------------------------------------------------
+# HydroperiodAnalyzer (construction and validation; no EE computation)
+# ---------------------------------------------------------------------
+
+def test_hydroperiod_year_bounds():
+    """Cycles run from the configured start day to the same day a year later."""
+    from ndvi2gif import NdviSeasonality, HydroperiodAnalyzer
+    ns = NdviSeasonality(sat="S2", start_year=2022, end_year=2022)
+
+    # Default hydrological year starts on 1 September; the end is exclusive
+    assert HydroperiodAnalyzer(ns)._hyd_year_bounds(2022) == (
+        "2022-09-01", "2023-09-01"
+    )
+    custom = HydroperiodAnalyzer(ns, hydrological_year_start=(10, 1))
+    assert custom._hyd_year_bounds(2022) == ("2022-10-01", "2023-10-01")
+
+
+def test_hydroperiod_rejects_invalid_indices():
+    """Only water indices the sensor actually provides are accepted."""
+    from ndvi2gif import NdviSeasonality, HydroperiodAnalyzer
+    ns = NdviSeasonality(sat="S2", start_year=2022, end_year=2022)
+    analyzer = HydroperiodAnalyzer(ns)
+
+    for index in HydroperiodAnalyzer.WATER_INDICES:
+        analyzer._validate_index(index)
+
+    # A vegetation index is not a water index
+    with pytest.raises(ValueError, match="not a supported water index"):
+        analyzer.get_water_masks(index="ndvi")
+
+    # Sentinel-1 has none of the optical water indices
+    s1 = HydroperiodAnalyzer(NdviSeasonality(sat="S1", index="vv"))
+    with pytest.raises(ValueError, match="not available for sensor"):
+        s1.get_water_masks(index="mndwi")
 
 
 # ---------------------------------------------------------------------
@@ -486,6 +539,84 @@ def test_integration_pixel_trends_percentile_band_name():
         ee.Reducer.count(), roi, 200, maxPixels=1e9
     ).getInfo()
     assert stats["slope"] > 0
+
+
+@pytest.mark.ee
+def test_integration_hydroperiod_invariants():
+    """Midpoint weights tile the cycle and the hydroperiod bands stay consistent.
+
+    Doñana marshes, Sentinel-2, hydrological year Sep 2022 - Aug 2023.
+    """
+    ee = _require_ee()
+    from ndvi2gif import NdviSeasonality, HydroperiodAnalyzer
+
+    roi = ee.Geometry.Rectangle([-6.40, 36.93, -6.33, 36.98])
+    ns = NdviSeasonality(roi=roi, sat="S2", start_year=2022, end_year=2022)
+    analyzer = HydroperiodAnalyzer(ns)
+
+    # --- Water masks: one per day, weights covering the whole cycle ---------
+    masks = analyzer.get_water_masks(hyd_year=2022)
+    props = ee.Dictionary({
+        "time": masks.aggregate_array("system:time_start"),
+        "weight": masks.aggregate_array("weight"),
+        "start": masks.aggregate_array("start_doy"),
+        "end": masks.aggregate_array("end_doy"),
+    }).getInfo()
+
+    n_dates = len(props["time"])
+    assert n_dates > 10
+    # Same-day tiles are mosaicked, so no two masks share a day
+    days = {t // 86_400_000 for t in props["time"]}
+    assert len(days) == n_dates
+
+    # Each scene owns the days up to the midpoints with its neighbours:
+    # contiguous spans from 0 to 365 whose weights add up to the year
+    assert props["start"][0] == 0
+    assert props["end"][-1] == 365
+    assert props["start"][1:] == props["end"][:-1]
+    assert sum(props["weight"]) == pytest.approx(365)
+
+    # --- Hydroperiod bands --------------------------------------------------
+    result = analyzer.compute_hydroperiod(hyd_year=2022)
+    assert result.bandNames().getInfo() == [
+        "hydroperiod", "valid_days", "normalized",
+        "first_flood_doy", "last_flood_doy",
+    ]
+    assert result.getInfo()["properties"]["index"] == "mndwi"
+
+    checks = ee.Image.cat([
+        result.select("hydroperiod").rename("flood"),
+        result.select("valid_days").rename("valid"),
+        result.select("normalized").rename("norm"),
+        result.select("valid_days").subtract(result.select("hydroperiod"))
+        .rename("valid_minus_flood"),
+        result.select("last_flood_doy").subtract(result.select("first_flood_doy"))
+        .rename("last_minus_first"),
+    ])
+    stats = checks.reduceRegion(
+        ee.Reducer.minMax(), roi, 100, maxPixels=1e9
+    ).getInfo()
+
+    assert stats["flood_min"] >= 0
+    assert stats["valid_max"] <= 365
+    assert stats["valid_minus_flood_min"] >= 0
+    assert 0 <= stats["norm_min"] and stats["norm_max"] <= 365
+    assert stats["last_minus_first_min"] >= 0
+    # The marsh floods part of the year and dries out elsewhere
+    assert stats["flood_max"] > 30
+    assert stats["flood_min"] == 0
+
+    # --- Downloadable mask stack --------------------------------------------
+    stack = analyzer.get_water_masks_stack(hyd_year=2022)
+    assert stack.bandNames().size().getInfo() == n_dates
+    band_type = stack.bandTypes().values().get(0).getInfo()
+    assert (band_type["min"], band_type["max"]) == (0, 255)
+
+    histograms = stack.reduceRegion(
+        ee.Reducer.frequencyHistogram(), roi, 200, maxPixels=1e9
+    ).values().getInfo()
+    seen = {int(value) for hist in histograms for value in hist}
+    assert seen <= {0, 1, 2, 255}
 
 
 if __name__ == "__main__":

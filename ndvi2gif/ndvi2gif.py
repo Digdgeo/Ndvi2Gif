@@ -802,7 +802,7 @@ class NdviSeasonality:
             'ndvi', 'ndwi', 'mndwi', 'evi', 'savi', 'gndvi', 'avi', 
             'nbri', 'ndsi', 'aweinsh', 'awei', 'ndmi', 'msi', 'nmi', 
             'ndti', 'cri1', 'cri2', 'lai', 'pri', 'wdrvi', 'lst',
-            'vci', 'utfvi', 'nbr', 'wi2015', 'ndbi'
+            'vci', 'utfvi', 'nbr', 'wi2015', 'ndbi', 'cig'
         }
 
         # Sentinel-2 exclusive indices (Red Edge bands)

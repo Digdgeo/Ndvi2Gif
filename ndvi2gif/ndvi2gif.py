@@ -139,6 +139,21 @@ def scale_OLI(image):
     return image.addBands(opticalBands, None, True)
     
 
+def _to_reflectance(image):
+    """
+    Rescale the standardized optical bands of Sentinel-2 or MODIS to 0-1.
+
+    Both collections store surface reflectance as integers multiplied by
+    10000. Only the standardized band names are touched, so auxiliary bands
+    (MODIS LST, added later) keep their own units; ``addBands`` with
+    ``overwrite=True`` keeps the image properties and footprint.
+    """
+    optical = ['Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3',
+               'Nir', 'Swir1', 'Swir2']
+    present = image.bandNames().filter(ee.Filter.inList('item', optical))
+    return image.addBands(image.select(present).multiply(0.0001), None, True)
+
+
 def scale_ETM(image):
     """
     Scale Landsat 4-5-7 ETM+/TM sensor data to surface reflectance.
@@ -603,7 +618,14 @@ class NdviSeasonality:
 
         cloud_filter : bool, optional
             If True, applies cloud filtering to optical sensors (S2, Landsat).
-            No effect on SAR or other sensors. Default is True.
+            On Sentinel-2 this is two steps: whole scenes above
+            ``max_cloud_cover`` are dropped, then cloudy pixels are masked
+            (SCL or QA60, see ``scl_mask``). ``False`` disables **both**, so
+            clouds enter the composites. To keep the pixel mask without
+            discarding scenes — useful in persistently cloudy regions, where
+            few scenes pass a scene-level threshold — leave it True and set
+            ``max_cloud_cover=100``. No effect on SAR or other sensors.
+            Default is True.
         
         max_cloud_cover : int, optional
             Maximum cloud cover percentage (0-100) for initial filtering.
@@ -797,12 +819,11 @@ class NdviSeasonality:
         if sat != 'S1' and orbit != 'BOTH':
             print(f"Warning: orbit parameter '{orbit}' is only used with Sentinel-1. Ignoring for {sat}.")
             
-        # Define basic optical indices (available on all optical sensors)
+        # Define basic optical indices (available on all optical sensors).
+        # Only visible and NIR bands: Sentinel-3 OLCI has no SWIR or thermal
         self.optical_indices = {
-            'ndvi', 'ndwi', 'mndwi', 'evi', 'savi', 'gndvi', 'avi', 
-            'nbri', 'ndsi', 'aweinsh', 'awei', 'ndmi', 'msi', 'nmi', 
-            'ndti', 'cri1', 'cri2', 'lai', 'pri', 'wdrvi', 'lst',
-            'vci', 'utfvi', 'nbr', 'wi2015', 'ndbi', 'cig'
+            'ndvi', 'ndwi', 'evi', 'savi', 'gndvi', 'avi',
+            'cri1', 'cri2', 'lai', 'pri', 'wdrvi', 'vci', 'cig'
         }
 
         # Sentinel-2 exclusive indices (Red Edge bands)
@@ -816,10 +837,17 @@ class NdviSeasonality:
             'red_edge_position', 'fluorescence_height', 'water_leaving_reflectance'
         }
 
-        # Indices requiring SWIR2 band (~2100-2200nm) - not available in Sentinel-3 OLCI
+        # Indices requiring the SWIR bands (Swir1 ~1600 nm, Swir2 ~2200 nm),
+        # which Sentinel-3 OLCI does not have
         self.swir_optical_indices = {
-            'fai'
+            'mndwi', 'nbri', 'ndsi', 'aweinsh', 'awei', 'ndmi', 'msi', 'nmi',
+            'ndti', 'nbr', 'wi2015', 'ndbi', 'fai'
         }
+
+        # Thermal indices. They read the surface temperature bands of Landsat
+        # (ST_B10 / ST_B6) and MODIS (LST_Day_1km), and would return a fully
+        # masked image on any other sensor
+        self.thermal_indices = {'lst', 'utfvi'}
 
         # Raw reflectance bands exposed as selectable "indices". Spectral
         # indices are ratios and cancel out multiplicative brightness changes,
@@ -886,8 +914,10 @@ class NdviSeasonality:
             'S2': (self.optical_indices | self.s2_exclusive_indices
                    | self.swir_optical_indices | self.raw_band_indices
                    | self.s2_rededge_bands),
-            'Landsat': self.optical_indices | self.swir_optical_indices | self.raw_band_indices,
-            'MODIS': self.optical_indices | self.swir_optical_indices | self.raw_band_indices,
+            'Landsat': (self.optical_indices | self.swir_optical_indices
+                        | self.raw_band_indices | self.thermal_indices),
+            'MODIS': (self.optical_indices | self.swir_optical_indices
+                      | self.raw_band_indices | {'lst'}),
             'S1': self.s1_indices,
             'S3': self.optical_indices | self.s3_exclusive_indices,
             'ERA5': self.era5_variables,
@@ -902,10 +932,11 @@ class NdviSeasonality:
         self.sat = sat
 
         # Factor that turns the stored band values into surface reflectance
-        # (0-1), used by get_raw_band. Landsat is already rescaled in
-        # scale_OLI / scale_ETM, while Sentinel-2 and MODIS store reflectance
-        # as integers multiplied by 10000
-        self.reflectance_scale = {'S2': 1e-4, 'MODIS': 1e-4}.get(sat, 1.0)
+        # (0-1), used by get_raw_band. Every optical collection is already in
+        # reflectance: Landsat through scale_OLI / scale_ETM, Sentinel-2 and
+        # MODIS through _to_reflectance (before 1.6.0 these two stayed as
+        # integers multiplied by 10000 and this factor was 1e-4 for them)
+        self.reflectance_scale = 1.0
 
         # Validate index for selected satellite
         available_indices = self.sensor_indices[self.sat]
@@ -1448,6 +1479,12 @@ class NdviSeasonality:
                 'Blue', 'Green', 'Red', 'Red_Edge1', 'Red_Edge2', 'Red_Edge3',
                 'Nir', 'Swir1', 'Swir2'
             ]).filterBounds(self.roi)
+
+        # Sentinel-2 L2A stores surface reflectance as integers multiplied by
+        # 10000. Ratio indices such as NDVI do not notice, but every index with
+        # a constant, a sum or an inverse does (SAVI, EVI, AVI, WI2015, CRI...),
+        # so the bands are brought to reflectance in 0-1 like Landsat's
+        S2col = S2col.map(_to_reflectance)
         
         # ============= MODIS CONFIGURATION =============
         # MODIS Terra + Aqua - Smart configuration based on time period
@@ -1459,10 +1496,11 @@ class NdviSeasonality:
         use_aqua = period_start.millis().gte(aqua_start_date.millis())
         
         # Terra reflectance (always available)
+        # Reflectance is stored as integers multiplied by 10000, as in Sentinel-2
         MOD09A1 = ee.ImageCollection("MODIS/061/MOD09A1").select(
             ['sur_refl_b03', 'sur_refl_b04', 'sur_refl_b01', 'sur_refl_b02', 'sur_refl_b06', 'sur_refl_b07'], 
             ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']
-        ).filterBounds(self.roi)
+        ).filterBounds(self.roi).map(_to_reflectance)
         
         # Terra LST (always available since 2000)
         MOD11A1 = ee.ImageCollection("MODIS/061/MOD11A1").select(['LST_Day_1km']).filterBounds(self.roi)
@@ -1476,7 +1514,7 @@ class NdviSeasonality:
             MYD09A1 = ee.ImageCollection("MODIS/061/MYD09A1").select(
                 ['sur_refl_b03', 'sur_refl_b04', 'sur_refl_b01', 'sur_refl_b02', 'sur_refl_b06', 'sur_refl_b07'], 
                 ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2']
-            ).filterBounds(self.roi)
+            ).filterBounds(self.roi).map(_to_reflectance)
             
             # Aqua LST
             MYD11A1 = ee.ImageCollection("MODIS/061/MYD11A1").select(['LST_Day_1km']).filterBounds(self.roi)
@@ -2185,11 +2223,11 @@ class NdviSeasonality:
         radiometric normalization, where the criterion is per-band reflectance
         stability, not index stability.
 
-        The value is rescaled to surface reflectance (0-1) with
-        ``self.reflectance_scale``, so the same threshold means the same thing
-        on every sensor: Sentinel-2 and MODIS store reflectance as integers
-        multiplied by 10000, while Landsat is already rescaled by
-        :func:`scale_OLI` / :func:`scale_ETM`.
+        The value is surface reflectance (0-1) on every sensor, so the same
+        threshold means the same thing whichever produced it: Landsat is
+        rescaled by :func:`scale_OLI` / :func:`scale_ETM`, and Sentinel-2 and
+        MODIS, which store reflectance as integers multiplied by 10000, by
+        :func:`_to_reflectance` when the collection is built.
 
         Available as ``index='blue'``, ``'green'``, ``'red'``, ``'nir'``,
         ``'swir1'``, ``'swir2'`` on Sentinel-2, Landsat and MODIS, plus
@@ -2309,7 +2347,7 @@ class NdviSeasonality:
         Remote Sensing of Environment, 140, 23-35.
         """
         return image.expression(
-            '4.0 * (GREEN - SWIR1) - 0.25 * NIR + 2.75 * SWIR2', {
+            '4.0 * (GREEN - SWIR1) - (0.25 * NIR + 2.75 * SWIR2)', {
             'NIR': image.select('Nir'),
             'GREEN': image.select('Green'),
             'SWIR1':image.select('Swir1'),
@@ -3041,7 +3079,7 @@ class NdviSeasonality:
             '(Red2 - Blue_Green) / (NIR - Blue_Green)', {
             'Blue_Green': image.select('Blue_Green'),  # Oa04 - 490nm
             'Red2': image.select('Red2'),              # Oa08 - 665nm  
-            'NIR': image.select('NIR')                 # Oa12 - 753.75nm
+            'NIR': image.select('Nir')                 # Oa12 - 753.75nm
         }).rename(['nd'])
 
     def get_cdom(self, image):
@@ -3121,7 +3159,7 @@ class NdviSeasonality:
         return image.expression(
             '(NIR - Red_Edge2) / (NIR + Red_Edge2)', {
             'Red_Edge2': image.select('Red_Edge2'),    # Oa11 - 708.75nm
-            'NIR': image.select('NIR')                 # Oa12 - 753.75nm
+            'NIR': image.select('Nir')                 # Oa12 - 753.75nm
         }).rename(['nd'])
 
     def get_red_edge_position(self, image):

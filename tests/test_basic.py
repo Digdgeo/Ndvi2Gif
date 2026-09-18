@@ -169,14 +169,15 @@ def test_raw_bands_available_per_sensor():
 
 
 def test_raw_band_reflectance_scale():
-    """Scale factor brings every sensor to reflectance in 0-1."""
+    """Every optical collection is already reflectance, so raw bands need no factor.
+
+    Since 1.6.0 Sentinel-2 and MODIS are rescaled when the collection is built
+    (they store integers x 10000), like Landsat in scale_OLI / scale_ETM.
+    """
     from ndvi2gif.ndvi2gif import NdviSeasonality
 
-    # S2 and MODIS store reflectance as integers x 10000
-    assert NdviSeasonality(sat="S2", index="red").reflectance_scale == pytest.approx(1e-4)
-    assert NdviSeasonality(sat="MODIS", index="red").reflectance_scale == pytest.approx(1e-4)
-    # Landsat is already rescaled by scale_OLI / scale_ETM
-    assert NdviSeasonality(sat="Landsat", index="red").reflectance_scale == 1.0
+    for sat in ("S2", "MODIS", "Landsat"):
+        assert NdviSeasonality(sat=sat, index="red").reflectance_scale == 1.0
 
 
 def test_era5_variables_available():
@@ -741,6 +742,105 @@ def test_integration_classifier_multisensor_resampling():
         ee.Reducer.mean(), roi, 10, maxPixels=1e9
     ).getInfo()["Landsat_ndvi_2021_summer"]
     assert fine_mean == pytest.approx(native_mean, abs=0.01)
+
+
+@pytest.mark.ee
+def test_integration_every_registered_index_computes():
+    """Each index a sensor accepts can be computed on a real image of it.
+
+    Until 1.6.0 Sentinel-3 accepted twelve SWIR indices (OLCI has no SWIR),
+    two of its own water-quality indices looked up a band called 'NIR'
+    instead of 'Nir', and 'lst' was offered on sensors without thermal
+    bands, where it returned an empty image.
+    """
+    ee = _require_ee()
+    import contextlib, io
+    from ndvi2gif import NdviSeasonality
+
+    roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
+    failures = {}
+    for sat, default in [("S2", "ndvi"), ("Landsat", "ndvi"), ("MODIS", "ndvi"),
+                         ("S3", "ndvi"), ("S1", "vv")]:
+        with contextlib.redirect_stdout(io.StringIO()):
+            inst = NdviSeasonality(roi=roi, sat=sat, index=default,
+                                   start_year=2021, end_year=2021)
+        image = inst.ndvi_col.filterDate("2021-06-01", "2021-09-01").first()
+        for index in sorted(inst.sensor_indices[sat]):
+            try:
+                ee.Image(inst.d[index](image)).bandNames().getInfo()
+            except Exception as e:  # noqa: BLE001 - report every failure at once
+                failures[f"{sat}:{index}"] = str(e)[:80]
+
+    assert failures == {}
+
+    inst = NdviSeasonality(sat="S3", index="ndvi")
+    assert not {"mndwi", "ndmi", "awei", "lst"} & inst.sensor_indices["S3"]
+    assert "lst" not in inst.sensor_indices["S2"]
+    assert {"lst", "utfvi"} <= inst.sensor_indices["Landsat"]
+
+
+@pytest.mark.ee
+def test_integration_index_formulas_on_known_reflectance():
+    """Index formulas match their published definitions on fixed reflectances."""
+    ee = _require_ee()
+    from ndvi2gif import NdviSeasonality
+
+    refl = {"Blue": 0.05, "Green": 0.08, "Red": 0.06, "Nir": 0.30,
+            "Swir1": 0.15, "Swir2": 0.08}
+    image = ee.Image.constant(list(refl.values())).rename(list(refl.keys()))
+    b, g, r, n, s1, s2 = refl.values()
+
+    expected = {
+        "ndvi": (n - r) / (n + r),
+        # ndvi2gif uses L = 0.428 by default (Huete suggested 0.5)
+        "savi": 1.428 * (n - r) / (n + r + 0.428),
+        "evi": 2.5 * (n - r) / (n + 6 * r - 7.5 * b + 1),
+        # Feyisa et al. (2014): the SWIR2 term is subtracted, not added
+        "aweinsh": 4 * (g - s1) - (0.25 * n + 2.75 * s2),
+        "awei": b + 2.5 * g - 1.5 * (n + s1) - 0.25 * s2,
+        "mndwi": (g - s1) / (g + s1),
+    }
+    inst = NdviSeasonality(sat="S2", index="ndvi")
+    point = ee.Geometry.Point([0, 0])
+    for index, value in expected.items():
+        got = ee.Image(inst.d[index](image)).reduceRegion(
+            ee.Reducer.first(), point, 10).values().get(0).getInfo()
+        assert got == pytest.approx(value, abs=1e-5), index
+
+
+@pytest.mark.ee
+def test_integration_optical_sensors_share_reflectance_scale():
+    """S2, Landsat and MODIS bands are all reflectance, so indices agree.
+
+    Before 1.6.0 Sentinel-2 and MODIS kept their integer x 10000 values and
+    every index with a constant (SAVI, EVI, LAI...) came out several times
+    too large on them.
+    """
+    ee = _require_ee()
+    import contextlib, io
+    from ndvi2gif import NdviSeasonality
+
+    roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
+    bands = ["Blue", "Green", "Red", "Nir", "Swir1", "Swir2"]
+    values = {}
+    for sat in ("S2", "Landsat", "MODIS"):
+        with contextlib.redirect_stdout(io.StringIO()):
+            inst = NdviSeasonality(roi=roi, sat=sat, start_year=2021, end_year=2021)
+        summer = inst.ndvi_col.filterDate("2021-06-01", "2021-09-01").select(bands).median()
+        stack = ee.Image.cat([
+            summer.select("Red").rename("red"),
+            ee.Image(inst.d["savi"](summer)).rename("savi"),
+            ee.Image(inst.d["evi"](summer)).rename("evi"),
+        ])
+        values[sat] = stack.reduceRegion(
+            ee.Reducer.median(), roi, 60, maxPixels=1e9).getInfo()
+
+    for sat, v in values.items():
+        assert 0 < v["red"] < 1, sat
+    for index in ("savi", "evi"):
+        ref = values["Landsat"][index]
+        for sat in ("S2", "MODIS"):
+            assert values[sat][index] == pytest.approx(ref, abs=0.05), (sat, index)
 
 
 if __name__ == "__main__":

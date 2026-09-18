@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚠️ Values change for some indices on Sentinel-2 and MODIS
+
+**Sentinel-2 and MODIS bands are now surface reflectance (0-1), as Landsat's always were.** Both collections store reflectance as integers multiplied by 10000 and were used as such, so every index that is not a pure band ratio came out wrong on them. Ratios (NDVI, NDWI, MNDWI, NDMI, NBR, GNDVI, NDRE...) cancel the scale and **do not change**. Indices with a constant, a sum or an inverse **do**, and the old values were wrong — over the same Doñana summer composite:
+
+| Index | Landsat | Sentinel-2 before → now | MODIS before → now |
+|---|---|---|---|
+| SAVI | 0.14 | 0.27 → 0.13 | 0.34 → 0.16 |
+| EVI | 0.14 | 0.40 → 0.13 | 0.45 → 0.15 |
+| LAI | 0.38 | 1.38 → 0.35 | 1.49 → 0.42 |
+| AVI | 0.25 | 550 → 0.25 | 347 → 0.26 |
+| WI2015 | 1.5 | −2255 → 1.5 | −2023 → 1.5 |
+| CRI1 | 3.2 | 0.0 → 2.5 | 0.0 → 4.4 |
+
+Also affected: `cri2`, `fai`, `mcari` and `ireci`, and the magnitude (not the sign) of `awei`/`aweinsh`. Ratios of differences such as `wdrvi`, `psri`, `mtci`, `reip` and `s2rep` are scale-free and do not change. Results computed with these indices on Sentinel-2 or MODIS with earlier versions should be recomputed. The raw bands (`index='red'`...) were already rescaled and do not change.
+
 ### Added
 
 - **🛰️ Multi-sensor classification in `LandCoverClassifier`**: pass a list of `NdviSeasonality` instances, one per sensor, and give the indices per sensor as a dict:
@@ -30,6 +45,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **`index='cig'` (Chlorophyll Index Green) was unreachable.** Its method was in the dispatch dictionary but the index was never registered for any sensor, so the constructor rejected it with `ValueError`. It only needs the green and NIR bands, so it is now available on every optical sensor (Sentinel-2, Landsat, MODIS, Sentinel-3), like `gndvi`. A new test fails if any index in the dispatch dictionary is left without a sensor again.
+- **`aweinsh` had the sign of its SWIR2 term flipped**: it computed `4·(Green − SWIR1) − 0.25·NIR + 2.75·SWIR2` instead of Feyisa et al.'s (2014) `4·(Green − SWIR1) − (0.25·NIR + 2.75·SWIR2)`. It is one of the water indices of `HydroperiodAnalyzer`, whose water masks with `index='aweinsh'` change accordingly.
+- **Sentinel-3 offered indices it cannot compute.** Twelve indices that need SWIR bands (`mndwi`, `ndmi`, `awei`, `aweinsh`, `nbr`, `nbri`, `ndbi`, `ndsi`, `ndti`, `msi`, `nmi`, `wi2015`) were registered for Sentinel-3, whose OLCI sensor has no SWIR, and failed with an Earth Engine error when computed. They are no longer accepted for `sat='S3'`, which now raises a clear `ValueError` instead.
+- **`floating_algae` and `tsi` failed on Sentinel-3**, the only sensor that offers them: they looked up a band called `'NIR'` while it is named `'Nir'`.
+- **`lst` and `utfvi` were offered on sensors without thermal bands**: on Sentinel-2 and Sentinel-3 they silently returned fully masked images. `lst` is now available on Landsat and MODIS, and `utfvi` on Landsat only. A new test computes every index registered for each sensor on a real image of it.
+- `cloud_filter` is now documented as what it is: `False` disables both the scene-level filter and the pixel-level cloud mask. To keep the pixel mask without discarding scenes, use `cloud_filter=True, max_cloud_cover=100`.
 - **Default pixel size for MODIS, ERA5 and CHIRPS.** `_default_scale_for_sat()`, used by `export_to_drive()` / `export_to_asset()` when no `scale` is given, returned 250 m for MODIS although its reflectance comes from MOD09A1 at 500 m, and 30 m for ERA5-Land and CHIRPS, whose grids are about 11 km and 5.5 km: exports were four times too large for MODIS and tens of thousands of times for the climate datasets, with no added information. They now default to 500 m, 11132 m and 5566 m.
 - **`LandCoverClassifier.get_accuracy_report()` always raised `KeyError`**: it read `producer_accuracy`/`user_accuracy` while the metrics are stored as `producers_accuracy`/`consumers_accuracy`, and treated them as dicts although Earth Engine returns them as a column and a row indexed by class value. It now returns one row per class present in the validation set plus the overall accuracy and kappa.
 - **`LandCoverClassifier.get_feature_importance()` always raised `ValueError`**: it looked for `'RandomForest'` in the Python type of the classifier, which is `ee.Classifier` for every algorithm. It now works after `classify_supervised()` with `'random_forest'`, `'cart'` or `'gradient_tree'`, and returns a plain dict sorted by importance instead of a server-side object.

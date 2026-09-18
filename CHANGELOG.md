@@ -26,6 +26,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Also affected: `cri2`, `fai`, `mcari` and `ireci`, and the magnitude (not the sign) of `awei`/`aweinsh`. Ratios of differences such as `wdrvi`, `psri`, `mtci`, `reip` and `s2rep` are scale-free and do not change. Results computed with these indices on Sentinel-2 or MODIS with earlier versions should be recomputed. The raw bands (`index='red'`...) were already rescaled and do not change.
 
+### ⚠️ Values change for Sentinel-1
+
+**Sentinel-1 preprocessing and polarimetric indices now work on linear power.** `COPERNICUS/S1_GRD` is served in dB, and it was used as if it were linear:
+
+- **Terrain correction and speckle filtering were applied to dB values.** The terrain correction multiplies backscatter by a factor between 0.5 and 2 — a ±3 dB adjustment on linear power, but on dB it could turn −13 dB into −26 dB on steep slopes. `S1ARDProcessor` gains `input_format` (`'DB'` by default, for `COPERNICUS/S1_GRD`; `'LINEAR'` for `S1_GRD_FLOAT`) and converts to linear before processing. `vv` and `vh` are still returned in dB; on flat terrain they barely change, on slopes they change a lot and are now correct.
+- **Indices were computed on dB**, where ratios and sums have no physical meaning. They now convert to linear power first and follow their published definitions (over a Doñana scene, before → now):
+
+  | Index | Formula (linear power) | Before → now |
+  |---|---|---|
+  | `rvi` | `4·VH / (VV + VH)` | 2.42 → 0.70 |
+  | `vv_vh_ratio` | `VV / VH` | 0.65 → 4.9 |
+  | `rfdi` | `(VV − VH) / (VV + VH)` (dual-pol adaptation of Mitchard et al. 2012) | −0.53 → 0.65 |
+  | `dpsvi` | `(VV² + VV·VH) / √2`, the per-pixel DPSVIm of dos Santos et al. (2021) | was `(VV − VH)/(VV + VH)` on dB |
+
+  Periasamy's original DPSVI needs the maximum VV of the whole scene, so it is not a per-pixel index; the modified form is used and documented as such.
+- `vsdi` is unchanged but now documented as **experimental**: no publication defining it has been found (it was attributed to Periasamy 2018, who does not define it).
+- `S1ARDProcessor.process_image()` returned an `ee.Element` instead of an `ee.Image` when called directly on an image.
+
 ### Added
 
 - **🛰️ Multi-sensor classification in `LandCoverClassifier`**: pass a list of `NdviSeasonality` instances, one per sensor, and give the indices per sensor as a dict:

@@ -72,7 +72,8 @@ class S1ARDProcessor:
                  terrain_correction=True,
                  terrain_flattening_model='VOLUME',
                  dem='COPERNICUS_30',
-                 format='LINEAR'):
+                 format='LINEAR',
+                 input_format='DB'):
         """
         Initialize the Sentinel-1 ARD processor with specified parameters.
         
@@ -129,6 +130,18 @@ class S1ARDProcessor:
             - 'DB': Decibel scale (better for visualization)
             
             Default is 'LINEAR'.
+
+        input_format : str, optional
+            Scale of the VV/VH bands of the images passed to
+            :meth:`process_image`:
+
+            - 'DB': decibels, as served by ``COPERNICUS/S1_GRD`` (default)
+            - 'LINEAR': linear power, as in ``COPERNICUS/S1_GRD_FLOAT``
+
+            Terrain correction multiplies the backscatter by a factor and the
+            speckle filters work on intensity statistics, so both need linear
+            power. dB input is converted before processing; before 1.6.0 it
+            was processed as if it were linear.
             
         Examples
         --------
@@ -164,6 +177,11 @@ class S1ARDProcessor:
         self.terrain_flattening_model = terrain_flattening_model
         self.dem = dem
         self.format = format
+        if input_format not in ('DB', 'LINEAR'):
+            raise ValueError(
+                f"input_format must be 'DB' or 'LINEAR', got {input_format!r}"
+            )
+        self.input_format = input_format
         
         # Load the specified DEM
         self.dem_ee = self._get_dem()
@@ -633,6 +651,24 @@ class S1ARDProcessor:
         
         return image.addBands(vv_filtered, None, True).addBands(vh_filtered, None, True)
     
+    def from_db(self, image):
+        """
+        Convert backscatter values from decibel to linear power scale.
+
+        Parameters
+        ----------
+        image : ee.Image
+            SAR image with VV and VH bands in dB.
+
+        Returns
+        -------
+        ee.Image
+            Image with VV and VH as linear power (10 ** (dB / 10)); other
+            bands and properties are kept.
+        """
+        linear = ee.Image(10).pow(image.select(['VV', 'VH']).divide(10))
+        return image.addBands(linear.rename(['VV', 'VH']), None, True)
+
     def to_db(self, image):
         """
         Convert backscatter values from linear to decibel scale.
@@ -693,6 +729,11 @@ class S1ARDProcessor:
         >>> s1_collection = ee.ImageCollection('COPERNICUS/S1_GRD')
         >>> processed = s1_collection.map(processor.process_image)
         """
+        # 0. Work in linear power: terrain correction is multiplicative and the
+        # speckle filters rely on intensity statistics
+        if self.input_format == 'DB':
+            image = self.from_db(image)
+
         # 1. Terrain correction (if enabled)
         if self.terrain_correction:
             image = self.apply_terrain_correction(image)
@@ -705,5 +746,7 @@ class S1ARDProcessor:
         if self.format == 'DB':
             image = self.to_db(image)
         
-        # Preserve original metadata
-        return image.copyProperties(image, ['system:time_start', 'system:time_end'])
+        # Every step uses addBands(..., overwrite=True), which keeps the image
+        # properties. Wrapped in ee.Image because copyProperties, used here
+        # before 1.6.0, returns an ee.Element on the Python client
+        return ee.Image(image)

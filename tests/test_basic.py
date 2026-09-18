@@ -843,5 +843,45 @@ def test_integration_optical_sensors_share_reflectance_scale():
             assert values[sat][index] == pytest.approx(ref, abs=0.05), (sat, index)
 
 
+@pytest.mark.ee
+def test_integration_sar_indices_on_linear_power():
+    """SAR indices use linear power although the collection is in dB."""
+    ee = _require_ee()
+    import math
+    from ndvi2gif import NdviSeasonality, S1ARDProcessor
+
+    vv_db, vh_db = -12.0, -19.0
+    vv, vh = 10 ** (vv_db / 10), 10 ** (vh_db / 10)
+    image = ee.Image.constant([vv_db, vh_db, 35.0]).rename(["VV", "VH", "angle"])
+    point = ee.Geometry.Point([0, 0])
+
+    def first(img):
+        return ee.Image(img).reduceRegion(
+            ee.Reducer.first(), point, 10).values().get(0).getInfo()
+
+    inst = NdviSeasonality(sat="S1", index="vv")
+    expected = {
+        "rvi": 4 * vh / (vv + vh),
+        "vv_vh_ratio": vv / vh,
+        "rfdi": (vv - vh) / (vv + vh),
+        "dpsvi": (vv ** 2 + vv * vh) / math.sqrt(2),
+        "vv": vv_db,  # single polarizations stay in dB
+        "vh": vh_db,
+    }
+    for index, value in expected.items():
+        assert first(inst.d[index](image)) == pytest.approx(value, rel=1e-5), index
+
+    # The ARD processor takes dB, works in linear power and can return dB:
+    # with nothing else to do, the round trip gives back the input
+    ard = S1ARDProcessor(speckle_filter=None, terrain_correction=False,
+                         input_format="DB", format="DB")
+    out = ard.process_image(image)
+    assert first(out.select("VV")) == pytest.approx(vv_db, abs=1e-4)
+    assert first(ard.from_db(image).select("VH")) == pytest.approx(vh, rel=1e-6)
+
+    with pytest.raises(ValueError, match="input_format"):
+        S1ARDProcessor(input_format="dB")
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

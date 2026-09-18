@@ -1591,7 +1591,12 @@ class NdviSeasonality:
                 terrain_correction=self.sar_terrain_correction,
                 terrain_flattening_model=self.sar_terrain_model,
                 dem='COPERNICUS_30',
-                format='LINEAR'  # Keep linear for index calculations
+                # COPERNICUS/S1_GRD comes in dB: the processor converts it to
+                # linear power for terrain correction and speckle filtering and
+                # returns dB, the usual scale for VV/VH composites. Indices
+                # convert back to linear themselves (see _s1_linear)
+                input_format='DB',
+                format='DB'
             )
             
             def apply_speckle_filter(image):
@@ -3923,6 +3928,17 @@ class NdviSeasonality:
             
 
     # Funciones SAR actualizadas con parámetro normalize
+    @staticmethod
+    def _s1_linear(image):
+        """
+        VV and VH of a Sentinel-1 image as linear power.
+
+        The Sentinel-1 collection is kept in dB, the usual scale for
+        backscatter composites, but polarimetric indices are defined on linear
+        power: ratios and sums of dB values have no physical meaning.
+        """
+        return ee.Image(10).pow(image.select(['VV', 'VH']).divide(10))
+
     def get_rvi(self, image, normalize=False):
         """
         Radar Vegetation Index - More robust vegetation indicator than individual polarizations.
@@ -3934,16 +3950,25 @@ class NdviSeasonality:
         normalize : bool, optional
             If True, normalizes output to [0,1] range. Default is False.
         
+        Dual-polarization form ``4 * VH / (VV + VH)``, computed on linear
+        power: the collection is in dB, which gives meaningless values here.
+
         References
         ----------
         Kim, Y., Jackson, T., Bindlish, R., Lee, H., Hong, S. (2012). 
         Radar vegetation index for estimating the vegetation water content of rice and soybean. 
         IEEE Geoscience and Remote Sensing Letters, 9(4), 564-568.
+
+        Nasirzadehdizaji, R., Balik Sanli, F., Abdikan, S., Cakir, Z., Sekertekin,
+        A., Ustuner, M. (2019). Sensitivity analysis of multi-temporal Sentinel-1
+        SAR parameters to crop height and canopy coverage. Applied Sciences,
+        9(4), 655. https://doi.org/10.3390/app9040655
         """
-        rvi = image.expression(
+        linear = self._s1_linear(image)
+        rvi = linear.expression(
             '4 * VH / (VV + VH)', {
-            'VV': image.select('VV'),
-            'VH': image.select('VH')}).rename(['RVI'])
+            'VV': linear.select('VV'),
+            'VH': linear.select('VH')}).rename(['RVI'])
         
         if normalize:
             rvi = self._normalize_to_01(rvi)
@@ -4014,11 +4039,16 @@ class NdviSeasonality:
         Mascolo, L., Lopez‐Sanchez, J.M., Vicente‐Guijalba, F., Nunziata, F., Migliaccio, M., Mazzarella, G. (2016). 
         A complete procedure for crop phenology estimation with PolSAR data based on the complex Wishart classifier. 
         IEEE Transactions on Geoscience and Remote Sensing, 54(11), 6505-6515.
+
+        Computed on linear power. In dB the same information is the
+        difference ``VV - VH``; dividing two dB values, as before 1.6.0,
+        gives a number with no physical meaning.
         """
-        ratio = image.expression(
+        linear = self._s1_linear(image)
+        ratio = linear.expression(
             'VV / VH', {
-            'VV': image.select('VV'),
-            'VH': image.select('VH')}).rename(['RATIO'])
+            'VV': linear.select('VV'),
+            'VH': linear.select('VH')}).rename(['RATIO'])
         
         if normalize:
             ratio = self._normalize_to_01(ratio)
@@ -4027,8 +4057,17 @@ class NdviSeasonality:
 
     def get_dpsvi(self, image, normalize=False):
         """
-        Dual-pol SAR Vegetation Index - Optimized for dense vegetation canopy analysis.
-        
+        Modified Dual-Polarization SAR Vegetation Index (DPSVIm).
+
+        ``(VV**2 + VV * VH) / sqrt(2)`` on linear power. It is the modified
+        form of Periasamy's DPSVI proposed by dos Santos et al. (2021): the
+        original, ``(VV_max - VV + VH) / sqrt(2) * (VV + VH) / VV * VH``,
+        depends on ``VV_max``, the maximum VV of the whole scene, so it is not
+        a per-pixel index and changes with the extent; the modified form is
+        computed pixel by pixel and compares across scenes and dates. Before
+        1.6.0 this method returned ``(VV - VH) / (VV + VH)`` on dB values,
+        which is neither.
+
         Parameters
         ----------
         image : ee.Image
@@ -4038,14 +4077,21 @@ class NdviSeasonality:
         
         References
         ----------
-        Mandal, D., Kumar, V., Ratha, D., Dey, S., Bhattacharya, A., Lopez‐Sanchez, J.M., ... Rao, Y.S. (2020). 
-        Dual polarimetric radar vegetation index for crop growth monitoring using sentinel‐1 SAR data. 
-        Remote Sensing of Environment, 247, 111954.
+        dos Santos, E.P., da Silva, D.D., do Amaral, C.H. (2021). Vegetation
+        cover monitoring in tropical regions using SAR-C dual-polarization
+        index: seasonal and spatial influences. International Journal of Remote
+        Sensing, 42(19), 7581-7609. https://doi.org/10.1080/01431161.2021.1959955
+
+        Periasamy, S. (2018). Significance of dual polarimetric synthetic
+        aperture radar in biomass retrieval: An attempt on Sentinel-1. Remote
+        Sensing of Environment, 217, 537-549.
+        https://doi.org/10.1016/j.rse.2018.09.003
         """
-        dpsvi = image.expression(
-            '(VV - VH) / (VV + VH)', {
-            'VV': image.select('VV'),
-            'VH': image.select('VH')}).rename(['DPSVI'])
+        linear = self._s1_linear(image)
+        dpsvi = linear.expression(
+            '(VV ** 2 + VV * VH) / sqrt(2)', {
+            'VV': linear.select('VV'),
+            'VH': linear.select('VH')}).rename(['DPSVI'])
         
         if normalize:
             dpsvi = self._normalize_to_01(dpsvi)
@@ -4068,11 +4114,21 @@ class NdviSeasonality:
         Ningthoujam, R.K., Balzter, H., Tansey, K., Feldpausch, T.R., Mitchard, E.T., Wani, A.A., Joshi, P.K. (2018). 
         Relationships of S-1 C-band SAR backscatter with forest cover, height and aboveground biomass at multiple spatial scales across four forest types. 
         Remote Sensing, 10(9), 1442.
+
+        Mitchard, E.T.A., Saatchi, S.S., White, L.J.T., Abernethy, K.A., Jeffery,
+        K.J., Lewis, S.L., et al. (2012). Mapping tropical forest biomass with
+        radar and spaceborne LiDAR in Lopé National Park, Gabon. Biogeosciences,
+        9(1), 179-191. https://doi.org/10.5194/bg-9-179-2012
+
+        Defined by Mitchard et al. as ``(HH - HV) / (HH + HV)``; Sentinel-1
+        carries VV/VH, so the dual-pol adaptation ``(VV - VH) / (VV + VH)`` is
+        used, on linear power (before 1.6.0 it was ``(VV - VH) / VV`` on dB).
         """
-        rfdi = image.expression(
-            '(VV - VH) / VV', {
-            'VV': image.select('VV'),
-            'VH': image.select('VH')
+        linear = self._s1_linear(image)
+        rfdi = linear.expression(
+            '(VV - VH) / (VV + VH)', {
+            'VV': linear.select('VV'),
+            'VH': linear.select('VH')
         }).rename(['RFDI'])
         
         if normalize:
@@ -4082,20 +4138,21 @@ class NdviSeasonality:
 
     def get_vsdi(self, image, normalize=False):
         """
-        Vegetation Scattering Diversity Index - Measures scattering diversity in vegetated areas.
-        
+        Vegetation Scattering Diversity Index (experimental).
+
+        ``sqrt((VV - VH)**2 + (VV + VH)**2)``, computed on the dB values of
+        the collection. No publication defining this index has been found —
+        it was previously attributed to Periasamy (2018), who defines DPDD,
+        IDPDD, VDDPI and DPSVI but not this — so treat it as an experimental
+        feature without a physical interpretation, and prefer the documented
+        indices for anything that has to be reported.
+
         Parameters
         ----------
         image : ee.Image
-            Input SAR image with VV and VH bands
+            Input SAR image with VV and VH bands (dB)
         normalize : bool, optional
             If True, normalizes output to [0,1] range. Default is False.
-        
-        References
-        ----------
-        Periasamy, S. (2018). 
-        Significance of dual polarimetric synthetic aperture radar in biomass retrieval: 
-        An attempt on Sentinel‐1. Remote Sensing of Environment, 217, 537-549.
         """
         vsdi = image.expression(
             'sqrt((VV - VH) ** 2 + (VV + VH) ** 2)', {

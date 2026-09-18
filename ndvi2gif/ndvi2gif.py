@@ -4419,6 +4419,10 @@ class NdviSeasonality:
     def _default_scale_for_sat(self) -> int:
         """
         Return a sensible default pixel scale (meters) based on the configured sensor.
+
+        It is the native resolution of the collection each sensor is read
+        from: MOD09A1 reflectance is 500 m, ERA5-Land 0.1 degrees and CHIRPS
+        0.05 degrees (their size at the equator).
         """
         sat = (self.sat or "").upper()
         if sat.startswith("S2") or sat.startswith("S1"):
@@ -4426,9 +4430,13 @@ class NdviSeasonality:
         if sat.startswith("L"):   # Landsat 5/7/8/9
             return 30
         if sat.startswith("MOD"):
-            return 250
+            return 500
         if sat.startswith("S3"):
             return 300
+        if sat == "ERA5":
+            return 11132
+        if sat == "CHIRPS":
+            return 5566
         return 30
     
     def export_to_drive(

@@ -11,9 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **🛰️ Multi-sensor classification in `LandCoverClassifier`**: pass a list of `NdviSeasonality` instances, one per sensor, and give the indices per sensor as a dict:
+
+  ```python
+  clf = LandCoverClassifier([s2, s1])
+  clf.create_feature_stack(indices={'S2': ['ndvi', 'ndmi'], 'S1': ['vv', 'vh']})
+  ```
+
+  Band names carry the sensor as prefix (`S2_ndvi_2024_winter`, `S1_vh_2024_march`) only when there is more than one sensor, so single-sensor code and band names are unchanged. The typical use is combining optical indices with Sentinel-1 backscatter where clouds leave the optical series full of gaps.
+- **Choice of resampling when sensors differ in resolution** (`resample=`): `'coarser'` aggregates the finer sensors by their mean onto the grid of the coarsest one, `'finer'` interpolates the coarser ones bilinearly onto the finest grid, and a number sets the pixel size in meters. There is deliberately no default when resolutions differ — the two options mean different things (losing detail vs. smoothing without adding information) — so the classifier raises a `ValueError` explaining them. The common grid is the UTM zone of the ROI unless `crs=` says otherwise. Verified pixel by pixel: a 30 m Sentinel-2 value on the Landsat grid is exactly the mean of the nine 10 m pixels inside it.
+
+### Changed
+
+- `LandCoverClassifier` samples training data, normalizes and exports at the pixel size of the feature stack (`clf.scale`) instead of fixed values: sampling was hardcoded at 10 m and normalization at 30 m whatever the sensor, and `export_results()` defaulted to 30 m.
+
 ### Fixed
 
 - **`index='cig'` (Chlorophyll Index Green) was unreachable.** Its method was in the dispatch dictionary but the index was never registered for any sensor, so the constructor rejected it with `ValueError`. It only needs the green and NIR bands, so it is now available on every optical sensor (Sentinel-2, Landsat, MODIS, Sentinel-3), like `gndvi`. A new test fails if any index in the dispatch dictionary is left without a sensor again.
+- **Default pixel size for MODIS, ERA5 and CHIRPS.** `_default_scale_for_sat()`, used by `export_to_drive()` / `export_to_asset()` when no `scale` is given, returned 250 m for MODIS although its reflectance comes from MOD09A1 at 500 m, and 30 m for ERA5-Land and CHIRPS, whose grids are about 11 km and 5.5 km: exports were four times too large for MODIS and tens of thousands of times for the climate datasets, with no added information. They now default to 500 m, 11132 m and 5566 m.
+- `LandCoverClassifier` temporal statistics selected an index's bands with the pattern `<index>_.*`, so `vv` also caught the `vv_vh_ratio` bands and mixed them into the `vv` mean, std, max and min. The pattern now requires the year after the index name.
 
 ### Added
 

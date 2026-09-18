@@ -255,6 +255,42 @@ def test_hydroperiod_rejects_invalid_indices():
 
 
 # ---------------------------------------------------------------------
+# LandCoverClassifier (multi-sensor argument validation; no EE computation)
+# ---------------------------------------------------------------------
+
+def test_classifier_multisensor_validation():
+    """Resampling must be chosen explicitly when resolutions differ."""
+    from ndvi2gif import NdviSeasonality, LandCoverClassifier
+
+    s2 = NdviSeasonality(sat="S2", index="ndvi")
+    s1 = NdviSeasonality(sat="S1", index="vh")
+    landsat = NdviSeasonality(sat="Landsat", index="ndvi")
+
+    # Same resolution: nothing to choose
+    clf = LandCoverClassifier([s2, s1])
+    assert clf.multi_sensor and clf.scale == 10 and clf.crs is None
+
+    # A single sensor keeps working as before
+    assert LandCoverClassifier(landsat).scale == 30
+
+    with pytest.raises(ValueError, match="different resolutions"):
+        LandCoverClassifier([s2, landsat])
+    with pytest.raises(ValueError, match="different sensor"):
+        LandCoverClassifier([s2, s2])
+    with pytest.raises(ValueError, match="resample must be"):
+        LandCoverClassifier([s2, s1], resample="max")
+
+    with pytest.raises(ValueError, match="as a dict"):
+        clf.create_feature_stack(indices=["ndvi"])
+    with pytest.raises(ValueError, match="missing"):
+        clf.create_feature_stack(indices={"S2": ["ndvi"]})
+    with pytest.raises(ValueError, match="No processor"):
+        clf.create_feature_stack(indices={"S2": ["ndvi"], "S1": ["vh"], "MODIS": ["ndvi"]})
+    with pytest.raises(ValueError, match="Invalid indices for S1"):
+        clf.create_feature_stack(indices={"S2": ["ndvi"], "S1": ["ndvi"]})
+
+
+# ---------------------------------------------------------------------
 # S1ARDProcessor (constructor only; no EE calls)
 # ---------------------------------------------------------------------
 
@@ -617,6 +653,67 @@ def test_integration_hydroperiod_invariants():
     ).values().getInfo()
     seen = {int(value) for hist in histograms for value in hist}
     assert seen <= {0, 1, 2, 255}
+
+
+@pytest.mark.ee
+def test_integration_classifier_multisensor_resampling():
+    """Sensors are put on one grid: mean aggregation or bilinear interpolation."""
+    ee = _require_ee()
+    import math
+    from ndvi2gif import NdviSeasonality, LandCoverClassifier
+
+    roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
+    kw = dict(roi=roi, periods=4, start_year=2021, end_year=2021)
+    s2 = NdviSeasonality(sat="S2", index="ndvi", **kw)
+    landsat = NdviSeasonality(sat="Landsat", index="ndvi", **kw)
+    indices = {"S2": ["ndvi"], "Landsat": ["ndvi"]}
+
+    # --- Coarser: S2 averaged onto the 30 m Landsat grid ---------------------
+    clf = LandCoverClassifier([s2, landsat], resample="coarser")
+    assert clf.scale == 30
+    assert clf.crs == "EPSG:32629"  # UTM zone of Doñana
+
+    stack = clf.create_feature_stack(
+        indices=indices, include_statistics=False, normalize=False
+    )
+    assert stack.bandNames().getInfo() == [
+        f"{sat}_ndvi_2021_{season}"
+        for sat in ("S2", "Landsat")
+        for season in ("winter", "spring", "summer", "autumn")
+    ]
+    band = stack.select("S2_ndvi_2021_summer")
+    assert band.projection().crs().getInfo() == clf.crs
+    assert band.projection().nominalScale().getInfo() == pytest.approx(30)
+
+    # The 30 m value is the mean of the nine 10 m pixels inside the cell
+    point = ee.Geometry.Point([-6.27, 36.975])
+    x, y = point.transform(clf.crs, 1).coordinates().getInfo()
+    x0, y0 = math.floor(x / 30) * 30, math.floor(y / 30) * 30
+    cell = ee.Geometry.Rectangle([x0, y0, x0 + 30, y0 + 30], clf.crs, False)
+    native = s2.get_period_composite(2021, 2)
+    inside = native.reduceRegion(
+        ee.Reducer.mean().combine(ee.Reducer.count(), None, True),
+        cell, 10, crs=clf.crs,
+    ).getInfo()
+    aggregated = band.reduceRegion(ee.Reducer.first(), point, 30).getInfo()
+    assert inside["nd_count"] == 9
+    assert aggregated["S2_ndvi_2021_summer"] == pytest.approx(inside["nd_mean"], abs=1e-6)
+
+    # --- Finer: Landsat interpolated onto the 10 m grid ----------------------
+    clf = LandCoverClassifier([s2, landsat], resample="finer")
+    stack = clf.create_feature_stack(
+        indices=indices, include_statistics=False, normalize=False
+    )
+    band = stack.select("Landsat_ndvi_2021_summer")
+    assert band.projection().nominalScale().getInfo() == pytest.approx(10)
+
+    # Interpolation smooths values but keeps the regional mean
+    native_mean = landsat.get_period_composite(2021, 2).reduceRegion(
+        ee.Reducer.mean(), roi, 30, maxPixels=1e9).getInfo()["nd"]
+    fine_mean = band.reduceRegion(
+        ee.Reducer.mean(), roi, 10, maxPixels=1e9
+    ).getInfo()["Landsat_ndvi_2021_summer"]
+    assert fine_mean == pytest.approx(native_mean, abs=0.01)
 
 
 if __name__ == "__main__":

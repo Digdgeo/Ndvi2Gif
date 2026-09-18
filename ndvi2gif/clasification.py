@@ -32,7 +32,17 @@ class LandCoverClassifier:
     Attributes
     ----------
     processor : NdviSeasonality
-        Instance providing temporal NDVI composites and configuration.
+        First (or only) processor; ROI and dates are taken from it.
+    processors : list of NdviSeasonality
+        Every processor, one per sensor.
+    multi_sensor : bool
+        True when more than one sensor is combined. Band names then carry
+        the sensor as prefix (``S2_ndvi_2023_january``).
+    scale : float
+        Pixel size in meters of the feature stack, used for sampling,
+        normalization and export.
+    crs : str or None
+        CRS of the common grid when the sensors are resampled, else None.
     feature_stack : ee.Image or None
         Image containing stacked features (NDVI indices, temporal metrics).
     training_data : ee.FeatureCollection or None
@@ -57,45 +67,190 @@ class LandCoverClassifier:
         Satellite name used (e.g., 'S2', 'L8').
     """
     
-    def __init__(self, ndvi_seasonality_instance):
+    # Accepted values of the ``resample`` argument besides a scale in meters
+    RESAMPLE_MODES = ('coarser', 'finer')
+
+    def __init__(self, ndvi_seasonality_instance, resample=None, crs=None):
         """
-        Initialize the classifier with an ``NdviSeasonality`` instance.
+        Initialize the classifier with one or more ``NdviSeasonality`` instances.
 
         Parameters
         ----------
-        ndvi_seasonality_instance : NdviSeasonality
-            An initialized instance of the NdviSeasonality processor, providing
-            temporal composites, ROI, and analysis configuration.
+        ndvi_seasonality_instance : NdviSeasonality or list of NdviSeasonality
+            Processor providing the temporal composites, ROI and analysis
+            configuration. Pass a list to combine several sensors in one
+            feature stack (e.g. Sentinel-2 optical indices with Sentinel-1
+            backscatter); each processor must use a different sensor. The
+            ROI is taken from the first one.
+        resample : {'coarser', 'finer'} or float, optional
+            Common pixel size of the feature stack when the sensors have
+            different resolutions. Required in that case, since the choice
+            changes what the classification means:
+
+            - ``'coarser'``: finer sensors are aggregated by their **mean**
+              onto the grid of the coarsest one. Nothing is invented, but
+              detail is lost (S2 + Landsat -> 30 m).
+            - ``'finer'``: coarser sensors are **bilinearly interpolated**
+              onto the grid of the finest one. The map keeps the finer
+              detail, but the interpolated bands are only smoothed, they do
+              not gain information (S2 + Landsat -> 10 m).
+            - a number: pixel size in meters. Each sensor is aggregated or
+              interpolated to it, whichever applies.
+
+            With a single sensor the default ``None`` keeps its native
+            resolution, as in previous versions.
+        crs : str, optional
+            CRS of the common grid when resampling (e.g. ``'EPSG:32650'``).
+            Defaults to the UTM zone of the ROI centroid, so pixel sizes are
+            true meters.
+
+        Raises
+        ------
+        ValueError
+            If two processors use the same sensor, if ``resample`` is not a
+            valid option, or if the sensors have different resolutions and
+            no ``resample`` was given.
 
         Notes
         -----
-        The constructor inherits spatial and temporal parameters directly from
-        the provided processor:
+        The constructor inherits spatial and temporal parameters from the
+        first processor:
         - ROI (region of interest)
         - Number of periods per year
         - Start and end years
         - Satellite identifier
+
+        Native resolutions come from
+        :meth:`NdviSeasonality._default_scale_for_sat` (10 m for S1/S2, 30 m
+        for Landsat, 250 m for MODIS, 300 m for S3...).
+
+        Examples
+        --------
+        Sentinel-2 indices plus Sentinel-1 backscatter, both at 10 m::
+
+            >>> s2 = NdviSeasonality(roi=roi, sat='S2', periods=12,
+            ...                      start_year=2023, end_year=2023)
+            >>> s1 = NdviSeasonality(roi=roi, sat='S1', periods=12,
+            ...                      start_year=2023, end_year=2023)
+            >>> clf = LandCoverClassifier([s2, s1])
+            >>> stack = clf.create_feature_stack(
+            ...     indices={'S2': ['ndvi', 'mndwi'], 'S1': ['vh', 'rvi']})
+
+        Sentinel-2 and Landsat on the 30 m Landsat grid::
+
+            >>> clf = LandCoverClassifier([s2, landsat], resample='coarser')
         """
-        self.processor = ndvi_seasonality_instance
+        if isinstance(ndvi_seasonality_instance, (list, tuple)):
+            processors = list(ndvi_seasonality_instance)
+        else:
+            processors = [ndvi_seasonality_instance]
+        if not processors:
+            raise ValueError("Pass at least one NdviSeasonality instance")
+
+        sats = [p.sat for p in processors]
+        repeated = sorted({s for s in sats if sats.count(s) > 1})
+        if repeated:
+            raise ValueError(
+                f"Each processor must use a different sensor; repeated: {repeated}. "
+                "Put all the indices of a sensor in the same processor through "
+                "create_feature_stack(indices={...})."
+            )
+
+        self.processors = processors
+        self.processor = processors[0]
+        self.multi_sensor = len(processors) > 1
         self.feature_stack = None
         self.training_data = None
         self.validation_data = None
         self.classifier = None
         self.classified_image = None
         self.accuracy_results = None
-        
+
         # Inherit parameters
         self.roi = self.processor.roi
         self.periods = self.processor.periods
         self.start_year = self.processor.start_year
         self.end_year = self.processor.end_year
         self.sat = self.processor.sat
-        
-        print(f"LandCoverClassifier initialized for {self.sat}")
+
+        # Pixel size of the stack and whether bands have to be put on a common grid
+        self.native_scales = {p.sat: p._default_scale_for_sat() for p in processors}
+        self.resample = resample
+        self.scale = self._resolve_scale(resample)
+        self.crs = crs
+        needs_grid = resample is not None
+        if needs_grid and self.crs is None:
+            self.crs = self._utm_crs_for_roi()
+
+        print(f"LandCoverClassifier initialized for {', '.join(sats)}")
         print(f"Period: {self.start_year}-{self.end_year}, {self.periods} periods/year")
-    
+        if self.multi_sensor or needs_grid:
+            natives = ', '.join(f"{s} {m} m" for s, m in self.native_scales.items())
+            grid = f" on {self.crs}" if needs_grid else ""
+            print(f"Feature stack at {self.scale} m{grid} (native: {natives})")
+
+    def _resolve_scale(self, resample):
+        """Pixel size in meters of the feature stack for a ``resample`` option."""
+        natives = sorted(set(self.native_scales.values()))
+
+        if resample is None:
+            if len(natives) > 1:
+                listed = ', '.join(f"{s} {m} m" for s, m in self.native_scales.items())
+                raise ValueError(
+                    f"The sensors have different resolutions ({listed}). Choose "
+                    "how to combine them with resample='coarser' (mean "
+                    "aggregation to the coarsest grid), resample='finer' "
+                    "(bilinear interpolation to the finest grid) or "
+                    "resample=<meters>."
+                )
+            return natives[0]
+
+        if resample == 'coarser':
+            return natives[-1]
+        if resample == 'finer':
+            return natives[0]
+        if isinstance(resample, (int, float)) and not isinstance(resample, bool) and resample > 0:
+            return resample
+        raise ValueError(
+            f"resample must be one of {self.RESAMPLE_MODES}, a scale in meters, "
+            f"or None; got {resample!r}"
+        )
+
+    def _utm_crs_for_roi(self):
+        """EPSG code of the UTM zone containing the ROI centroid."""
+        lon, lat = self.roi.centroid(1).coordinates().getInfo()
+        zone = int((lon + 180) // 6) + 1
+        return f"EPSG:{(32600 if lat >= 0 else 32700) + zone}"
+
+    def _to_common_grid(self, image, native_scale):
+        """
+        Put a single-sensor stack on the common grid of the feature stack.
+
+        Composites reduced from an ``ee.ImageCollection`` carry no fixed
+        projection, so the sensor's native resolution is declared first.
+        From there the image is aggregated by its mean when the target pixel
+        is coarser, bilinearly interpolated when it is finer, and simply
+        aligned otherwise.
+        """
+        if self.resample is None:
+            return image
+
+        target = ee.Projection(self.crs).atScale(self.scale)
+        image = image.setDefaultProjection(crs=self.crs, scale=native_scale)
+
+        if self.scale > native_scale:
+            # Input pixels per output pixel, with margin for grid misalignment
+            ratio = int(np.ceil(self.scale / native_scale)) + 1
+            image = image.reduceResolution(
+                reducer=ee.Reducer.mean(), maxPixels=min(ratio * ratio, 65535)
+            )
+        elif self.scale < native_scale:
+            image = image.resample('bilinear')
+
+        return image.reproject(target)
+
     def create_feature_stack(self,
-                           indices: List[str] = None,
+                           indices: Union[List[str], Dict[str, List[str]]] = None,
                            include_statistics: bool = True,
                            normalize: bool = True) -> ee.Image:
         """
@@ -103,8 +258,12 @@ class LandCoverClassifier:
         
         Parameters
         ----------
-        indices : list of str, optional
-            Indices to stack. If None, uses current index.
+        indices : list of str or dict, optional
+            Indices to stack. With a single sensor, a list such as
+            ``['ndvi', 'mndwi']``. With several sensors, a dict mapping each
+            sensor to its indices, such as
+            ``{'S2': ['ndvi', 'mndwi'], 'S1': ['vh', 'rvi']}``. If None, uses
+            the current index of each processor.
         include_statistics : bool
             Add temporal statistics (mean, std, max, min)
         normalize : bool
@@ -113,75 +272,56 @@ class LandCoverClassifier:
         Returns
         -------
         ee.Image
-            Multi-band feature stack
+            Multi-band feature stack. Bands are named
+            ``<index>_<year>_<period>`` with a single sensor and
+            ``<sensor>_<index>_<year>_<period>`` with several.
 
         Raises
         ------
         ValueError
-            If `indices` contains unsupported names or is empty.
+            If `indices` contains unsupported names, names sensors that were
+            not passed to the classifier, or is a list with several sensors.
         ee.EEException
             If Earth Engine image processing fails when computing the stack.
         """
         print("Creating feature stack...")
-        
-        # Use current index if none specified
-        if indices is None:
-            indices = [self.processor.index]
-        
-        # Validate indices
-        available = self.processor.sensor_indices[self.sat]
-        invalid = [idx for idx in indices if idx not in available]
-        if invalid:
-            raise ValueError(f"Invalid indices for {self.sat}: {invalid}")
-        
-        feature_bands = []
-        
-        # Process each index
-        for idx_name in indices:
-            print(f"  Processing {idx_name}...")
-            
-            # Temporarily set processor index
-            original_index = self.processor.index
-            self.processor.index = idx_name
-            
-            # Generate composites
-            self.processor.get_year_composite()
 
-            # get_year_composite skips the years without any image, so the
-            # position of an image in the collection is not its year offset.
-            # Pair each image with its year from the per-year scene counts,
-            # which list every year in the same order
-            years_with_data = [
-                year for year, counts in self.processor.period_scene_counts.items()
-                if sum(counts) > 0
-            ]
+        indices_by_sat = self._indices_by_sat(indices)
 
-            # Stack all years (end_year is inclusive, like get_year_composite)
-            for year, year_image in zip(years_with_data, self.processor.imagelist):
-                counts = self.processor.period_scene_counts[year]
+        sensor_stacks = []
+        stat_groups = []
 
-                # Rename bands with descriptive names
-                for period_idx, period_name in enumerate(self.processor.period_names):
-                    # An empty period comes back as a fully masked band, and a
-                    # single masked band masks every pixel on sampling and
-                    # classification, so it is left out of the stack
-                    if counts[period_idx] == 0:
-                        print(f"    Skipping {idx_name} {year} {period_name}: no images")
-                        continue
-                    band = year_image.select(period_name)
-                    band_name = f"{idx_name}_{year}_{period_name}"
-                    feature_bands.append(band.rename(band_name))
-            
-            # Restore original index
-            self.processor.index = original_index
-        
+        for processor in self.processors:
+            sat = processor.sat
+            prefix = f"{sat}_" if self.multi_sensor else ""
+            feature_bands = []
+
+            # Process each index
+            for idx_name in indices_by_sat[sat]:
+                print(f"  Processing {prefix}{idx_name}...")
+
+                # Temporarily set processor index
+                original_index = processor.index
+                processor.index = idx_name
+                try:
+                    feature_bands.extend(self._index_bands(processor, idx_name, prefix))
+                finally:
+                    # Restore original index
+                    processor.index = original_index
+                stat_groups.append(f"{prefix}{idx_name}")
+
+            sensor_stack = ee.Image.cat(feature_bands)
+            sensor_stacks.append(
+                self._to_common_grid(sensor_stack, self.native_scales[sat])
+            )
+
         # Create feature stack
-        self.feature_stack = ee.Image.cat(feature_bands)
+        self.feature_stack = ee.Image.cat(sensor_stacks)
         
         # Add statistics if requested
         if include_statistics:
             print("  Adding temporal statistics...")
-            stats = self._compute_statistics(indices)
+            stats = self._compute_statistics(stat_groups)
             self.feature_stack = self.feature_stack.addBands(stats)
         
         # Normalize if requested
@@ -196,37 +336,110 @@ class LandCoverClassifier:
         print(f"Feature stack ready: {band_count} bands")
         
         return self.feature_stack
-    
-    def _compute_statistics(self, indices: List[str]) -> ee.Image:
-        """
-        Compute basic statistics for a given image.
 
-        Calculates per-band mean, standard deviation, minimum and maximum
-        values to support normalization and feature scaling.
+    def _indices_by_sat(self, indices):
+        """Normalize the ``indices`` argument to ``{sat: [index, ...]}`` and validate it."""
+        sats = [p.sat for p in self.processors]
+
+        if indices is None:
+            indices_by_sat = {p.sat: [p.index] for p in self.processors}
+        elif isinstance(indices, dict):
+            unknown = sorted(set(indices) - set(sats))
+            if unknown:
+                raise ValueError(
+                    f"No processor for sensor(s) {unknown}; the classifier has {sats}"
+                )
+            missing = [s for s in sats if s not in indices]
+            if missing:
+                raise ValueError(
+                    f"Give the indices of every sensor; missing: {missing}"
+                )
+            indices_by_sat = {s: list(indices[s]) for s in sats}
+        else:
+            if self.multi_sensor:
+                raise ValueError(
+                    "With several sensors pass indices as a dict, e.g. "
+                    "{'S2': ['ndvi'], 'S1': ['vh']}"
+                )
+            indices_by_sat = {self.sat: list(indices)}
+
+        for processor in self.processors:
+            sat = processor.sat
+            if not indices_by_sat[sat]:
+                raise ValueError(f"No indices given for {sat}")
+            available = processor.sensor_indices[sat]
+            invalid = [idx for idx in indices_by_sat[sat] if idx not in available]
+            if invalid:
+                raise ValueError(f"Invalid indices for {sat}: {invalid}")
+
+        return indices_by_sat
+
+    def _index_bands(self, processor, idx_name, prefix):
+        """One band per year and period of an index, named after both."""
+        feature_bands = []
+
+        # Generate composites
+        processor.get_year_composite()
+
+        # get_year_composite skips the years without any image, so the
+        # position of an image in the collection is not its year offset.
+        # Pair each image with its year from the per-year scene counts,
+        # which list every year in the same order
+        years_with_data = [
+            year for year, counts in processor.period_scene_counts.items()
+            if sum(counts) > 0
+        ]
+
+        # Stack all years (end_year is inclusive, like get_year_composite)
+        for year, year_image in zip(years_with_data, processor.imagelist):
+            counts = processor.period_scene_counts[year]
+
+            # Rename bands with descriptive names
+            for period_idx, period_name in enumerate(processor.period_names):
+                # An empty period comes back as a fully masked band, and a
+                # single masked band masks every pixel on sampling and
+                # classification, so it is left out of the stack
+                if counts[period_idx] == 0:
+                    print(f"    Skipping {prefix}{idx_name} {year} {period_name}: no images")
+                    continue
+                band = year_image.select(period_name)
+                band_name = f"{prefix}{idx_name}_{year}_{period_name}"
+                feature_bands.append(band.rename(band_name))
+
+        return feature_bands
+
+    def _compute_statistics(self, groups: List[str]) -> ee.Image:
+        """
+        Compute per-pixel temporal statistics of each index.
+
+        Reduces all the year/period bands of an index to their mean,
+        standard deviation, maximum and minimum.
 
         Parameters
         ----------
-        image : ee.Image
-            Earth Engine image for which statistics will be computed.
+        groups : list of str
+            Band name prefixes, one per index: ``'ndvi'`` with a single
+            sensor, ``'S2_ndvi'`` with several.
 
         Returns
         -------
-        dict
-            Dictionary containing per-band statistics:
-            ``{'mean': ..., 'std': ..., 'min': ..., 'max': ...}``.
+        ee.Image
+            Four bands per group: ``<group>_mean``, ``<group>_std``,
+            ``<group>_max`` and ``<group>_min``.
         """
         stats_bands = []
         
-        for idx_name in indices:
-            # Select all bands for this index
-            idx_pattern = f"{idx_name}_.*"
+        for group in groups:
+            # Select all bands for this index. The year digits keep 'vv' from
+            # also matching the 'vv_vh_ratio' bands
+            idx_pattern = f"{group}_[0-9]{{4}}_.*"
             idx_bands = self.feature_stack.select(idx_pattern)
             
             # Calculate statistics
-            mean = idx_bands.reduce(ee.Reducer.mean()).rename(f"{idx_name}_mean")
-            std = idx_bands.reduce(ee.Reducer.stdDev()).rename(f"{idx_name}_std")
-            max_val = idx_bands.reduce(ee.Reducer.max()).rename(f"{idx_name}_max")
-            min_val = idx_bands.reduce(ee.Reducer.min()).rename(f"{idx_name}_min")
+            mean = idx_bands.reduce(ee.Reducer.mean()).rename(f"{group}_mean")
+            std = idx_bands.reduce(ee.Reducer.stdDev()).rename(f"{group}_std")
+            max_val = idx_bands.reduce(ee.Reducer.max()).rename(f"{group}_max")
+            min_val = idx_bands.reduce(ee.Reducer.min()).rename(f"{group}_min")
             
             stats_bands.extend([mean, std, max_val, min_val])
         
@@ -255,7 +468,7 @@ class LandCoverClassifier:
         minMax = image.reduceRegion(
             reducer=ee.Reducer.minMax(),
             geometry=self.roi,
-            scale=30,
+            scale=self.scale,
             maxPixels=1e9,
             bestEffort=True
         )
@@ -363,7 +576,7 @@ class LandCoverClassifier:
             training_fc = self.feature_stack.sampleRegions(
                 collection=polygons_fc,
                 properties=[class_property],
-                scale=10,
+                scale=self.scale,
                 numPixels=points_per_class,
                 geometries=True
             )
@@ -374,7 +587,7 @@ class LandCoverClassifier:
         self.training_data = self.feature_stack.sampleRegions(
             collection=training_fc,
             properties=[class_property],
-            scale=10
+            scale=self.scale
         )
         
         # Get sample count
@@ -549,7 +762,7 @@ class LandCoverClassifier:
         # Sample input data for clustering
         training_data = self.feature_stack.sample(
             region=self.roi,
-            scale=30,
+            scale=self.scale,
             numPixels=5000,
             geometries=True
         )
@@ -629,7 +842,7 @@ class LandCoverClassifier:
         print(f"Overall Accuracy: {self.accuracy_results['overall_accuracy']:.3f}")
         print(f"Kappa: {self.accuracy_results['kappa']:.3f}")
 
-    def export_results(self, description: str, scale: int = 30, region: Optional[ee.Geometry] = None):
+    def export_results(self, description: str, scale: Optional[float] = None, region: Optional[ee.Geometry] = None):
         """
         Export the classified image to Google Drive or Earth Engine Asset.
 
@@ -637,8 +850,10 @@ class LandCoverClassifier:
         ----------
         description : str
             Name of the export task.
-        scale : int, optional
-            Spatial resolution in meters. Default is 30.
+        scale : float, optional
+            Spatial resolution in meters. Defaults to the pixel size of the
+            feature stack (:attr:`scale`), so the map is exported at the
+            resolution it was classified at. Before 1.6.0 it was always 30.
         region : ee.Geometry, optional
             Geometry defining the export area. If None, uses the full image extent.
 
@@ -657,12 +872,21 @@ class LandCoverClassifier:
         if self.classified_image is None:
             raise ValueError("No classified image to export. Run classification first.")
 
-        task = ee.batch.Export.image.toDrive(
+        if scale is None:
+            scale = self.scale
+
+        export_args = dict(
             image=self.classified_image,
             description=description,
             scale=scale,
             region=region
         )
+        # Keep the grid the stack was built on, so exported pixels match
+        # the classified ones
+        if self.crs is not None:
+            export_args['crs'] = self.crs
+
+        task = ee.batch.Export.image.toDrive(**export_args)
         task.start()
         return task
     

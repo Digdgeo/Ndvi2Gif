@@ -27,17 +27,19 @@ Built on top of [Google Earth Engine](https://github.com/google/earthengine-api)
 
 ---
 
-## ✨ What's New in v1.5.0
+## ✨ What's New in v1.6.0
 
-> **v1.5.1 — please upgrade if you build multi-year composites.** When a period had no images at all (e.g. every scene removed by the cloud filter), `get_year_composite()` dropped it and the following bands took the wrong period names, so band-by-band reductions across years silently mixed different months. Every year now keeps one band per period, with empty periods as masked bands. The same release fixes the year labels of the classification feature stack and trend maps on Sentinel-1 or percentile composites. See the [CHANGELOG](CHANGELOG.md).
+> **⚠️ Values change for some indices — please read before upgrading.** A review of every index against its publication found that **Sentinel-2 and MODIS bands were used as integers × 10000** instead of reflectance: band ratios such as NDVI were unaffected, but SAVI, EVI, LAI, AVI, WI2015, CRI and a few others came out wrong on those sensors (EVI 2–3 times too high). **Sentinel-1 was processed and indexed in dB** instead of linear power, and its terrain correction had no effect because the DEM lost its projection. Several formulas were also wrong (`aweinsh`, `wi2015`, `nmi`, `rfdi`, `dpsvi`). All are fixed and tested; results computed with the affected indices should be recomputed. The [CHANGELOG](CHANGELOG.md) lists every index and how much it changes.
 
-**Raw reflectance bands** — the standardized bands are now selectable through `index=` on Sentinel-2, Landsat and MODIS (`'blue'`, `'green'`, `'red'`, `'nir'`, `'swir1'`, `'swir2'`, plus `'red_edge1-3'` on S2), returned as surface reflectance in 0–1 on every sensor. Spectral indices are ratios and cancel out changes in brightness, so a pixel can hold exactly the same NDVI while its reflectance drifts; radiometric work needs the bands themselves. Combined with the dispersion reducers they map how invariant each pixel is across a series — the basis for picking pseudo-invariant features.
+**Multi-sensor classification** — `LandCoverClassifier([s2, s1])` combines indices from several sensors in one feature stack, e.g. `indices={'S2': ['ndvi', 'ndmi'], 'S1': ['vv', 'vh']}`. When resolutions differ you choose how to reconcile them (`resample='coarser'`, `'finer'` or a pixel size in meters). In the new [Tawau Hills tutorial](https://digdgeo.github.io/Ndvi2Gif/notebooks/07_multisensor_classification.html) — natural forest versus oil palm under Borneo's clouds — Sentinel-2 + Sentinel-1 reach 0.76 overall accuracy against 0.73 and 0.58 for each sensor alone.
 
-**`key='count'`** — valid observations per pixel: the quality layer that says which parts of a dispersion map can be trusted.
+**Reproducible classifications** — `export_model()` saves the full configuration, every random-forest tree, the accuracy and the training samples with their coordinates, ready to refit the model in scikit-learn or R. Train/validation splits are now seeded and identical across feature stacks, so classifiers can be compared fairly.
 
-Previously, in v1.4.0: **dispersion reducers** — four `key` options (`'std'`, `'variance'`, `'range'`, `'cv'`) that map how much an index **varies** inside each period instead of its typical level, useful for phenological change, disturbances and unstable surfaces such as flooded areas. They work with every sensor and index, and the composites keep the usual period band names, so they export, animate and analyse like any other.
+**An indices catalogue you can trust** — the [indices reference](https://digdgeo.github.io/Ndvi2Gif/reference/indices.html) is rebuilt from the code: 111 variables, each with the formula as implemented and a verified reference. Each sensor now only accepts the indices it can actually compute.
 
-**Downloadable water masks** — `HydroperiodAnalyzer.get_water_masks_stack()` flattens the per-date binary masks into a single `uint8` image (one band per acquisition date), and `include_masks=True` sends them to Drive or to an Earth Engine asset alongside the hydroperiod. Cloudy pixels and pixels no satellite ever saw get their own codes, so a time series can tell them apart.
+Previously, in v1.5.0: **raw reflectance bands** as `index=` (`'blue'` … `'swir2'`, plus `'red_edge1-3'` on S2) and **`key='count'`**, the number of valid observations per pixel; v1.5.1 fixed band names shifting when a period had no images.
+
+In v1.4.0: **dispersion reducers** — `key='std'`, `'variance'`, `'range'`, `'cv'` — and **downloadable water masks** from `HydroperiodAnalyzer`.
 
 And in v1.3.0: `SpatialPhenologyAnalyzer`, GEE-native per-pixel phenology rasters (SOS/POS/EOS) with threshold, derivative and harmonic methods. See [CHANGELOG](CHANGELOG.md) for details.
 
@@ -52,7 +54,7 @@ And in v1.3.0: `SpatialPhenologyAnalyzer`, GEE-native per-pixel phenology raster
 | `TimeSeriesAnalyzer` | Trend detection (Mann-Kendall, Sen's slope), phenology metrics, dashboards |
 | `SpatialPhenologyAnalyzer` | Per-pixel phenology rasters (SOS/POS/EOS) via threshold, derivative or harmonic methods |
 | `S1ARDProcessor` | Sentinel-1 SAR preprocessing: terrain correction, speckle filtering |
-| `LandCoverClassifier` | Supervised (RF, SVM, CART) and unsupervised (K-means, LDA) classification |
+| `LandCoverClassifier` | Supervised (RF, SVM, CART) and unsupervised (K-means, LDA) classification, multi-sensor feature stacks, exportable models |
 
 ---
 

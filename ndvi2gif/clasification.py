@@ -167,6 +167,11 @@ class LandCoverClassifier:
         self.accuracy_results = None
         self.class_property = 'class'
         self.algorithm = None
+        # What export_model() needs to describe the experiment
+        self.stack_config = None
+        self.classifier_params = None
+        self.train_fraction = None
+        self.seed = None
 
         # Inherit parameters
         self.roi = self.processor.roi
@@ -289,6 +294,11 @@ class LandCoverClassifier:
         print("Creating feature stack...")
 
         indices_by_sat = self._indices_by_sat(indices)
+        self.stack_config = {
+            'indices': indices_by_sat,
+            'include_statistics': include_statistics,
+            'normalize': normalize,
+        }
 
         sensor_stacks = []
         stat_groups = []
@@ -559,6 +569,8 @@ class LandCoverClassifier:
         """
         print("Loading training data...")
         self.class_property = class_property
+        self.train_fraction = train_fraction
+        self.seed = seed
         
         if self.feature_stack is None:
             raise ValueError("Create feature stack first using create_feature_stack()")
@@ -606,7 +618,8 @@ class LandCoverClassifier:
         self.training_data = self.feature_stack.sampleRegions(
             collection=training_fc,
             properties=[class_property, 'random'],
-            scale=self.scale
+            scale=self.scale,
+            geometries=True  # coordinates go into export_model()
         )
         
         # Get sample count
@@ -709,6 +722,7 @@ class LandCoverClassifier:
             self.classifier = ee.Classifier.smileCart(**default_params)
             
         elif algorithm == 'naive_bayes':
+            default_params = {}
             self.classifier = ee.Classifier.smileNaiveBayes()
             
         elif algorithm == 'gradient_tree':
@@ -727,6 +741,7 @@ class LandCoverClassifier:
             raise ValueError(f"Unknown algorithm: {algorithm}")
         
         self.algorithm = algorithm
+        self.classifier_params = dict(default_params)
 
         # Train classifier
         self.classifier = self.classifier.train(
@@ -1019,3 +1034,144 @@ class LandCoverClassifier:
 
         importance = self.classifier.explain().get('importance').getInfo()
         return dict(sorted(importance.items(), key=lambda kv: kv[1], reverse=True))
+
+    def export_model(self, path: str, include_samples: bool = True) -> Dict[str, str]:
+        """
+        Write everything needed to reproduce a supervised classification.
+
+        Two files, so the experiment can be repeated or re-fitted outside
+        Earth Engine (scikit-learn, R...):
+
+        - ``<path>.json``: the configuration of every processor (sensor,
+          periods and their dates, years, reducer, cloud and SAR options, ROI
+          as GeoJSON), the feature stack (indices per sensor, statistics,
+          normalization, pixel size, CRS, resampling), the ordered list of
+          features, the training setup (class property, train fraction,
+          seed), the algorithm with the parameters actually used, the model
+          as described by Earth Engine (``explain()``: for random forests
+          every tree as text, the feature importance and the out-of-bag
+          error; for CART the tree also in Graphviz ``dot`` format) and the
+          accuracy metrics.
+        - ``<path>_samples.csv``: one row per sample with its coordinates,
+          class, every feature value and a ``split`` column (``train`` /
+          ``validation``).
+
+        The trees are documentation: no other library loads them. To
+        replicate the model elsewhere, train on the CSV with the same
+        algorithm and parameters; the result is equivalent, not identical
+        tree by tree, since each implementation draws its own randomness.
+
+        Parameters
+        ----------
+        path : str
+            Output path without extension, e.g. ``'results/tawau_s2_s1'``.
+            Missing folders are created.
+        include_samples : bool, optional
+            Also write the samples CSV. Default True.
+
+        Returns
+        -------
+        dict
+            Paths written, under the keys ``'model'`` and ``'samples'``.
+
+        Raises
+        ------
+        ValueError
+            If no supervised classification has been run.
+
+        Examples
+        --------
+        >>> clf.classify_supervised(algorithm='random_forest')
+        >>> clf.export_model('results/tawau_rf')
+        {'model': 'results/tawau_rf.json', 'samples': 'results/tawau_rf_samples.csv'}
+
+        Refit the same model in scikit-learn::
+
+            >>> import json, pandas as pd
+            >>> from sklearn.ensemble import RandomForestClassifier
+            >>> meta = json.load(open('results/tawau_rf.json'))
+            >>> df = pd.read_csv('results/tawau_rf_samples.csv')
+            >>> train = df[df.split == 'train']
+            >>> rf = RandomForestClassifier(
+            ...     n_estimators=meta['classifier']['parameters']['numberOfTrees'])
+            >>> rf.fit(train[meta['features']], train[meta['training']['class_property']])
+        """
+        import json
+        from datetime import datetime, timezone
+        from . import __version__
+
+        if self.classifier is None or self.algorithm is None:
+            raise ValueError(
+                "No supervised classification to export. Run classify_supervised() first."
+            )
+
+        folder = os.path.dirname(path)
+        if folder:
+            os.makedirs(folder, exist_ok=True)
+
+        processor_keys = [
+            'sat', 'periods', 'period_names', 'period_dates', 'start_year',
+            'end_year', 'key', 'percentile', 'cloud_filter', 'max_cloud_cover',
+            'scl_mask', 'orbit', 'use_sar_ard', 'sar_speckle_filter',
+            'sar_terrain_correction', 'sar_terrain_model', 'normalize_sar',
+        ]
+        processors = []
+        for processor in self.processors:
+            config = {key: getattr(processor, key, None) for key in processor_keys}
+            if config['key'] != 'percentile':
+                config.pop('percentile')
+            processors.append(config)
+
+        features = self.feature_stack.bandNames().getInfo()
+        model = {
+            'ndvi2gif_version': __version__,
+            'created': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+            'roi': self.roi.getInfo(),
+            'processors': processors,
+            'feature_stack': {
+                **(self.stack_config or {}),
+                'scale_m': self.scale,
+                'crs': self.crs,
+                'resample': self.resample,
+                'native_scales_m': self.native_scales,
+            },
+            'features': features,
+            'training': {
+                'class_property': self.class_property,
+                'train_fraction': self.train_fraction,
+                'seed': self.seed,
+            },
+            'classifier': {
+                'algorithm': self.algorithm,
+                'parameters': self.classifier_params,
+                'explain': self.classifier.explain().getInfo(),
+            },
+            'accuracy': self.accuracy_results,
+        }
+
+        paths = {'model': f"{path}.json"}
+        with open(paths['model'], 'w', encoding='utf-8') as f:
+            json.dump(model, f, indent=2, ensure_ascii=False, default=str)
+
+        if include_samples:
+            samples = self.training_data.map(lambda f: f.set('split', 'train'))
+            if self.validation_data is not None:
+                samples = samples.merge(
+                    self.validation_data.map(lambda f: f.set('split', 'validation')))
+            # computeFeatures pages through the collection, so it is not
+            # capped at the 5000 features of getInfo()
+            df = ee.data.computeFeatures({
+                'expression': samples,
+                'fileFormat': 'PANDAS_DATAFRAME',
+            })
+            coords = df.pop('geo').apply(lambda g: g['coordinates'] if g else [None, None])
+            df.insert(0, 'lon', coords.str[0])
+            df.insert(1, 'lat', coords.str[1])
+            columns = ['lon', 'lat', self.class_property, 'split'] + features
+            df = df[[c for c in columns if c in df.columns]]
+            paths['samples'] = f"{path}_samples.csv"
+            df.to_csv(paths['samples'], index=False)
+
+        print(f"Model written to {paths['model']}"
+              + (f", samples to {paths['samples']}" if 'samples' in paths else ''))
+        return paths

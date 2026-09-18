@@ -967,5 +967,53 @@ def test_integration_training_split_independent_of_stack():
     assert splits[0] and splits[0] == splits[1]
 
 
+@pytest.mark.ee
+def test_integration_export_model(tmp_path):
+    """export_model writes the configuration, the model and the samples."""
+    ee = _require_ee()
+    import contextlib, io, json
+    from ndvi2gif import NdviSeasonality, LandCoverClassifier
+
+    roi = ee.Geometry.Rectangle([-6.45, 36.95, -6.25, 37.10])
+    worldcover = ee.ImageCollection("ESA/WorldCover/v200").first().rename("landcover")
+    points = worldcover.stratifiedSample(
+        numPoints=30, classBand="landcover", region=roi, scale=30, seed=1,
+        geometries=True)
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        inst = NdviSeasonality(roi=roi, sat="S2", periods=4, start_year=2021,
+                               end_year=2021, key="median")
+        clf = LandCoverClassifier(inst)
+        clf.create_feature_stack(indices=["ndvi", "ndwi"], include_statistics=False,
+                                 normalize=False)
+        clf.add_training_data(training_points=points, class_property="landcover",
+                              seed=3)
+        clf.classify_supervised(algorithm="random_forest",
+                                params={"numberOfTrees": 10})
+        paths = clf.export_model(str(tmp_path / "out" / "model"))
+
+    meta = json.load(open(paths["model"]))
+    assert meta["processors"][0]["sat"] == "S2"
+    assert meta["features"] == [f"{i}_2021_{s}" for i in ("ndvi", "ndwi")
+                                for s in ("winter", "spring", "summer", "autumn")]
+    assert meta["training"] == {"class_property": "landcover",
+                                "train_fraction": 0.7, "seed": 3}
+    assert meta["classifier"]["parameters"]["numberOfTrees"] == 10
+    assert len(meta["classifier"]["explain"]["trees"]) == 10
+    assert meta["accuracy"]["overall_accuracy"] > 0
+
+    samples = pd.read_csv(paths["samples"])
+    assert list(samples.columns[:4]) == ["lon", "lat", "landcover", "split"]
+    assert set(samples["split"]) == {"train", "validation"}
+    assert set(meta["features"]) <= set(samples.columns)
+    assert samples["lon"].between(-6.45, -6.25).all()
+
+    # The CSV is enough to fit an equivalent model outside Earth Engine
+    from sklearn.ensemble import RandomForestClassifier
+    train = samples[samples["split"] == "train"]
+    rf = RandomForestClassifier(n_estimators=10, random_state=0)
+    rf.fit(train[meta["features"]], train["landcover"])
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

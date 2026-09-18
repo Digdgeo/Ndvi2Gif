@@ -165,6 +165,8 @@ class LandCoverClassifier:
         self.classifier = None
         self.classified_image = None
         self.accuracy_results = None
+        self.class_property = 'class'
+        self.algorithm = None
 
         # Inherit parameters
         self.roi = self.processor.roi
@@ -546,6 +548,7 @@ class LandCoverClassifier:
             If Earth Engine sampling fails when extracting training data.
         """
         print("Loading training data...")
+        self.class_property = class_property
         
         if self.feature_stack is None:
             raise ValueError("Create feature stack first using create_feature_stack()")
@@ -701,10 +704,12 @@ class LandCoverClassifier:
         else:
             raise ValueError(f"Unknown algorithm: {algorithm}")
         
+        self.algorithm = algorithm
+
         # Train classifier
         self.classifier = self.classifier.train(
             features=self.training_data,
-            classProperty='class',
+            classProperty=self.class_property,
             inputProperties=bands
         )
         
@@ -828,7 +833,7 @@ class LandCoverClassifier:
         validated = self.validation_data.classify(self.classifier)
         
         # Create confusion matrix
-        confusion_matrix = validated.errorMatrix('class', 'classification')
+        confusion_matrix = validated.errorMatrix(self.class_property, 'classification')
         
         # Calculate metrics
         self.accuracy_results = {
@@ -939,9 +944,17 @@ class LandCoverClassifier:
         if not self.accuracy_results:
             raise ValueError("No accuracy metrics available. Run classification first.")
 
+        # Earth Engine returns producer's accuracy as a column (N x 1) and
+        # user's (consumer's) accuracy as a row (1 x N), both indexed by class
+        # value; classes missing from the validation set are left out
+        producers = [row[0] for row in self.accuracy_results['producers_accuracy']]
+        consumers = self.accuracy_results['consumers_accuracy'][0]
+        matrix = np.array(self.accuracy_results['confusion_matrix'])
+
         rows = []
-        for cls, pa in self.accuracy_results['producer_accuracy'].items():
-            ua = self.accuracy_results['user_accuracy'].get(cls, None)
+        for cls, (pa, ua) in enumerate(zip(producers, consumers)):
+            if matrix[cls, :].sum() == 0 and matrix[:, cls].sum() == 0:
+                continue
             rows.append({
                 'Class': cls,
                 'ProducerAccuracy': pa,
@@ -957,20 +970,30 @@ class LandCoverClassifier:
     
     def get_feature_importance(self) -> Dict[str, float]:
         """
-        Get feature importance scores from a Random Forest classifier.
+        Get feature importance scores of the trained classifier.
+
+        Available for the tree-based algorithms of :meth:`classify_supervised`
+        (``'random_forest'``, ``'cart'`` and ``'gradient_tree'``). Scores are
+        relative within a model: compare features, not models.
 
         Returns
         -------
         dict
-            Mapping of feature names to importance scores.
+            Mapping of feature (band) names to importance scores, sorted from
+            most to least important.
 
         Raises
         ------
         ValueError
-            If classifier is not a Random Forest or not trained.
+            If no tree-based classifier has been trained.
         """
-        if not hasattr(self, 'classifier') or 'RandomForest' not in str(type(self.classifier)):
-            raise ValueError("Feature importance is only available for Random Forest classifiers.")
+        # The Python type of every trained classifier is ee.Classifier, so the
+        # algorithm has to come from what classify_supervised() was asked for
+        if self.classifier is None or self.algorithm not in ('random_forest', 'cart', 'gradient_tree'):
+            raise ValueError(
+                "Feature importance is only available after classify_supervised() "
+                "with algorithm='random_forest', 'cart' or 'gradient_tree'."
+            )
 
-        importance = self.classifier.explain()['importance']
-        return importance
+        importance = self.classifier.explain().get('importance').getInfo()
+        return dict(sorted(importance.items(), key=lambda kv: kv[1], reverse=True))

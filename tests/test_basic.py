@@ -290,6 +290,33 @@ def test_classifier_multisensor_validation():
         clf.create_feature_stack(indices={"S2": ["ndvi"], "S1": ["ndvi"]})
 
 
+def test_classifier_accuracy_report_and_importance_guard():
+    """The accuracy report reads what _calculate_accuracy() stores."""
+    from ndvi2gif import NdviSeasonality, LandCoverClassifier
+    clf = LandCoverClassifier(NdviSeasonality(sat="S2", index="ndvi"))
+
+    # Shapes as returned by ee.ConfusionMatrix: producers N x 1, consumers
+    # 1 x N, indexed by class value. Class 0 is not used here
+    clf.accuracy_results = {
+        "overall_accuracy": 0.8,
+        "kappa": 0.7,
+        "producers_accuracy": [[0], [0.9], [0.6]],
+        "consumers_accuracy": [[0, 0.75, 0.8]],
+        "confusion_matrix": [[0, 0, 0], [0, 9, 1], [0, 3, 4]],
+    }
+    report = clf.get_accuracy_report()
+    assert list(report["Class"]) == [1, 2, "Overall"]
+    assert list(report["ProducerAccuracy"]) == [0.9, 0.6, 0.8]
+    assert list(report["UserAccuracy"]) == [0.75, 0.8, 0.7]
+
+    # No importance without a trained tree-based classifier
+    with pytest.raises(ValueError, match="only available"):
+        clf.get_feature_importance()
+    clf.classifier, clf.algorithm = object(), "svm"
+    with pytest.raises(ValueError, match="only available"):
+        clf.get_feature_importance()
+
+
 # ---------------------------------------------------------------------
 # S1ARDProcessor (constructor only; no EE calls)
 # ---------------------------------------------------------------------

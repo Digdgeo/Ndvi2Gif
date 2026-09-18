@@ -9,11 +9,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.1] - 2026-09-18
 
 ### Fixed
 
 - **`get_year_composite()` shifted the band names of every period after an empty one.** A period without a single image (scenes dropped by the cloud filter, a sensor not yet in orbit, acquisition gaps) was dropped, and the remaining bands were then named after the *first* N periods. With monthly Sentinel-2 composites over Doñana in 2017, where February and March have no scenes, the year came out with 10 bands: April's data was labelled `february`, May's `march`, and so on. Reducing a multi-year collection band by band then mixed different months without any error. Every year now has exactly one band per period, always under its own name: an empty period is a fully masked band (exported as nodata), or zeros for `key='count'`, since zero valid observations is a real value there. `get_period_composite()` returns the same placeholder, so the time-series and classification tools that call it get it too.
+- **`LandCoverClassifier.create_feature_stack()` dropped the last year and mislabelled years after a skipped one.** It iterated `range(end_year - start_year)` while `end_year` is inclusive, so a 2018-2025 stack stopped at 2024. It also paired each composite with its year by position in the collection, but `get_year_composite()` skips the years without any image: with Sentinel-2 over 2014-2016, 2015's composite was labelled 2014 and 2016's 2015. Years are now matched by value, through the new `NdviSeasonality.period_scene_counts` (`{year: [scenes per period]}`, filled by `get_year_composite()`). Periods without images are left out of the stack with a message instead of entering as fully masked bands, since a single masked band masks every pixel on sampling and classification.
+- **`SpatialTrendAnalyzer.calculate_pixel_trends()` only worked when the composite band was called `nd`.** It selected `'nd'` by name, which fails on Sentinel-1 (`'VH'`, `'RVI'`...) and with `key='percentile'` (`'nd_p90'`). The band is now taken by position.
 
 ### Changed
 

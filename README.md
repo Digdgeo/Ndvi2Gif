@@ -29,6 +29,8 @@ Built on top of [Google Earth Engine](https://github.com/google/earthengine-api)
 
 ## ✨ What's New in v1.5.0
 
+> **v1.5.1 — please upgrade if you build multi-year composites.** When a period had no images at all (e.g. every scene removed by the cloud filter), `get_year_composite()` dropped it and the following bands took the wrong period names, so band-by-band reductions across years silently mixed different months. Every year now keeps one band per period, with empty periods as masked bands. The same release fixes the year labels of the classification feature stack and trend maps on Sentinel-1 or percentile composites. See the [CHANGELOG](CHANGELOG.md).
+
 **Raw reflectance bands** — the standardized bands are now selectable through `index=` on Sentinel-2, Landsat and MODIS (`'blue'`, `'green'`, `'red'`, `'nir'`, `'swir1'`, `'swir2'`, plus `'red_edge1-3'` on S2), returned as surface reflectance in 0–1 on every sensor. Spectral indices are ratios and cancel out changes in brightness, so a pixel can hold exactly the same NDVI while its reflectance drifts; radiometric work needs the bands themselves. Combined with the dispersion reducers they map how invariant each pixel is across a series — the basis for picking pseudo-invariant features.
 
 **`key='count'`** — valid observations per pixel: the quality layer that says which parts of a dispersion map can be trusted.

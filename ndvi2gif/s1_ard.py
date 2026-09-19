@@ -211,7 +211,9 @@ class S1ARDProcessor:
             # the slope came out near zero and masked part of every scene, so
             # terrain correction had no effect. The tiles' own projection
             # restores the 30 m grid
-            tiles = ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM')
+            # GLO30 was superseded by GLO30_2024_1 in 2026; same bands, same
+            # 30 m grid, so the swap is transparent
+            tiles = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1').select('DEM')
             return tiles.mosaic().setDefaultProjection(tiles.first().projection())
         if self.dem == 'SRTM_30':
             return ee.Image('USGS/SRTMGL1_003')

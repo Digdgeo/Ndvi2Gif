@@ -28,10 +28,12 @@ Welcome to the comprehensive tutorial for **Ndvi2Gif**, a Python library for mul
 This tutorial will guide you through:
 
 1. **Getting Started**: Installation, authentication, and your first analysis
-2. **Core Tutorials**: Step-by-step guides for common workflows
-3. **Advanced Features**: SAR processing, time series, classification
-4. **Use Cases**: Real-world applications in agriculture, wetlands, drought assessment
-5. **Reference**: Complete API documentation and indices catalog
+2. **User Guide**: One page per module — what each class does, how it is
+   configured, and what every option means
+3. **Tutorials**: Executed notebooks that take a real study area from end to
+   end, with their outputs: land cover in Córdoba, hydroperiod in Doñana,
+   forest and oil palm under the clouds of Borneo
+4. **Reference**: Complete API documentation, indices catalog and datasets
 
 ## Quick Example
 

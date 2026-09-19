@@ -11,6 +11,7 @@ License: MIT
 
 import ee
 import os
+import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -69,6 +70,10 @@ class LandCoverClassifier:
     
     # Accepted values of the ``resample`` argument besides a scale in meters
     RESAMPLE_MODES = ('coarser', 'finer')
+
+    # Clusterers offered by :meth:`classify_unsupervised`. The deprecated
+    # alias 'lda' is resolved to 'lvq' before this tuple is checked
+    UNSUPERVISED_ALGORITHMS = ('kmeans', 'cascade_kmeans', 'lvq')
 
     def __init__(self, ndvi_seasonality_instance, resample=None, crs=None):
         """
@@ -765,79 +770,160 @@ class LandCoverClassifier:
                             algorithm: str = 'kmeans',
                             n_clusters: int = 10,
                             max_iterations: int = 20,
+                            n_pixels: int = 5000,
+                            seed: int = 0,
                             params: Dict = None) -> ee.Image:
         """
         Perform unsupervised classification (clustering).
-        
+
+        The clusterer is trained on a random sample of the feature stack and
+        then applied to every pixel of it. Clusters are numbered arbitrarily:
+        they carry no class meaning until they are interpreted, for instance
+        by crossing them with reference labels or with the mean of each
+        feature per cluster.
+
         Parameters
         ----------
         algorithm : str
             Clustering algorithm:
-            - 'kmeans': K-means clustering (default)
-            - 'cascade_kmeans': Cascade K-means
-            - 'lda': Latent Dirichlet Allocation
+
+            - ``'kmeans'`` (default): Weka's SimpleKMeans
+              (``ee.Clusterer.wekaKMeans``). Lloyd's algorithm on Euclidean
+              distance: the samples are split into exactly ``n_clusters``
+              groups by repeating "assign every sample to the nearest
+              centroid, move every centroid to the mean of its samples"
+              until nothing moves or ``max_iterations`` is reached. It
+              minimizes the within-cluster variance, so it favours compact
+              clusters of similar spread.
+            - ``'cascade_kmeans'``: Cascade SimpleKMeans
+              (``ee.Clusterer.wekaCascadeKMeans``). Runs k-means for a
+              growing number of clusters and keeps the one that maximizes
+              the Calinski-Harabasz criterion, so **it chooses the number of
+              clusters itself** between 2 and ``n_clusters``; the result
+              usually has fewer. Use it when the number of classes in the
+              data is unknown.
+            - ``'lvq'``: Learning Vector Quantization
+              (``ee.Clusterer.wekaLVQ``). A competitive neural network in
+              Kohonen's sense: ``n_clusters`` prototype vectors are pulled
+              towards the samples that fall closest to them, by a step that
+              shrinks over the training epochs. It does not minimize the
+              within-cluster variance and depends on the order of the
+              samples, so it tends to give clusters of more even size than
+              k-means — useful when k-means collapses a large, homogeneous
+              cover type into one cluster and splits the rest.
+            - ``'lda'``: deprecated alias of ``'lvq'``, kept because that is
+              the clusterer it always ran. The name was wrong: no version of
+              this method performed Latent Dirichlet Allocation.
         n_clusters : int
-            Number of clusters
+            Number of clusters. For ``'cascade_kmeans'`` it is the
+            **maximum**, since that algorithm picks its own number.
         max_iterations : int
-            Maximum iterations
-        params : dict
-            Algorithm-specific parameters
-            
+            Maximum iterations. Only ``'kmeans'`` takes it; the other two
+            have no equivalent parameter.
+        n_pixels : int
+            Number of random pixels sampled from the feature stack to train
+            the clusterer. Default 5000.
+        seed : int
+            Seed of that random sample, so a run can be repeated. Default 0.
+        params : dict, optional
+            Extra keyword arguments for the underlying ``ee.Clusterer``,
+            such as ``{'seed': 7}`` for k-means or
+            ``{'learningRate': 0.05, 'epochs': 2000}`` for LVQ. They
+            override the arguments built from the parameters above.
+
         Returns
         -------
         ee.Image
-            Clustered image
+            Single-band image named ``'cluster'``, with values from 0 to the
+            number of clusters minus one. Also stored in
+            ``self.classified_image``, which a later call overwrites.
 
         Raises
         ------
         ValueError
-            If no feature stack has been created or if `algorithm`
-            is not one of {'kmeans', 'gmm'}.
+            If no feature stack has been created, or if `algorithm` is not
+            one of 'kmeans', 'cascade_kmeans' or 'lvq'.
         ee.EEException
             If unsupervised classification fails in Earth Engine.
+
+        Examples
+        --------
+        Twelve clusters over a multi-temporal stack::
+
+            >>> clusters = clf.classify_unsupervised(algorithm='kmeans',
+            ...                                      n_clusters=12)
+
+        Let the cascade choose how many classes the data supports::
+
+            >>> clusters = clf.classify_unsupervised(
+            ...     algorithm='cascade_kmeans', n_clusters=15)
+
+        See Also
+        --------
+        classify_supervised : Classification with labeled training data.
         """
         if self.feature_stack is None:
             raise ValueError("Create feature stack first")
-        
+
+        if algorithm == 'lda':
+            warnings.warn(
+                "algorithm='lda' is deprecated and will be removed in a "
+                "future release: it never ran Latent Dirichlet Allocation, "
+                "but Weka's Learning Vector Quantization. Use "
+                "algorithm='lvq' for the same result.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            algorithm = 'lvq'
+
+        if algorithm not in self.UNSUPERVISED_ALGORITHMS:
+            raise ValueError(
+                f"Unknown algorithm: {algorithm}. Available: "
+                f"{', '.join(self.UNSUPERVISED_ALGORITHMS)}"
+            )
+
         print(f"Performing {algorithm} clustering with {n_clusters} clusters...")
-        
+
         # Sample input data for clustering
         training_data = self.feature_stack.sample(
             region=self.roi,
             scale=self.scale,
-            numPixels=5000,
+            numPixels=n_pixels,
+            seed=seed,
             geometries=True
         )
-        
-        # Select clusterer
+
+        # Select clusterer. Anything in params overrides the arguments built
+        # from n_clusters and max_iterations
+        params = dict(params or {})
+
         if algorithm == 'kmeans':
-            clusterer = ee.Clusterer.wekaKMeans(
-                nClusters=n_clusters,
-                maxIterations=max_iterations
-            )
-            
+            args = {'nClusters': n_clusters, 'maxIterations': max_iterations}
+            args.update(params)
+            clusterer = ee.Clusterer.wekaKMeans(**args)
+
         elif algorithm == 'cascade_kmeans':
-            clusterer = ee.Clusterer.wekaCascadeKMeans(
-                minClusters=2,
-                maxClusters=n_clusters
-            )
-            
-        elif algorithm == 'lda':
-            clusterer = ee.Clusterer.wekaLVQ(
-                numClusters=n_clusters
-            )
-            
-        else:
-            raise ValueError(f"Unknown algorithm: {algorithm}")
-        
+            args = {'minClusters': 2, 'maxClusters': n_clusters}
+            args.update(params)
+            clusterer = ee.Clusterer.wekaCascadeKMeans(**args)
+
+        else:  # lvq
+            args = {'numClusters': n_clusters}
+            args.update(params)
+            clusterer = ee.Clusterer.wekaLVQ(**args)
+
         # Train clusterer
         clusterer = clusterer.train(training_data)
-        
+
         # Apply to image
         self.classified_image = self.feature_stack.cluster(clusterer)
-        
-        print(f"Clustering complete: {n_clusters} clusters")
-        
+
+        if algorithm == 'cascade_kmeans':
+            print(f"Clustering complete: up to {n_clusters} clusters, "
+                  "the cascade chooses how many")
+        else:
+            print(f"Clustering complete: {n_clusters} clusters")
+
         return self.classified_image
     
     def _calculate_accuracy(self):

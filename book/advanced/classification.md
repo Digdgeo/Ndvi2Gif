@@ -170,13 +170,26 @@ clustered = clf.classify_unsupervised(
 )
 ```
 
-| Algorithm | Description |
-|---|---|
-| `kmeans` | Weka k-means. Requires you to choose `n_clusters`. |
-| `cascade_kmeans` | Cascade k-means; chooses an optimal number of clusters between 2 and `n_clusters`. |
-| `lda` | Weka LVQ (Learning Vector Quantization). |
+| Algorithm | Earth Engine clusterer | Description |
+|---|---|---|
+| `kmeans` | `wekaKMeans` | Lloyd's algorithm on Euclidean distance: it splits the samples into exactly `n_clusters` groups by repeating "assign every sample to its nearest centroid, move every centroid to the mean of its samples". Minimises the within-cluster variance, so it favours compact clusters of similar spread. |
+| `cascade_kmeans` | `wekaCascadeKMeans` | Runs k-means for a growing number of clusters and keeps the one that maximises the Calinski-Harabasz criterion. **It chooses the number of clusters itself** between 2 and `n_clusters`, and usually returns fewer. |
+| `lvq` | `wekaLVQ` | Learning Vector Quantization, a competitive neural network in Kohonen's sense: `n_clusters` prototype vectors are pulled towards the samples closest to them, by a step that shrinks over the training epochs. It does not minimise the within-cluster variance and depends on the order of the samples, so it tends to give clusters of more even size than k-means. |
 
-The clusterer is trained on a random sample of 5 000 pixels drawn from the feature stack, then applied to the whole image. Clusters are unlabelled — interpret them by overlaying with known land cover or high-resolution imagery.
+```{deprecated} 1.6.1
+`algorithm='lda'` still works as an alias of `'lvq'`, with a `DeprecationWarning`. The
+name was always wrong: it never ran Latent Dirichlet Allocation, but Weka's LVQ.
+```
+
+Only `kmeans` takes `max_iterations`; the other two have no equivalent parameter. Anything
+in `params` is passed straight to the underlying `ee.Clusterer` and overrides the rest, so
+LVQ's own knobs are reachable: `params={'learningRate': 0.05, 'epochs': 2000}`.
+
+The clusterer is trained on a random sample of `n_pixels` pixels (5 000 by default, with
+`seed` to repeat the draw) taken from the feature stack, then applied to the whole image.
+Clusters are numbered arbitrarily and carry no class meaning — interpret them by crossing
+them with reference labels, with the mean of each feature per cluster, or with
+high-resolution imagery.
 
 > **Cascade k-means is the right first move on unknown terrain.** You rarely know the "true" number of classes before looking at the data. Cascade will suggest one, then you can iterate with plain k-means once you have a hypothesis.
 
@@ -300,7 +313,7 @@ Random Forest plus `get_feature_importance()` is the only route to "why did the 
 | `create_feature_stack(indices, include_statistics, normalize)` | `ee.Image` | Build multi-band feature stack from temporal composites |
 | `add_training_data(training_points, training_polygons, class_property, points_per_class)` | `None` | Load labelled samples, auto-split 70/30 train/validation |
 | `classify_supervised(algorithm, train_fraction, params)` | `ee.Image` | Train and apply a supervised classifier |
-| `classify_unsupervised(algorithm, n_clusters, max_iterations, params)` | `ee.Image` | Apply a clustering algorithm to the feature stack |
+| `classify_unsupervised(algorithm, n_clusters, max_iterations, n_pixels, seed, params)` | `ee.Image` | Apply a clustering algorithm to the feature stack |
 | `export_results(description, scale, region)` | `ee.batch.Task` | Export classified image to Google Drive |
 | `plot_confusion_matrix(labels)` | `matplotlib.axes.Axes` | Confusion matrix heatmap |
 | `get_accuracy_report()` | `pandas.DataFrame` | Tabular accuracy metrics |
@@ -308,7 +321,7 @@ Random Forest plus `get_feature_importance()` is the only route to "why did the 
 
 **Supervised algorithms:** `random_forest`, `svm`, `cart`, `naive_bayes`, `gradient_tree`
 
-**Unsupervised algorithms:** `kmeans`, `cascade_kmeans`, `lda`
+**Unsupervised algorithms:** `kmeans`, `cascade_kmeans`, `lvq` (`lda` is a deprecated alias of `lvq`)
 
 ---
 

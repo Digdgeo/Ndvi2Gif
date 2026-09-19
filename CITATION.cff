@@ -17,7 +17,7 @@ identifiers:
 repository-code: "https://github.com/Digdgeo/Ndvi2Gif"
 url: "https://digdgeo.github.io/Ndvi2Gif/"
 license: MIT
-version: 1.6.0
+version: 1.6.1
 date-released: "2026-09-19"
 preferred-citation:
   type: article

@@ -27,3 +27,6 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Notebook outputs written by export_model()
+notebooks/results/

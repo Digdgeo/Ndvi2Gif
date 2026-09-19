@@ -9,6 +9,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-09-19
+
+### Fixed
+
+- **The Copernicus DEM used for Sentinel-1 terrain correction was a deprecated asset.**
+  `COPERNICUS/DEM/GLO30` was superseded by `COPERNICUS/DEM/GLO30_2024_1`, and Earth Engine
+  printed a deprecation warning on every run that touched the SAR ARD pipeline. Same bands,
+  same 30 m grid, so results are unchanged.
+
+### Changed
+
+- **`classify_unsupervised(algorithm='lda')` is renamed to `'lvq'`.** The name was wrong:
+  it never ran Latent Dirichlet Allocation, but Weka's Learning Vector Quantization
+  (`ee.Clusterer.wekaLVQ`). `'lda'` still works as an alias and raises a
+  `DeprecationWarning`. The docstring now describes what each of the three clusterers
+  actually does, and how they differ.
+- **`classify_unsupervised()` honours its `params` argument.** It was accepted and silently
+  ignored, so the underlying `ee.Clusterer` could not be tuned. Anything in `params` is now
+  passed through and overrides the arguments built from `n_clusters` and `max_iterations`.
+- **`classify_unsupervised()` gains `n_pixels` and `seed`**, so the random sample the
+  clusterer trains on can be sized and repeated. Its final message no longer claims
+  `n_clusters` clusters for `cascade_kmeans`, which chooses its own.
+
+### Documentation
+
+- **The book is reorganised** into Getting Started / **User Guide** / **Tutorials** /
+  Reference. The old "Core Tutorials" and "Advanced Features" were both prose guides, and
+  "Notebooks" described a file format rather than its contents: guides explain a class,
+  tutorials are executed case studies. Page URLs are unchanged.
+- The classification guide documents what each clusterer actually does, rather than listing
+  their names.
+
+### Packaging
+
+- The package description now names what the library does today — composites, land cover
+  classification, phenology, hydroperiod and SAR processing — instead of the older
+  composites-and-time-series wording.
+
+---
+
 ## [1.6.0] - 2026-09-19
 
 ### ⚠️ Values change for some indices on Sentinel-2 and MODIS

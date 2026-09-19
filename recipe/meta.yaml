@@ -41,7 +41,8 @@ about:
   home: https://github.com/Digdgeo/Ndvi2Gif
   license: MIT
   license_file: ../LICENSE
-  summary: Multi-seasonal remote sensing analysis suite with Google Earth Engine
+  summary: Multi-seasonal remote sensing analysis suite: composites, land cover
+    classification, phenology, hydroperiod and SAR processing with Google Earth Engine
   description: |
     Ndvi2Gif is a Python library for multi-temporal remote sensing analysis with
     Google Earth Engine. It provides seasonal compositing, 40+ vegetation and

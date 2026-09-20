@@ -1093,6 +1093,39 @@ def test_integration_period_covers_every_day():
 
 
 @pytest.mark.ee
+def test_integration_get_stats_one_row_per_zone():
+    """Zonal statistics return one row per feature, attributes kept.
+
+    A path to a shapefile always did. An ee.FeatureCollection passed directly
+    fell through to `geom.geometry()`, which dissolves the polygons into one
+    zone and drops their attributes: three reservoirs came back as a single
+    unnamed row.
+    """
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    zones = ee.FeatureCollection([
+        ee.Feature(ee.Geometry.Rectangle([-6.30, 36.95, -6.27, 37.00]), {"zone": "a"}),
+        ee.Feature(ee.Geometry.Rectangle([-6.26, 36.95, -6.23, 37.00]), {"zone": "b"}),
+        ee.Feature(ee.Geometry.Rectangle([-6.22, 36.95, -6.19, 37.00]), {"zone": "c"}),
+    ])
+
+    inst = NdviSeasonality(roi=zones.geometry().bounds(), sat="S2", index="ndvi",
+                           key="median", periods=4,
+                           start_year=2021, end_year=2021)
+    image = ee.Image(inst.get_year_composite().first())
+
+    gdf = inst.get_stats(image=image, geom=zones, stat="MEAN", scale=100)
+    assert len(gdf) == 3
+    assert sorted(gdf["zone"]) == ["a", "b", "c"]
+    assert "summer" in gdf.columns
+
+    # A bare geometry is a single zone
+    single = inst.get_stats(image=image, geom=zones.geometry(), stat="MEAN", scale=200)
+    assert len(single) == 1
+
+
+@pytest.mark.ee
 def test_integration_peak_period():
     """get_peak_period() maps the period of the maximum, skipping empty ones.
 

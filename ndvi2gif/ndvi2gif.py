@@ -5464,7 +5464,11 @@ class NdviSeasonality:
             single_image = image
             process_collection = False
         
-        # Determine geometry for analysis
+        # Determine the zones to analyse. reduceRegions wants a
+        # FeatureCollection and computes one row per feature, which is the
+        # whole point of zonal statistics: calling .geometry() on a collection
+        # of polygons dissolves them into a single zone and drops every
+        # attribute with them (one row for 49 reservoirs, and no name on it)
         if geom is None:
             roi = self.roi
         elif isinstance(geom, str):
@@ -5475,7 +5479,12 @@ class NdviSeasonality:
             else:
                 raise ValueError("Path must be to a .shp or .geojson file.")
         else:
-            roi = geom.geometry() if hasattr(geom, 'geometry') else geom
+            roi = geom
+
+        if isinstance(roi, ee.Geometry):
+            roi = ee.FeatureCollection([ee.Feature(roi)])
+        elif isinstance(roi, ee.Feature):
+            roi = ee.FeatureCollection([roi])
 
         # Set default output name
         if name is None:

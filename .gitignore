@@ -112,3 +112,6 @@ examples_notebooks/Phenology.ipynb
 
 # Logo drafts and design material, kept local
 logos/
+
+# Local experiments, not part of the package
+.scratch/

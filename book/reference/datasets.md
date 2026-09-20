@@ -13,6 +13,8 @@ Comprehensive guide to the 7 satellite and climate reanalysis platforms supporte
 | **Sentinel-1** | SAR | 2014-present | 10m | 7 indices | All-weather monitoring |
 | **ERA5-Land** | Climate | 1950-present | ~11km | 47 variables | Climate analysis |
 | **CHIRPS** | Climate | 1981-present | ~5.5km | 1 variable | Precipitation monitoring |
+| **VIIRS** | Nighttime lights | 2014-present | ~500m | 2 variables | Human activity, light pollution |
+| **DMSP-OLS** | Nighttime lights | 1992-2013 | ~1km | 4 variables | Long-term urban growth |
 
 ---
 
@@ -550,6 +552,115 @@ precip_era5 = NdviSeasonality(
     end_year=2023,
     key='sum'
 )
+```
+
+---
+
+## Nighttime Lights
+
+Both datasets measure light emitted by the Earth at night, which is mostly a
+measure of people: cities, roads, industry, fishing fleets, gas flares. They
+are the two halves of one record — DMSP-OLS runs from 1992 to 2013 and VIIRS
+from 2014 on — but they are **not** directly comparable, since one is a
+calibrated radiance and the other a 6-bit digital number.
+
+### VIIRS
+
+**Visible Infrared Imaging Radiometer Suite, Day/Night Band**
+
+```python
+processor = NdviSeasonality(
+    roi=roi,
+    sat='VIIRS',
+    index='avg_rad',
+    periods=12,
+    start_year=2017,
+    end_year=2023,
+    key='mean'
+)
+```
+
+**Technical Specifications:**
+- **Provider**: Earth Observation Group, Colorado School of Mines
+- **Temporal Resolution**: Monthly composites
+- **Spatial Resolution**: ~500 m (15 arc-seconds)
+- **Temporal Coverage**: **2014 - present**
+- **Earth Engine Collection**: `NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG`
+
+**Variables:**
+- `avg_rad` - Average radiance (nW/cm²/sr)
+- `cf_cvg` - Number of cloud-free observations behind the composite
+
+The collection is the stray-light corrected version, which is what makes the
+polar summer usable. Each image is already a monthly composite, so
+`periods=12` gives one image per period and the reducer has nothing to
+combine.
+
+**Limitations:**
+- Moonlight, airglow, snow cover and fires are **not** removed: a bright pixel
+  is not necessarily a lit one
+- Winter nights are longer and clearer, which by itself raises the monthly
+  average in mid-latitudes — a seasonal signal that is atmospheric, not human
+- No correction for the blue light of LED street lighting, which the DNB sees
+  poorly, so a city that switches to LEDs appears to dim
+
+### DMSP-OLS
+
+**Defense Meteorological Satellite Program, Operational Linescan System**
+
+```python
+processor = NdviSeasonality(
+    roi=roi,
+    sat='DMSP',
+    index='stable_lights',
+    periods=1,          # annual composites: one image per year
+    start_year=1992,
+    end_year=2013,
+    key='mean'
+)
+```
+
+**Technical Specifications:**
+- **Provider**: NOAA National Geophysical Data Center
+- **Temporal Resolution**: **Annual** composites
+- **Spatial Resolution**: ~1 km (30 arc-seconds)
+- **Temporal Coverage**: **1992 - 2013**
+- **Earth Engine Collection**: `NOAA/DMSP-OLS/NIGHTTIME_LIGHTS`
+
+**Variables:**
+- `stable_lights` - Lights present all year, ephemeral events removed
+- `avg_vis` - Raw average of the cloud-free nights
+- `avg_lights_x_pct` - `avg_vis` weighted by the share of lit nights
+- `cf_cvg` - Number of cloud-free observations behind the composite
+
+**Limitations:**
+- **One image per year**, so timing within a year cannot be resolved: use
+  `periods=1` and read the years as the series
+- 6-bit sensor (0-63) that **saturates** over city centres
+- Digital numbers are **not calibrated** between satellites or years; a series
+  needs intercalibration before its values can be compared over time
+
+### Which one
+
+| Aspect | VIIRS | DMSP-OLS |
+|--------|-------|----------|
+| Period | 2014-present | 1992-2013 |
+| Frequency | Monthly | Annual |
+| Resolution | ~500 m | ~1 km |
+| Units | Radiance (nW/cm²/sr) | 6-bit DN (0-63) |
+| Saturation | No | Yes, over cities |
+| Timing within a year | Yes | No |
+
+Use VIIRS for anything about *when* — which month a place shines brightest —
+and DMSP for anything that has to reach back before 2014, such as the growth
+of a city over two decades.
+
+```{seealso}
+`get_peak_period()` turns a lights series into a map of the month of maximum
+radiance, which is the method of
+[Ramírez et al. (2023)](https://doi.org/10.1002/pan3.10520) on celebrations and
+light pollution. It works on any index: peak greenness, peak flooding, peak
+chlorophyll.
 ```
 
 ---

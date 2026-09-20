@@ -909,6 +909,32 @@ class NdviSeasonality:
             'precipitation'  # Daily precipitation in mm
         }
 
+        # VIIRS nighttime lights variables (monthly composites)
+        self.viirs_variables = {
+            'avg_rad',  # Average radiance, nW/cm2/sr
+            'cf_cvg'    # Cloud-free observations used
+        }
+
+        # VIIRS Black Marble daily variables (VNP46A2). Short names, because
+        # the band names of the product ('DNB_BRDF_Corrected_NTL') are not
+        # usable as an index= argument
+        self.viirs_daily_variables = {
+            'ntl',               # DNB_BRDF_Corrected_NTL
+            'ntl_gap_filled',    # Gap_Filled_DNB_BRDF_Corrected_NTL
+            'lunar_irradiance',  # DNB_Lunar_Irradiance
+            'quality_flag',      # Mandatory_Quality_Flag
+            'cloud_mask',        # QF_Cloud_Mask
+            'snow_flag'          # Snow_Flag
+        }
+
+        # DMSP-OLS nighttime lights variables (annual composites)
+        self.dmsp_variables = {
+            'avg_vis',           # Average visible band, 6-bit DN
+            'stable_lights',     # Lights cleaned of ephemeral events
+            'avg_lights_x_pct',  # avg_vis weighted by the share of lit nights
+            'cf_cvg'             # Cloud-free observations used
+        }
+
         # Final sensor-to-indices mapping
         self.sensor_indices = {
             'S2': (self.optical_indices | self.s2_exclusive_indices
@@ -921,7 +947,10 @@ class NdviSeasonality:
             'S1': self.s1_indices,
             'S3': self.optical_indices | self.s3_exclusive_indices,
             'ERA5': self.era5_variables,
-            'CHIRPS': self.chirps_variables
+            'CHIRPS': self.chirps_variables,
+            'VIIRS': self.viirs_variables,
+            'VIIRS_DAILY': self.viirs_daily_variables,
+            'DMSP': self.dmsp_variables
         }
         
         # Validate satellite
@@ -1058,7 +1087,20 @@ class NdviSeasonality:
             'surface_runoff_sum_lm2': self.get_era5_surface_runoff_sum_lm2,
             'snowfall_sum_lm2': self.get_era5_snowfall_sum_lm2,
             # CHIRPS precipitation
-            'precipitation': self.get_chirps_precipitation
+            'precipitation': self.get_chirps_precipitation,
+            # Nighttime lights. 'cf_cvg' is a band of both VIIRS and DMSP and
+            # means the same thing in each, so one method serves both
+            'avg_rad': self.get_viirs_avg_rad,
+            'cf_cvg': self.get_cf_cvg,
+            'ntl': self.get_viirs_ntl,
+            'ntl_gap_filled': self.get_viirs_ntl_gap_filled,
+            'lunar_irradiance': self.get_viirs_lunar_irradiance,
+            'quality_flag': self.get_viirs_quality_flag,
+            'cloud_mask': self.get_viirs_cloud_mask,
+            'snow_flag': self.get_viirs_snow_flag,
+            'avg_vis': self.get_dmsp_avg_vis,
+            'stable_lights': self.get_dmsp_stable_lights,
+            'avg_lights_x_pct': self.get_dmsp_avg_lights_x_pct
         }
 
         # Generate dynamic temporal periods - replaces all hardcoded periods
@@ -1278,6 +1320,41 @@ class NdviSeasonality:
                 .And(scl.neq(9))   # high probability cloud
                 .And(scl.neq(10))) # thin cirrus
         return image.updateMask(mask).copyProperties(
+            image, ['system:time_start', 'system:time_end', 'system:index'])
+
+    def mask_viirs_quality(self, image):
+        """
+        Keep only the good retrievals of a VIIRS Black Marble daily image.
+
+        ``Mandatory_Quality_Flag`` grades every pixel of VNP46A2:
+
+        - 0: high quality, persistent nighttime lights
+        - 1: high quality, ephemeral nighttime lights
+        - 2: poor quality, outlier or likely cloud contaminated
+        - 255: no retrieval
+
+        Grades 0 and 1 are kept. Flag 2 is where a cloud the mask missed shows
+        up as a dark or a bright night, which is exactly the noise that ruins
+        a map of the date of the maximum.
+
+        Parameters
+        ----------
+        image : ee.Image
+            VNP46A2 image with its quality bands.
+
+        Returns
+        -------
+        ee.Image
+            The same image with the poor and missing retrievals masked out.
+
+        References
+        ----------
+        Román, M.O., Wang, Z., Sun, Q. et al. (2018). NASA's Black Marble
+        nighttime lights product suite. Remote Sensing of Environment, 210,
+        113-143. https://doi.org/10.1016/j.rse.2018.03.017
+        """
+        quality = image.select('Mandatory_Quality_Flag')
+        return image.updateMask(quality.lte(1)).copyProperties(
             image, ['system:time_start', 'system:time_end', 'system:index'])
 
     def mask_landsat_clouds(self, image):
@@ -1636,6 +1713,25 @@ class NdviSeasonality:
         # CHIRPS daily precipitation dataset (1981-present, ~5.5km resolution)
         CHIRPScol = ee.ImageCollection("UCSB-CHG/CHIRPS/DAILY").filterBounds(self.roi)
 
+        # ============= NIGHTTIME LIGHTS CONFIGURATION =============
+        # VIIRS DNB monthly composites, stray-light corrected (2014-present,
+        # ~500m). One image per month, so periods=12 gives one image per period
+        VIIRScol = ee.ImageCollection(
+            "NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterBounds(self.roi)
+
+        # VIIRS Black Marble daily, BRDF corrected for the moon and the
+        # atmosphere (2012-present, ~500m). NOAA/VIIRS/001/VNP46A2 is the
+        # deprecated version of this same product, frozen at the end of 2024
+        VIIRSdaily = ee.ImageCollection(
+            "NASA/VIIRS/002/VNP46A2").filterBounds(self.roi)
+        if self.sat == 'VIIRS_DAILY' and self.cloud_filter:
+            VIIRSdaily = VIIRSdaily.map(self.mask_viirs_quality)
+
+        # DMSP-OLS annual composites (1992-2013, ~1km). One image per year:
+        # there is no intra-annual variation to composite
+        DMSPcol = ee.ImageCollection(
+            "NOAA/DMSP-OLS/NIGHTTIME_LIGHTS").filterBounds(self.roi)
+
         # ============= ASSIGN COLLECTIONS BASED ON SENSOR =============
         if self.sat == 'S2':
             self.ndvi_col = S2col
@@ -1660,9 +1756,63 @@ class NdviSeasonality:
         elif self.sat == 'CHIRPS':
             self.ndvi_col = CHIRPScol
             print("CHIRPS daily precipitation (1981-present, ~5.5km resolution, 50°S-50°N)")
+        elif self.sat == 'VIIRS':
+            self.ndvi_col = VIIRScol
+            print("VIIRS DNB monthly nighttime lights (2014-present, ~500m resolution)")
+            if self.periods != 12:
+                print(f"  Note: VIIRS is monthly, so periods={self.periods} averages "
+                      "several months per period; periods=12 keeps each month")
+        elif self.sat == 'VIIRS_DAILY':
+            self.ndvi_col = VIIRSdaily
+            print("VIIRS Black Marble daily nighttime lights (2012-present, ~500m resolution)")
+            if self.cloud_filter:
+                print("Applying pixel-level quality mask using Mandatory_Quality_Flag")
+            else:
+                print("No quality mask: poor retrievals and gap-filled pixels are kept")
+        elif self.sat == 'DMSP':
+            self.ndvi_col = DMSPcol
+            print("DMSP-OLS annual nighttime lights (1992-2013, ~1km resolution)")
+            if self.periods != 1:
+                print(f"  Note: DMSP is annual, so every period of a year reads the "
+                      f"same image; periods={self.periods} cannot resolve timing "
+                      "within a year")
         else:
             print('Not a valid satellite')
     
+    def _period_date_range(self, year, period_idx):
+        """
+        Date range of a period, ready for ``filterDate``.
+
+        ``filterDate`` excludes its end date, while ``period_dates`` stores the
+        **last day** of each period, so filtering by it dropped that day from
+        every composite: January ran to the 30th, and in a leap year February
+        never saw the 29th, because the month is stored with 28 days.
+
+        The end of a period is therefore taken as the start of the next one,
+        and the end of the last period as the first day of the next year. That
+        keeps the periods contiguous, restores the missing day, handles leap
+        years on its own, and makes one-day periods (``periods=365``) work
+        instead of building an empty range that Earth Engine rejects.
+
+        Parameters
+        ----------
+        year : int
+            Year the period belongs to.
+        period_idx : int
+            Zero-based index of the period.
+
+        Returns
+        -------
+        (str, str)
+            Start date (inclusive) and end date (exclusive), 'YYYY-MM-DD'.
+        """
+        init = f"{year}{self.period_dates[period_idx][0]}"
+        if period_idx + 1 < len(self.period_dates):
+            ends = f"{year}{self.period_dates[period_idx + 1][0]}"
+        else:
+            ends = f"{year + 1}{self.period_dates[0][0]}"
+        return init, ends
+
     def get_period_composite(self, year, period_idx):
         """
         Generate composite image for a specific temporal period within a year.
@@ -1722,12 +1872,8 @@ class NdviSeasonality:
         _generate_periods : Defines period date ranges
         """
         # Extract temporal boundaries for the specified period
-        start_date, end_date = self.period_dates[period_idx]
-        
-        # Construct full date strings (YYYY-MM-DD format)
-        init = str(year) + start_date
-        ends = str(year) + end_date
-        
+        init, ends = self._period_date_range(year, period_idx)
+
         # Pre-compute all statistical composites for efficiency
         # This approach avoids redundant filtering and index calculation
         period_stats = {}
@@ -2084,9 +2230,7 @@ class NdviSeasonality:
 
         # --- helpers internos ---
         def _filtered_collection_for_period(year, period_idx):
-            start_date, end_date = self.period_dates[period_idx]
-            init = f"{year}{start_date}"
-            ends = f"{year}{end_date}"
+            init, ends = self._period_date_range(year, period_idx)
             # misma colección que se compone en get_period_composite
             return self.ndvi_col.filterDate(init, ends).map(self.d[self.index])
 
@@ -2111,9 +2255,7 @@ class NdviSeasonality:
 
             elif count_mode == "unique_dates":
                 # Usar la colección original (sin aplicar el índice) para no perder system:time_start
-                start_date, end_date = self.period_dates[period_idx]
-                init = f"{year}{start_date}"
-                ends = f"{year}{end_date}"
+                init, ends = self._period_date_range(year, period_idx)
                 ic_raw = self.ndvi_col.filterDate(init, ends)  # sin .map(self.d[self.index])
 
                 ts = ic_raw.aggregate_array('system:time_start')  # ee.List de timestamps (ms)
@@ -2138,8 +2280,8 @@ class NdviSeasonality:
             # get_period_composite ya devuelve una banda de relleno cuando un
             # periodo no tiene imágenes
             scene_counts = ee.List([
-                self.ndvi_col.filterDate(f"{year}{start}", f"{year}{end}").size()
-                for start, end in self.period_dates
+                self.ndvi_col.filterDate(*self._period_date_range(year, idx)).size()
+                for idx in range(self.periods)
             ]).getInfo()
             self.period_scene_counts[year] = scene_counts
 
@@ -2217,7 +2359,199 @@ class NdviSeasonality:
 
         return collection, df
 
-    
+    def get_peak_period(self, per_year=False, across_years='median',
+                        return_peak_value=False, mask_below=None,
+                        return_ties=False, composite=None):
+        """
+        Map the period of the year in which each pixel reaches its maximum.
+
+        Answers "*when*", not "*how much*": for every pixel, which of the
+        temporal periods holds the highest value of the configured index. The
+        result is a timing map — the month of peak greenness, the season of
+        deepest flooding, the month a city shines brightest.
+
+        The periods are the ones the instance is already configured with, so
+        the output values run from 1 to ``self.periods`` and correspond to
+        :attr:`period_names` in order.
+
+        Parameters
+        ----------
+        per_year : bool, optional
+            If False (default), the years are collapsed first (see
+            ``across_years``) and a single image is returned: the period in
+            which the *typical* year peaks. If True, returns one image per
+            year, each tagged with a ``year`` property, so the peak can be
+            tracked over time.
+        across_years : {'median', 'mean', 'max'}, optional
+            How the yearly composites are combined before the peak is looked
+            up. Ignored when ``per_year=True``. Default is ``'median'``, which
+            is robust to a single anomalous year.
+        return_peak_value : bool, optional
+            If True, the output keeps a second band, ``peak_value``, with the
+            index value at the peak. Default is False.
+        mask_below : float, optional
+            Mask out the pixels whose peak value does not reach this
+            threshold. The timing of a pixel with no signal is noise, so this
+            is the usual way to restrict the map to pixels that are actually
+            lit, flooded or vegetated. Default is None (keep every pixel).
+        return_ties : bool, optional
+            If True, the output keeps a band ``ties`` with the number of
+            periods that reach that same maximum: 1 where the peak is unique,
+            2 or more where the choice of period was arbitrary. Default is
+            False.
+        composite : ee.Image, optional
+            Use this multi-band composite — one band per period, in order —
+            instead of building one. For a composite that has already been
+            processed: chlorophyll masked to the water pixels, an index
+            masked to a land cover, a stack assembled by hand. Its bands are
+            renamed to :attr:`period_names` if they differ, so the output
+            still means "period number". Ignored when ``per_year=True``.
+
+        Returns
+        -------
+        ee.Image or ee.ImageCollection
+            Band ``peak_period``, an integer from 1 to ``self.periods``, plus
+            ``peak_value`` and ``ties`` if requested. An ``ee.Image`` when
+            ``per_year=False``, an ``ee.ImageCollection`` of one image per
+            year otherwise. Pixels with no valid data in any period are
+            masked.
+
+        Notes
+        -----
+        The peak is resolved with ``qualityMosaic`` over one candidate image
+        per period, which is what makes empty periods harmless: a period with
+        no data is masked and simply does not compete. Two consequences worth
+        knowing:
+
+        * **Ties go to the later period.** If two periods hold exactly the
+          same maximum, the second one wins. Rather than picking a winner by
+          some other rule — the first, the middle, the average of the tied
+          periods, all of which invent information the data does not have —
+          ``return_ties=True`` reports how many periods tied, so the pixels
+          where the answer is arbitrary can be found and dealt with
+          downstream. Exact ties are common with integer values (a count, a
+          saturated 6-bit DMSP city) and rare with reflectance.
+        * A pixel masked in *every* period comes back masked, rather than
+          defaulting to period 1.
+
+        Like every composite of this library, the result carries no fixed
+        projection, so anything that asks for it at another scale resamples
+        it. That is harmless for a display, but it makes a
+        ``frequencyHistogram`` of the periods report fractional counts for
+        values no pixel holds: count the periods with ``eq()`` at the native
+        scale, or ``reproject()`` the image first.
+
+        This is not the phenological POS of
+        :class:`~ndvi2gif.timeseries.SpatialPhenologyAnalyzer`, which fits and
+        smooths the series before locating the maximum. Here the maximum is
+        taken from the composites as they are: cruder, far cheaper, and
+        defined for any index and any sensor.
+
+        Examples
+        --------
+        Month of peak greenness over six years::
+
+            >>> processor = NdviSeasonality(roi=roi, sat='S2', periods=12,
+            ...                             index='ndvi', key='median',
+            ...                             start_year=2018, end_year=2023)
+            >>> peak = processor.get_peak_period()
+
+        Month of peak nighttime light, restricted to lit pixels::
+
+            >>> lights = NdviSeasonality(roi=city, sat='VIIRS', periods=12,
+            ...                          index='avg_rad', key='mean',
+            ...                          start_year=2017, end_year=2017)
+            >>> peak = lights.get_peak_period(mask_below=2, return_peak_value=True)
+
+        Follow the peak year by year::
+
+            >>> peaks = processor.get_peak_period(per_year=True)
+            >>> peaks.aggregate_array('year').getInfo()
+        """
+        if across_years not in ('median', 'mean', 'max'):
+            raise ValueError(
+                f"across_years must be 'median', 'mean' or 'max', got {across_years!r}"
+            )
+
+        if composite is not None and not per_year:
+            composite = ee.Image(composite)
+            n_bands = composite.bandNames().size().getInfo()
+            if n_bands != self.periods:
+                raise ValueError(
+                    f"composite has {n_bands} bands but the instance is "
+                    f"configured with {self.periods} periods: one band per "
+                    "period is required, in order"
+                )
+            return self._peak_from_composite(
+                composite.rename(self.period_names), return_peak_value,
+                mask_below, return_ties)
+
+        collection = self.get_year_composite()
+
+        if per_year:
+            # The years without a single scene are skipped by
+            # get_year_composite, so the years are read back from the scene
+            # counts instead of assuming the whole range is present
+            years = [year for year, counts in self.period_scene_counts.items()
+                     if sum(counts) > 0]
+            peaks = [self._peak_from_composite(img, return_peak_value,
+                                               mask_below, return_ties)
+                     .set('year', year,
+                          'system:time_start', img.get('system:time_start'))
+                     for img, year in zip(self.imagelist, years)]
+            return ee.ImageCollection.fromImages(peaks)
+
+        combined = getattr(collection, across_years)()
+        return self._peak_from_composite(combined, return_peak_value,
+                                         mask_below, return_ties)
+
+    def _peak_from_composite(self, composite, return_peak_value=False,
+                             mask_below=None, return_ties=False):
+        """
+        Period of the maximum of a multi-band composite, one band per period.
+
+        Builds one candidate image per period — the value and a constant with
+        the period number, both carrying the period's own mask — and lets
+        ``qualityMosaic`` pick the winner. See :meth:`get_peak_period`.
+        """
+        candidates = []
+        for period_idx, period_name in enumerate(self.period_names):
+            value = composite.select([period_name]).rename('peak_value').float()
+            if mask_below is not None:
+                value = value.updateMask(value.gte(mask_below))
+            # The constant carries the period's mask, so an empty period
+            # never wins by default
+            period = (ee.Image.constant(period_idx + 1).toInt()
+                      .rename('peak_period').updateMask(value.mask()))
+            candidates.append(value.addBands(period))
+
+        peak = ee.ImageCollection.fromImages(candidates).qualityMosaic('peak_value')
+
+        bands = ['peak_period']
+        if return_peak_value:
+            bands.append('peak_value')
+
+        if return_ties:
+            # How many periods hold that same maximum. Counted over the same
+            # candidates the mosaic chose from, not over the source composite:
+            # they carry the same float precision, the same mask and the same
+            # mask_below, so the winner always counts itself and 'ties' is
+            # never 0
+            tied = ee.ImageCollection.fromImages(
+                [c.select('peak_value').eq(peak.select('peak_value'))
+                 for c in candidates]
+            ).reduce(ee.Reducer.sum()).toInt().rename('ties')
+            # A maximum is reached by at least the period that holds it, so 1
+            # is the floor. The mosaic and these comparisons are resampled
+            # independently (a composite carries no fixed projection), which
+            # otherwise leaves a handful of pixels counting zero
+            tied = tied.unmask(0).max(1)
+            peak = peak.addBands(
+                tied.updateMask(peak.select('peak_value').mask()))
+            bands.append('ties')
+
+        return peak.select(bands).clip(self.roi)
+
     # Index calculation methods (same as original - keeping all of them)
     def get_raw_band(self, image, band):
         """
@@ -3857,6 +4191,196 @@ class NdviSeasonality:
         https://developers.google.com/earth-engine/datasets/catalog/UCSB-CHG_CHIRPS_DAILY
         """
         return image.select('precipitation').rename('nd')
+
+    #### Nighttime lights variables ####
+
+    def get_viirs_avg_rad(self, image):
+        """
+        Average nighttime radiance from the VIIRS Day/Night Band.
+
+        The monthly VCMSLCFG composite: cloud-free average radiance with the
+        stray light of the polar summer corrected, which is what makes it
+        usable at high latitudes. Moonlight, airglow and fires are *not*
+        removed, so a bright pixel is not necessarily a lit one.
+
+        Units: nW/cm²/sr
+        Temporal resolution: monthly (2014-present)
+        Spatial resolution: ~500 m (15 arc-seconds)
+
+        Use with ``key='mean'`` or ``'median'``; a monthly composite already
+        is the average of its cloud-free nights.
+
+        References
+        ----------
+        Elvidge, C.D., Baugh, K., Zhizhin, M., Hsu, F.C., Ghosh, T. (2017).
+        VIIRS night-time lights. International Journal of Remote Sensing,
+        38(21), 5860-5879. https://doi.org/10.1080/01431161.2017.1342050
+
+        Earth Observation Group, Colorado School of Mines
+        https://developers.google.com/earth-engine/datasets/catalog/NOAA_VIIRS_DNB_MONTHLY_V1_VCMSLCFG
+        """
+        return image.select('avg_rad').rename('nd')
+
+    def get_viirs_ntl(self, image):
+        """
+        Daily nighttime radiance, corrected for the moon and the atmosphere.
+
+        The Black Marble product (VNP46A2) removes what the monthly composite
+        leaves in: moonlight, atmospheric scattering, terrain and the angle of
+        view are all modelled away, so what is left is the light the surface
+        actually emitted. That is what makes a *daily* value comparable to the
+        next day's, and a map of the date of the maximum meaningful.
+
+        Units: nW/cm²/sr
+        Temporal resolution: daily (2012-present)
+        Spatial resolution: ~500 m
+
+        Cloudy nights are still cloudy: the quality mask
+        (:meth:`mask_viirs_quality`, applied when ``cloud_filter=True``) drops
+        the retrievals the algorithm itself grades as poor.
+
+        References
+        ----------
+        Román, M.O., Wang, Z., Sun, Q. et al. (2018). NASA's Black Marble
+        nighttime lights product suite. Remote Sensing of Environment, 210,
+        113-143. https://doi.org/10.1016/j.rse.2018.03.017
+
+        https://developers.google.com/earth-engine/datasets/catalog/NASA_VIIRS_002_VNP46A2
+        """
+        return image.select('DNB_BRDF_Corrected_NTL').rename('nd')
+
+    def get_viirs_ntl_gap_filled(self, image):
+        """
+        Daily nighttime radiance with the missing nights filled in.
+
+        Same as :meth:`get_viirs_ntl`, but the pixels without a valid
+        retrieval are filled from a temporal model instead of being left
+        empty. Convenient for a continuous series, dangerous for anything that
+        counts observations: a filled value is a prediction, not a
+        measurement, and ``quality_flag`` is what tells them apart.
+
+        Units: nW/cm²/sr
+        """
+        return image.select('Gap_Filled_DNB_BRDF_Corrected_NTL').rename('nd')
+
+    def get_viirs_lunar_irradiance(self, image):
+        """
+        Lunar irradiance at the time of the VIIRS overpass.
+
+        The moonlight that the BRDF correction of :meth:`get_viirs_ntl`
+        removed. Useful to check that a pattern in the lights is not the lunar
+        cycle in disguise.
+
+        Units: nW/cm²/sr
+        """
+        return image.select('DNB_Lunar_Irradiance').rename('nd')
+
+    def get_viirs_quality_flag(self, image):
+        """
+        Retrieval quality of a VIIRS Black Marble daily pixel.
+
+        Values: 0 high quality (persistent lights), 1 high quality (ephemeral
+        lights), 2 poor quality (outlier or cloud contaminated), 255 no
+        retrieval. See :meth:`mask_viirs_quality`, which keeps 0 and 1.
+
+        With ``key='count'`` this counts the nights that produced a value in
+        each period, which is the coverage behind any daily-lights composite.
+        """
+        return image.select('Mandatory_Quality_Flag').rename('nd')
+
+    def get_viirs_cloud_mask(self, image):
+        """
+        Cloud mask flags of a VIIRS Black Marble daily pixel.
+
+        ``QF_Cloud_Mask`` is a bitmask, not a number to average: bits hold day
+        or night, cloud confidence, cirrus, snow or ice. Exposed so it can be
+        decoded with ``bitwiseAnd`` when the default quality mask is not
+        enough.
+        """
+        return image.select('QF_Cloud_Mask').rename('nd')
+
+    def get_viirs_snow_flag(self, image):
+        """
+        Snow or ice cover under a VIIRS Black Marble daily pixel.
+
+        Values: 0 no snow or ice, 1 snow or ice. Fresh snow reflects
+        artificial light back to the sensor and can double the apparent
+        radiance of a city, so a winter peak deserves a look at this band.
+        """
+        return image.select('Snow_Flag').rename('nd')
+
+    def get_cf_cvg(self, image):
+        """
+        Number of cloud-free observations behind a nighttime lights composite.
+
+        Present in both VIIRS and DMSP-OLS, with the same meaning in each: how
+        many nights actually contributed to the pixel. It is the quality band
+        of these datasets — a low count means the radiance of that pixel rests
+        on very few nights, which matters in the tropics and in the polar
+        winter.
+
+        Units: count of observations
+        """
+        return image.select('cf_cvg').rename('nd')
+
+    def get_dmsp_avg_vis(self, image):
+        """
+        Average visible band of the DMSP-OLS annual composite.
+
+        The raw annual average of the cloud-free nights, ephemeral lights
+        (fires, aurorae, lightning) included. Use
+        :meth:`get_dmsp_stable_lights` for the cleaned version.
+
+        Units: 6-bit digital number (0-63), *not* a physical radiance
+        Temporal resolution: annual (1992-2013)
+        Spatial resolution: ~1 km (30 arc-seconds)
+
+        The 6-bit sensor saturates over city centres and the DN is not
+        calibrated between satellites or years, so a DMSP series needs
+        intercalibration before its values can be compared over time.
+
+        References
+        ----------
+        Elvidge, C.D., Baugh, K.E., Kihn, E.A., Kroehl, H.W., Davis, E.R.
+        (1997). Mapping city lights with nighttime data from the DMSP
+        Operational Linescan System. Photogrammetric Engineering and Remote
+        Sensing, 63(6), 727-734.
+
+        https://developers.google.com/earth-engine/datasets/catalog/NOAA_DMSP-OLS_NIGHTTIME_LIGHTS
+        """
+        return image.select('avg_vis').rename('nd')
+
+    def get_dmsp_stable_lights(self, image):
+        """
+        DMSP-OLS lights with the ephemeral ones removed.
+
+        Fires, aurorae and other one-off events are dropped and background
+        noise is set to zero, leaving the lights that were there all year:
+        cities, industry, gas flares. This is the band most DMSP studies use.
+
+        Units: 6-bit digital number (0-63), background set to 0
+        Temporal resolution: annual (1992-2013)
+        Spatial resolution: ~1 km (30 arc-seconds)
+
+        See :meth:`get_dmsp_avg_vis` for the saturation and intercalibration
+        caveats, which apply here too.
+        """
+        return image.select('stable_lights').rename('nd')
+
+    def get_dmsp_avg_lights_x_pct(self, image):
+        """
+        DMSP-OLS average lights weighted by the share of lit nights.
+
+        The product of ``avg_vis`` and the percentage of observations in which
+        the pixel was lit, which downweights pixels that only shine
+        occasionally. Useful to separate a steadily lit town from a place that
+        lights up a few nights a year.
+
+        Units: 6-bit digital number scaled by the lit fraction
+        Temporal resolution: annual (1992-2013)
+        Spatial resolution: ~1 km (30 arc-seconds)
+        """
+        return image.select('avg_lights_x_pct').rename('nd')
 
     #### New methods for SAR indices with normalization option ####
 

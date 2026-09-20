@@ -98,6 +98,7 @@ def test_valid_satellite_options_updated():
     sat_index = {
         "S2": "ndvi", "Landsat": "ndvi", "MODIS": "ndvi", "S1": "vv",
         "S3": "ndvi", "ERA5": "temperature_2m", "CHIRPS": "precipitation",
+        "VIIRS": "avg_rad", "DMSP": "stable_lights",
     }
     for sat, index in sat_index.items():
         assert NdviSeasonality(sat=sat, index=index).sat == sat
@@ -217,6 +218,28 @@ def test_chirps_precipitation_available():
     # Check that CHIRPS variables are mapped to the satellite
     chirps_vars = inst.sensor_indices["CHIRPS"]
     assert "precipitation" in chirps_vars
+
+
+def test_nighttime_lights_variables_available():
+    """VIIRS and DMSP-OLS variables are registered and reach their methods."""
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    viirs = NdviSeasonality(sat="VIIRS", index="avg_rad")
+    assert viirs.sensor_indices["VIIRS"] == {"avg_rad", "cf_cvg"}
+
+    dmsp = NdviSeasonality(sat="DMSP", index="stable_lights", periods=1)
+    assert dmsp.sensor_indices["DMSP"] == {
+        "avg_vis", "stable_lights", "avg_lights_x_pct", "cf_cvg"
+    }
+
+    # 'cf_cvg' is a band of both datasets and shares a single method
+    assert viirs.d["cf_cvg"].__name__ == dmsp.d["cf_cvg"].__name__ == "get_cf_cvg"
+
+    # An optical index is not available on a lights dataset, and the other way round
+    with pytest.raises(ValueError):
+        NdviSeasonality(sat="VIIRS", index="ndvi")
+    with pytest.raises(ValueError):
+        NdviSeasonality(sat="S2", index="avg_rad")
 
 
 # ---------------------------------------------------------------------
@@ -759,12 +782,18 @@ def test_integration_every_registered_index_computes():
 
     roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
     failures = {}
-    for sat, default in [("S2", "ndvi"), ("Landsat", "ndvi"), ("MODIS", "ndvi"),
-                         ("S3", "ndvi"), ("S1", "vv")]:
+    # DMSP-OLS ended in 2013, so it needs a date range of its own
+    for sat, default, window in [("S2", "ndvi", ("2021-06-01", "2021-09-01")),
+                                 ("Landsat", "ndvi", ("2021-06-01", "2021-09-01")),
+                                 ("MODIS", "ndvi", ("2021-06-01", "2021-09-01")),
+                                 ("S3", "ndvi", ("2021-06-01", "2021-09-01")),
+                                 ("S1", "vv", ("2021-06-01", "2021-09-01")),
+                                 ("VIIRS", "avg_rad", ("2021-06-01", "2021-09-01")),
+                                 ("DMSP", "stable_lights", ("2012-01-01", "2013-01-01"))]:
         with contextlib.redirect_stdout(io.StringIO()):
             inst = NdviSeasonality(roi=roi, sat=sat, index=default,
                                    start_year=2021, end_year=2021)
-        image = inst.ndvi_col.filterDate("2021-06-01", "2021-09-01").first()
+        image = inst.ndvi_col.filterDate(*window).first()
         for index in sorted(inst.sensor_indices[sat]):
             try:
                 ee.Image(inst.d[index](image)).bandNames().getInfo()
@@ -1013,6 +1042,152 @@ def test_integration_export_model(tmp_path):
     train = samples[samples["split"] == "train"]
     rf = RandomForestClassifier(n_estimators=10, random_state=0)
     rf.fit(train[meta["features"]], train["landcover"])
+
+
+def test_period_date_ranges_are_contiguous():
+    """A period ends where the next begins, so no day falls between two.
+
+    filterDate excludes its end date, and period_dates stores the last day of
+    each period, so filtering by it dropped that day from every composite:
+    January ran to the 30th, and February never saw the 29th of a leap year.
+    """
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    for periods in (4, 12, 24, 365):
+        inst = NdviSeasonality(periods=periods)
+        ranges = [inst._period_date_range(2016, i) for i in range(periods)]
+
+        assert ranges[0][0] == "2016-01-01"
+        assert ranges[-1][1] == "2017-01-01"  # the year is covered to the end
+        for (_, end), (start, _) in zip(ranges, ranges[1:]):
+            assert end == start
+        for start, end in ranges:
+            assert start < end  # never an empty range, not even at periods=365
+
+    monthly = NdviSeasonality(periods=12)
+    assert monthly._period_date_range(2016, 1) == ("2016-02-01", "2016-03-01")
+
+
+@pytest.mark.ee
+def test_integration_period_covers_every_day():
+    """Every day of the year lands in exactly one period.
+
+    CHIRPS is daily, so counting valid observations per period counts days.
+    2016 is a leap year: February must have 29.
+    """
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    roi = ee.Geometry.Rectangle([-6.10, 37.25, -5.85, 37.45])
+    inst = NdviSeasonality(roi=roi, sat="CHIRPS", index="precipitation",
+                           periods=12, key="count",
+                           start_year=2016, end_year=2016)
+    composite = ee.Image(inst.get_year_composite().first())
+    days = composite.reduceRegion(ee.Reducer.max(), roi, 5500,
+                                  maxPixels=1e9).getInfo()
+
+    assert days["january"] == 31
+    assert days["february"] == 29
+    assert days["december"] == 31
+    assert sum(days.values()) == 366
+
+
+@pytest.mark.ee
+def test_integration_peak_period():
+    """get_peak_period() maps the period of the maximum, skipping empty ones.
+
+    Same Doñana ROI as the empty-periods test: Sentinel-2 has no scene there
+    in February and March 2017, so neither month can be the peak of any pixel.
+    """
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
+    inst = NdviSeasonality(
+        roi=roi, periods=12, start_year=2017, end_year=2017,
+        sat="S2", index="ndvi", key="median",
+    )
+
+    peak = inst.get_peak_period(return_peak_value=True)
+    assert peak.bandNames().getInfo() == ["peak_period", "peak_value"]
+
+    stats = peak.select("peak_period").reduceRegion(
+        ee.Reducer.minMax(), roi, 100, maxPixels=1e9
+    ).getInfo()
+    assert 1 <= stats["peak_period_min"] <= stats["peak_period_max"] <= 12
+
+    # February (2) and March (3) have no data at all, so they can never win.
+    # Compared with eq(), not with a frequency histogram: the composite has no
+    # fixed projection, and a histogram at a scale other than the native one
+    # weights resampled pixels and invents fractional counts for values that
+    # no pixel actually holds
+    empty_periods = peak.select("peak_period").eq(2).Or(
+        peak.select("peak_period").eq(3))
+    assert empty_periods.selfMask().reduceRegion(
+        ee.Reducer.count(), roi, 10, maxPixels=1e9
+    ).getInfo()["peak_period"] == 0
+
+    # The peak value is the maximum across the periods. Both sides are built
+    # from the same composite: comparing against a second evaluation of
+    # get_year_composite() would differ by the resampling of the borders
+    composite = inst.get_year_composite().first()
+    direct = inst._peak_from_composite(composite, return_peak_value=True)
+    diff = direct.select("peak_value").subtract(
+        composite.reduce(ee.Reducer.max())).abs()
+    assert diff.reduceRegion(
+        ee.Reducer.max(), roi, 10, maxPixels=1e9
+    ).getInfo()["peak_value"] == pytest.approx(0, abs=1e-6)
+
+    # mask_below drops the pixels that never reach the threshold; with a
+    # threshold above every NDVI value nothing survives
+    empty = inst.get_peak_period(mask_below=2)
+    assert empty.reduceRegion(
+        ee.Reducer.count(), roi, 100, maxPixels=1e9
+    ).getInfo()["peak_period"] == 0
+
+    # One image per year, tagged with its year
+    yearly = NdviSeasonality(
+        roi=roi, periods=4, start_year=2019, end_year=2021,
+        sat="S2", index="ndvi", key="median",
+    ).get_peak_period(per_year=True)
+    assert yearly.aggregate_array("year").getInfo() == [2019, 2020, 2021]
+
+    with pytest.raises(ValueError):
+        inst.get_peak_period(across_years="first")
+
+
+@pytest.mark.ee
+def test_integration_peak_period_ties_and_composite():
+    """The tie count never drops below 1, and composite= is honoured.
+
+    A maximum is reached by at least the period holding it, so 'ties' starts
+    at 1. Integer values are where real ties happen: with key='count' several
+    periods routinely share the same number of observations.
+    """
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    roi = ee.Geometry.Rectangle([-6.02, 37.35, -5.93, 37.42])
+    inst = NdviSeasonality(roi=roi, sat="VIIRS_DAILY", index="quality_flag",
+                           key="count", periods=12,
+                           start_year=2017, end_year=2017)
+
+    peak = inst.get_peak_period(return_ties=True)
+    bounds = peak.select("ties").reduceRegion(
+        ee.Reducer.minMax(), roi, 500, maxPixels=1e9).getInfo()
+    assert bounds["ties_min"] >= 1
+    assert bounds["ties_max"] > 1      # integer counts do tie
+
+    # composite=: the peak of an image built elsewhere, masked or not
+    composite = inst.get_year_composite().first()
+    from_composite = inst.get_peak_period(composite=composite)
+    diff = from_composite.subtract(inst.get_peak_period(across_years="median")).abs()
+    assert diff.reduceRegion(
+        ee.Reducer.max(), roi, 500, maxPixels=1e9
+    ).getInfo()["peak_period"] == 0    # one year: median of it is itself
+
+    with pytest.raises(ValueError):
+        inst.get_peak_period(composite=composite.select(["january", "february"]))
 
 
 if __name__ == "__main__":

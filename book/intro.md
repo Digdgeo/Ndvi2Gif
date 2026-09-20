@@ -28,12 +28,12 @@ Welcome to the comprehensive tutorial for **Ndvi2Gif**, a Python library for mul
 This tutorial will guide you through:
 
 1. **Getting Started**: Installation, authentication, and your first analysis
-2. **User Guide**: One page per module — what each class does, how it is
-   configured, and what every option means
-3. **Tutorials**: Executed notebooks that take a real study area from end to
-   end, with their outputs: land cover in Córdoba, hydroperiod in Doñana,
-   forest and oil palm under the clouds of Borneo
-4. **Reference**: Complete API documentation, indices catalog and datasets
+2. **Tutorials**: One section per subject. Each opens with the page that
+   explains the class and every one of its options, and hangs underneath the
+   executed notebooks that take a real study area from end to end, with their
+   outputs: land cover in Córdoba, hydroperiod in Doñana, forest and oil palm
+   under the clouds of Borneo
+3. **Reference**: Complete API documentation, indices catalog and datasets
 
 ## Quick Example
 

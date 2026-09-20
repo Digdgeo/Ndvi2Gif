@@ -3581,9 +3581,8 @@ class SpatialPhenologyAnalyzer:
         and avoid hitting interactive memory limits.
         """
         p = self.processor
-        start_date, end_date = p.period_dates[period_idx]
-        init = f"{year}{start_date}"
-        ends = f"{year}{end_date}"
+        # Same range as get_period_composite, end date excluded
+        init, ends = p._period_date_range(year, period_idx)
 
         filtered = p.ndvi_col.filterDate(init, ends).map(p.d[p.index])
 

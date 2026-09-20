@@ -99,7 +99,8 @@ Yes, it makes nice GIFs — but it's much more than that.
 ## What you can do with it
 
 - **Compute pixel-wise statistics** over any region and time span — seasonal medians, percentiles, multi-year aggregations, or dispersion (std, variance, range, CV) to map variability instead of level
-- **Monitor 40+ indices** across Sentinel-1/2/3, Landsat (4–9), MODIS, ERA5-Land, and CHIRPS
+- **Monitor 40+ indices** across Sentinel-1/2/3, Landsat (4–9), MODIS, ERA5-Land, CHIRPS, and nighttime lights (VIIRS, DMSP-OLS)
+- **Map the timing of a maximum** with `get_peak_period()` — the month of peak greenness, of deepest flooding, of brightest nighttime light
 - **Analyse wetland hydroperiod** and multi-year flood anomalies with `HydroperiodAnalyzer`
 - **Detect trends and phenology** (SOS, EOS, POS, Length of Season) with `TimeSeriesAnalyzer`
 - **Classify land cover** with multi-temporal feature stacks and Random Forest, SVM, or K-means
@@ -111,7 +112,7 @@ Yes, it makes nice GIFs — but it's much more than that.
 
 ## Supported Sensors
 
-Sentinel-1 (SAR) · Sentinel-2 SR · Sentinel-3 OLCI · Landsat 4–9 SR · MODIS MOD09A1 · ERA5-Land · CHIRPS
+Sentinel-1 (SAR) · Sentinel-2 SR · Sentinel-3 OLCI · Landsat 4–9 SR · MODIS MOD09A1 · ERA5-Land · CHIRPS · VIIRS (monthly and daily) · DMSP-OLS
 
 ---
 

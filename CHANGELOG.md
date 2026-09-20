@@ -9,6 +9,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2026-09-20
+
+### Fixed
+
+- **Every period was missing its last day.** `filterDate` excludes its end date, while
+  `period_dates` stores the *last day* of each period, so January was composited from the
+  1st to the 30th and the 31st never entered any composite — one lost day per period, in
+  every sensor and every `periods` setting, always in the same direction. February made it
+  worse: it is stored with 28 days, so the 29th of a leap year was never composited either.
+  Measured on CHIRPS over Seville, the twelve monthly sums of 2017 added up to 357.4 mm
+  against the 358.4 mm that actually fell.
+
+  A period now ends where the next one begins, and the last one ends on the 1st of January
+  of the following year (`_period_date_range()`). Composites change slightly — less than 1%
+  in everything measured — and they change towards the data that was always meant to be
+  there.
+
+- **`periods=365` raised `Empty date ranges not supported`.** A one-day period built the
+  range `['-01-01', '-01-01']`, which Earth Engine rejects. With the fix each period is a
+  real day, so a daily dataset can be composited at its own resolution — which is what
+  makes the date of the maximum meaningful on VIIRS daily lights.
+
+### Added
+
+- **`get_peak_period()`: a map of *when*, not of *how much*.** For every pixel, the period
+  of the year in which the configured index reaches its maximum — the month of peak
+  greenness, the season of deepest flooding, the month a city shines brightest. The periods
+  are the ones the instance already uses, so the output runs from 1 to `periods` and matches
+  `period_names`. `per_year=True` returns one image per year instead of collapsing them,
+  `return_peak_value=True` keeps the value at the peak, and `mask_below=` drops the pixels
+  whose peak never reaches a threshold, which is how a lights map is restricted to lit
+  pixels.
+
+  It is resolved with `qualityMosaic` over one candidate per period, so a period with no
+  data is masked and simply does not compete, and a pixel masked in every period comes back
+  masked instead of defaulting to period 1.
+
+  Exact ties go to the later period, and rather than inventing a better rule —
+  the first, the middle, the mean of the tied periods — `return_ties=True` adds a `ties`
+  band counting how many periods reach that same maximum, so the pixels where the answer is
+  arbitrary can be found and handled downstream. Ties are not a corner case: on integer
+  values (`key='count'`, a saturated DMSP city) they are routine.
+
+  `composite=` takes the peak of an image built elsewhere instead of compositing again,
+  which is what makes it usable on a processed stack — chlorophyll masked to the water
+  pixels, an index masked to a land cover.
+
+  This is **not** the phenological POS of `SpatialPhenologyAnalyzer`, which smooths the
+  series before locating its maximum. Here the maximum is read off the composites as they
+  are: cruder, far cheaper, and defined for any index and any sensor.
+
+- **Nighttime lights: VIIRS and DMSP-OLS.** Two new values of `sat`, following the pattern
+  of ERA5 and CHIRPS:
+
+  - `sat='VIIRS'` — `NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG`, monthly composites from 2014 at
+    ~500 m, with `avg_rad` (radiance in nW/cm²/sr) and `cf_cvg` (cloud-free observations).
+  - `sat='DMSP'` — `NOAA/DMSP-OLS/NIGHTTIME_LIGHTS`, **annual** composites from 1992 to
+    2013 at ~1 km, with `stable_lights`, `avg_vis`, `avg_lights_x_pct` and `cf_cvg`.
+
+  DMSP is annual, so it cannot resolve timing within a year: use `periods=1` and read the
+  years as the series. The constructor says so when it is given anything else. Its 6-bit
+  digital numbers also saturate over city centres and are not calibrated between satellites,
+  which the documentation now states next to the data.
+
 ## [1.6.1] - 2026-09-19
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 This tutorial shows how to use **ndvi2gif** to monitor inland water bodies with Sentinel-2: detect the flooded extent each month, compute a monthly chlorophyll-a proxy, and study its inter-annual evolution. The workflow relies on the standard `NdviSeasonality` composites and on `TimeSeriesAnalyzer` for trend detection.
 
-A complete, runnable companion notebook with a reservoirs shapefile (CHG — Confederación Hidrográfica del Guadalquivir) is available in [`examples_notebooks/Water_Quality_Embalses.ipynb`](https://github.com/Digdgeo/Ndvi2Gif/blob/master/examples_notebooks/Water_Quality_Embalses.ipynb).
+A complete, executed companion notebook runs this on the reservoirs of the CHG (Confederación Hidrográfica del Guadalquivir): [Chlorophyll Peaks in Reservoirs](../notebooks/10_water_quality_reservoirs.ipynb), which maps the **month each part of a reservoir reaches its maximum chlorophyll** and compares the tail with the dam.
 
 ---
 

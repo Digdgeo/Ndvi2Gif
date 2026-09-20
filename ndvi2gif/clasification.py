@@ -915,6 +915,12 @@ class LandCoverClassifier:
         # Train clusterer
         clusterer = clusterer.train(training_data)
 
+        # Kept like the supervised classifier keeps self.classifier: the
+        # trained model can then be applied to something other than the image
+        # it was trained on — a FeatureCollection of sampled points, another
+        # stack — without clustering the whole scene again
+        self.clusterer = clusterer
+
         # Apply to image
         self.classified_image = self.feature_stack.cluster(clusterer)
 

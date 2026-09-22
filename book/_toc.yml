@@ -13,15 +13,16 @@ parts:
       - file: getting_started/quick_start
       - file: getting_started/roi_options
 
-  # One entry per tutorial. The prose pages explain a class and its options,
-  # the notebooks are executed case studies — but they are all tutorials, and
-  # the reader picks by subject, so they sit at the same level
+  # One executed notebook per subject, in the order a reader meets them: the
+  # general ones first, then one case study per class of the library. The prose
+  # pages that still walk through a class are being dissolved into their
+  # notebook, with the options and caveats moving to Reference
   - caption: Tutorials
     chapters:
-      - file: tutorials/basic_ndvi
-        title: "Basic NDVI Analysis"
       - file: notebooks/01_basic_usage
         title: "Basic Usage"
+      - file: tutorials/basic_ndvi
+        title: "Basic NDVI Analysis"
       - file: tutorials/climate_analysis
         title: "Climate Data (ERA5 & CHIRPS)"
       - file: advanced/sar_processing
@@ -29,13 +30,11 @@ parts:
       - file: advanced/time_series
         title: "Time Series Analysis"
       - file: notebooks/03_time_series_analysis
-        title: "Phenology and Trends (Ebro Delta)"
+        title: "Point Phenology and Trends (Ebro Delta)"
       - file: notebooks/06_stable_pixels
         title: "Stable Pixels & PIF Selection (Doñana)"
       - file: advanced/classification
         title: "Land Cover Classification"
-      - file: notebooks/02_landcover_classification
-        title: "Land Cover Classification (Córdoba)"
       - file: notebooks/07_multisensor_classification
         title: "Multi-sensor Classification (Tawau Hills)"
       - file: advanced/hydroperiod

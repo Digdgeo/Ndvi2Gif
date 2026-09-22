@@ -1223,5 +1223,60 @@ def test_integration_peak_period_ties_and_composite():
         inst.get_peak_period(composite=composite.select(["january", "february"]))
 
 
+@pytest.mark.ee
+def test_integration_peak_statistics_is_circular():
+    """The peak month is a circular variable, and the statistics must know it.
+
+    Feeding known peak periods straight in, bypassing the imagery, lets the
+    answers be checked against ones worked out by hand. The two that matter
+    are the cases an arithmetic mean gets wrong: December and January average
+    to June instead of late December, and a bimodal pixel averages to a month
+    in which nothing ever happened there.
+    """
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    roi = ee.Geometry.Rectangle([-6.0, 37.0, -5.9, 37.1])
+    inst = NdviSeasonality(roi=roi, periods=12, sat="S2", index="ndvi",
+                           start_year=2020, end_year=2022)
+
+    def stats(periods):
+        peaks = ee.ImageCollection([
+            ee.Image.constant(p).rename("peak_period").toInt().clip(roi)
+            for p in periods])
+        return inst.get_peak_statistics(peaks=peaks, min_years=1).reduceRegion(
+            ee.Reducer.first(), roi.centroid(1), 1000).getInfo()
+
+    # every year at the same period: the mean is that period, R is 1
+    for period in (1, 6, 12):
+        out = stats([period] * 3)
+        assert out["circular_mean"] == pytest.approx(period, abs=1e-6)
+        assert out["concentration"] == pytest.approx(1.0, abs=1e-6)
+        assert out["n_years"] == 3
+
+    # the wrap-around: an arithmetic mean would answer 6.5, June
+    out = stats([12, 1])
+    assert out["circular_mean"] == pytest.approx(12.5, abs=1e-6)
+    assert out["concentration"] > 0.9
+
+    out = stats([11, 12, 1, 2])
+    assert out["circular_mean"] == pytest.approx(12.5, abs=1e-6)
+
+    # bimodal: the mean lands in April, and R is what says not to trust it
+    out = stats([2, 6])
+    assert out["circular_mean"] == pytest.approx(4.0, abs=1e-6)
+    assert out["concentration"] == pytest.approx(0.5, abs=1e-6)
+
+    # four periods evenly around the circle cancel exactly
+    assert stats([1, 4, 7, 10])["concentration"] == pytest.approx(0.0, abs=1e-6)
+
+    # min_years masks the pixels with too few valid years
+    peaks = ee.ImageCollection([
+        ee.Image.constant(6).rename("peak_period").toInt().clip(roi)])
+    masked = inst.get_peak_statistics(peaks=peaks, min_years=2).reduceRegion(
+        ee.Reducer.first(), roi.centroid(1), 1000).getInfo()
+    assert masked["circular_mean"] is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

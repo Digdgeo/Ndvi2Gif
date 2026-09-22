@@ -2695,6 +2695,111 @@ class NdviSeasonality:
 
         return peak.select(bands).clip(self.roi)
 
+    def get_peak_statistics(self, mask_below=None, min_years=2, peaks=None):
+        """
+        Circular mean and concentration of the peak period across the years.
+
+        :meth:`get_peak_period` with ``per_year=True`` gives one peak period
+        per year. Summarising those with an ordinary average is wrong, because
+        **the period of the year is a circular variable**: the arithmetic mean
+        of December (12) and January (1) is 6.5 — June — when the answer is
+        late December. The wrap-around is the obvious failure, but not the only
+        one. A pixel that peaks in February in half the years and in June in
+        the other half averages to April, a month in which nothing ever
+        happened there.
+
+        The statistics that are defined on a circle are computed instead. Each
+        period becomes an angle, the unit vectors are averaged, and the mean
+        direction is read back as a period number:
+
+        Each period ``p`` becomes an angle ``theta = (p - 1) * 2*pi / n``; the
+        unit vectors are averaged into ``C = mean(cos theta)`` and
+        ``S = mean(sin theta)``. The **circular mean** is ``atan2(S, C)``, read
+        back as a period number, and the **resultant length**
+        ``R = sqrt(C**2 + S**2)`` is the concentration: how much the years
+        agree.
+
+        ``R`` is the number that makes the mean readable, and it should be
+        reported with it. R near 1 means every year peaked at the same time and
+        the mean is a real date. R near 0 means the years point in every
+        direction, the mean direction is arbitrary, and quoting it alone would
+        invent a season. A bimodal pixel — February and June — has a low R,
+        which is how it can be told from a genuinely April-peaking pixel that
+        the arithmetic mean would have made it look like.
+
+        Parameters
+        ----------
+        mask_below : float, optional
+            Passed to :meth:`get_peak_period`: drop the pixels whose peak value
+            does not reach this threshold, in the years where it does not. The
+            timing of a pixel with no signal is noise. Ignored when ``peaks``
+            is given.
+        min_years : int, optional
+            Mask the pixels with fewer than this many valid years. Two years
+            give a direction but no useful concentration, so raise it when R is
+            going to be interpreted. Default 2.
+        peaks : ee.ImageCollection, optional
+            A collection already produced by ``get_peak_period(per_year=True)``,
+            to avoid recomputing it. Only its ``peak_period`` band is read.
+
+        Returns
+        -------
+        ee.Image
+            Band ``circular_mean``, the mean peak period, fractional and
+            running from 1 to ``self.periods`` (a value of 12.6 with
+            ``periods=12`` means "late December, a fifth of the way into
+            January"); band ``concentration``, R between 0 and 1; and band
+            ``n_years``, how many years the pixel contributed.
+
+        Notes
+        -----
+        R has no threshold that makes it "significant"; it is a descriptive
+        statistic. As a rough guide over yearly data, above about 0.8 the years
+        cluster tightly, below about 0.4 the mean carries little meaning. If a
+        test is wanted, R is the statistic the Rayleigh test of uniformity is
+        built on.
+
+        Examples
+        --------
+        Month of peak greenness and how repeatable it is::
+
+            >>> processor = NdviSeasonality(roi=roi, periods=12, sat='S2',
+            ...                             start_year=2018, end_year=2024)
+            >>> stats = processor.get_peak_statistics()
+            >>> reliable = stats.updateMask(stats.select('concentration').gt(0.7))
+
+        Reusing a collection of peaks that is already in hand::
+
+            >>> peaks = processor.get_peak_period(per_year=True, mask_below=0.3)
+            >>> stats = processor.get_peak_statistics(peaks=peaks)
+        """
+        if peaks is None:
+            peaks = self.get_peak_period(per_year=True, mask_below=mask_below)
+
+        periods = ee.ImageCollection(peaks).select('peak_period')
+        step = 2 * math.pi / self.periods
+
+        # period 1 -> angle 0, so the angles tile the circle exactly
+        angles = periods.map(lambda image: image.subtract(1).multiply(step))
+        cos_mean = angles.map(lambda image: image.cos()).mean()
+        sin_mean = angles.map(lambda image: image.sin()).mean()
+
+        concentration = cos_mean.hypot(sin_mean).rename('concentration')
+
+        # Earth Engine's atan2 takes the receiver as x and the argument as y,
+        # the opposite order to math.atan2, so this reads cos.atan2(sin) to
+        # mean atan2(S, C). Getting it backwards fails silently: the
+        # concentration stays right and only the mean direction is wrong.
+        # Then, atan2 returns (-pi, pi]; shifting before the modulo keeps the
+        # result positive, so it maps back onto period numbers 1..periods
+        mean_angle = cos_mean.atan2(sin_mean).add(2 * math.pi).mod(2 * math.pi)
+        circular_mean = mean_angle.divide(step).add(1).rename('circular_mean')
+
+        n_years = periods.count().rename('n_years')
+
+        stats = circular_mean.addBands(concentration).addBands(n_years)
+        return stats.updateMask(n_years.gte(min_years)).clip(self.roi)
+
     # Index calculation methods (same as original - keeping all of them)
     def get_raw_band(self, image, band):
         """

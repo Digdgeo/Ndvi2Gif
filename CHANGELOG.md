@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`NdviSeasonality.get_peak_statistics()`** — the circular mean and the
+  concentration of the peak period across the years, because the period of the
+  year is a circular variable and an ordinary average of it is wrong. December
+  and January average to 6.5, June, when the answer is late December; and a
+  pixel that peaks in February half the years and in June the rest averages to
+  April, a month in which nothing ever happened there.
+
+  Returns `circular_mean` (fractional period number), `concentration` — the
+  resultant length R, between 0 and 1 — and `n_years`. R is what makes the mean
+  readable and should be reported with it: near 1 the years agree and the mean
+  is a real date, near 0 they point everywhere and the mean is arbitrary. The
+  bimodal pixel above comes out as April *with R = 0.5*, which is how it can be
+  told from a pixel that genuinely peaks in April.
+
 ### Fixed
 
 - **Every Sentinel-3 index was computed on raw radiance, and NDVI came out with

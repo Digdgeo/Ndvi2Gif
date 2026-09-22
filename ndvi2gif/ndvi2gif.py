@@ -56,6 +56,7 @@ License: MIT
 
 import os
 import ee
+import math
 import geemap
 import requests
 import zipfile
@@ -152,6 +153,148 @@ def _to_reflectance(image):
                'Nir', 'Swir1', 'Swir2']
     present = image.bandNames().filter(ee.Filter.inList('item', optical))
     return image.addBands(image.select(present).multiply(0.0001), None, True)
+
+
+# Band-averaged extraterrestrial solar irradiance of the OLCI bands, in
+# W m-2 um-1, keyed by the names ndvi2gif gives the bands. Computed by
+# convolving the Thuillier et al. (2003) solar spectrum with ESA's mean OLCI
+# spectral response functions (S3A_OL_SRF_20160713_mean_rsr.nc4 and its S3B
+# equivalent), which is how a band-averaged F0 is defined.
+#
+# These numbers matter because Earth Engine serves COPERNICUS/S3/OLCI as
+# top-of-atmosphere *radiance*. F0 spans a factor of 2.8 across the sixteen
+# bands loaded here (1937.6 at Oa04 against 699.7 at Oa21), and unlike the
+# illumination terms it does NOT cancel in a band ratio, so every index
+# computed straight from the radiance was wrong -- the same class of bug as
+# the Sentinel-2 and MODIS scale factors fixed in 1.6.0.
+#
+# S3A and S3B differ by 0.10% on average and 1.39% at worst (Oa01 only).
+_OLCI_SOLAR_IRRADIANCE = {
+    'S3A': {
+        'Violet': 1515.868,   # Oa01
+        'Blue': 1708.009,   # Oa02
+        'Blue2': 1890.814,   # Oa03
+        'Blue_Green': 1937.628,   # Oa04
+        'Green': 1918.784,   # Oa05
+        'Green2': 1796.865,   # Oa06
+        'Red': 1649.274,   # Oa07
+        'Red2': 1530.055,   # Oa08
+        'Red3': 1494.781,   # Oa09
+        'Red_Edge1': 1468.962,   # Oa10
+        'Red_Edge2': 1402.691,   # Oa11
+        'Nir': 1266.557,   # Oa12
+        'Nir2': 1173.373,   # Oa16
+        'Nir3': 959.221,   # Oa17
+        'Nir4': 930.995,   # Oa18
+        'Nir5': 699.731,   # Oa21
+    },
+    'S3B': {
+        'Violet': 1536.937,   # Oa01
+        'Blue': 1709.147,   # Oa02
+        'Blue2': 1891.177,   # Oa03
+        'Blue_Green': 1936.118,   # Oa04
+        'Green': 1920.022,   # Oa05
+        'Green2': 1797.488,   # Oa06
+        'Red': 1649.397,   # Oa07
+        'Red2': 1530.440,   # Oa08
+        'Red3': 1495.450,   # Oa09
+        'Red_Edge1': 1469.715,   # Oa10
+        'Red_Edge2': 1403.510,   # Oa11
+        'Nir': 1266.454,   # Oa12
+        'Nir2': 1174.141,   # Oa16
+        'Nir3': 959.101,   # Oa17
+        'Nir4': 931.341,   # Oa18
+        'Nir5': 699.833,   # Oa21
+    },
+}
+
+_OLCI_BANDS = list(_OLCI_SOLAR_IRRADIANCE['S3A'])
+
+
+def _solar_geometry(image):
+    """
+    Cosine of the solar zenith angle and the Earth-Sun distance factor.
+
+    Earth Engine's OLCI collection carries no solar angles: the SAFE product
+    holds them in tie-point grids that are not ingested, so they have to be
+    computed. This is the NOAA solar position algorithm, good to about a tenth
+    of a degree, which is far below the other error terms here.
+
+    Returns a two-band image, ``cos_sza`` per pixel (the angle changes across
+    a 1270 km swath, so a scene-wide constant would not do) and ``e0``, the
+    inverse squared Earth-Sun distance in AU, constant for the scene.
+    """
+    date = ee.Date(image.get('system:time_start'))
+    doy = ee.Number(date.getRelative('day', 'year')).add(1)
+    hour = ee.Number(date.getFraction('day')).multiply(24)
+
+    # fractional year, radians
+    gamma = doy.subtract(1).add(hour.subtract(12).divide(24)) \
+               .multiply(2 * math.pi / 365)
+
+    def harmonic(*terms):
+        """Sum of a0 + sum(an*cos(n*gamma) + bn*sin(n*gamma)), as an ee.Number."""
+        total = ee.Number(terms[0])
+        for n, (a, b) in enumerate(zip(terms[1::2], terms[2::2]), start=1):
+            angle = gamma.multiply(n)
+            total = total.add(angle.cos().multiply(a)).add(angle.sin().multiply(b))
+        return total
+
+    # equation of time, minutes
+    eqtime = harmonic(0.000075, 0.001868, -0.032077,
+                      -0.014615, -0.040849).multiply(229.18)
+    # solar declination, radians
+    decl = harmonic(0.006918, -0.399912, 0.070257,
+                    -0.006758, 0.000907, -0.002697, 0.00148)
+    # eccentricity correction, 1/d^2 with d in AU
+    e0 = harmonic(1.00011, 0.034221, 0.00128, 0.000719, 0.000077)
+
+    coords = ee.Image.pixelLonLat()
+    lat = coords.select('latitude').multiply(math.pi / 180)
+    # true solar time, minutes, then the hour angle in radians
+    true_solar = coords.select('longitude').multiply(4) \
+                       .add(eqtime).add(hour.multiply(60))
+    hour_angle = true_solar.divide(4).subtract(180).multiply(math.pi / 180)
+
+    cos_sza = lat.sin().multiply(ee.Number(decl.sin())) \
+                 .add(lat.cos().multiply(ee.Number(decl.cos())).multiply(hour_angle.cos()))
+
+    return cos_sza.rename('cos_sza').addBands(ee.Image.constant(e0).rename('e0'))
+
+
+def _s3_to_reflectance(image):
+    """
+    Convert Sentinel-3 OLCI top-of-atmosphere radiance to TOA reflectance.
+
+    ``rho = pi * L * d^2 / (F0 * cos(theta_s))``, with F0 taken per band and
+    per spacecraft from :data:`_OLCI_SOLAR_IRRADIANCE` and the geometry from
+    :func:`_solar_geometry`.
+
+    Note what each term does to an index. ``cos(theta_s)`` and ``d^2`` are the
+    same for every band, so they cancel in any band ratio and only matter for
+    absolute values and for indices that are not ratios. ``F0`` does not
+    cancel, which is why the radiance this replaces gave wrong answers even
+    for NDVI.
+
+    This is TOA reflectance, not surface reflectance: no atmospheric
+    correction is applied, and over water in particular the signal is
+    dominated by Rayleigh scattering.
+    """
+    spacecraft = ee.String(image.get('spacecraft'))
+    irradiance = ee.Dictionary(ee.Algorithms.If(
+        spacecraft.compareTo('S3B').eq(0),
+        _OLCI_SOLAR_IRRADIANCE['S3B'],
+        _OLCI_SOLAR_IRRADIANCE['S3A']))
+
+    present = image.bandNames().filter(ee.Filter.inList('item', _OLCI_BANDS))
+    f0 = ee.Image.constant(irradiance.values(present)).rename(present)
+
+    geometry = _solar_geometry(image)
+    illumination = f0.multiply(geometry.select('cos_sza')) \
+                     .multiply(geometry.select('e0'))
+
+    reflectance = image.select(present).multiply(math.pi).divide(illumination)
+    return image.addBands(reflectance, None, True)
 
 
 def scale_ETM(image):
@@ -1703,7 +1846,7 @@ class NdviSeasonality:
             'Violet', 'Blue', 'Blue2', 'Blue_Green', 'Green', 'Green2',
             'Red', 'Red2', 'Red3', 'Red_Edge1', 'Red_Edge2', 'Nir',
             'Nir2', 'Nir3', 'Nir4', 'Nir5'
-        ]).filterBounds(self.roi)
+        ]).filterBounds(self.roi).map(_s3_to_reflectance)
 
         # ============= ERA5-LAND CLIMATE REANALYSIS CONFIGURATION =============
         # ERA5-Land daily aggregated climate variables (1950-present, ~11km resolution)

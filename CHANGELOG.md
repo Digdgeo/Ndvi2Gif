@@ -9,6 +9,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Every Sentinel-3 index was computed on raw radiance, and NDVI came out with
+  the wrong sign.** `COPERNICUS/S3/OLCI` is top-of-atmosphere *radiance*, and the
+  collection was loaded as if it were reflectance. Because the solar irradiance
+  falls with wavelength at roughly the rate a vegetation spectrum rises, the
+  radiances are nearly flat across bands — measured over Doñana in July 2023:
+  93.9 at Oa02 against 106.4 at Oa17 — so NDVI sat near zero whatever the
+  surface. That scene returned **NDVI −0.022 on radiance and +0.208 on
+  reflectance**: not a bias, a change of sign, reading vegetation as bare ground.
+
+  The collection is now converted with `rho = pi * L * d^2 / (F0 * cos(theta_s))`.
+  The band-averaged solar irradiance `F0` is tabulated per band and per
+  spacecraft, from the Thuillier et al. (2003) solar spectrum convolved with
+  ESA's mean OLCI spectral response functions; across the sixteen bands loaded it
+  spans a factor of 2.8, and unlike the illumination terms it does **not** cancel
+  in a band ratio, which is why even NDVI was wrong. Earth Engine does not ingest
+  the solar-angle tie-point grids, so `cos(theta_s)` is computed per pixel with
+  the NOAA solar position algorithm; checked against the solar zenith angle
+  Sentinel-2 reports, over five sites and four seasons, it agrees to 0.23° on
+  average and 0.59° at worst — about 0.5% of absolute reflectance and nothing at
+  all in a ratio.
+
+  Same class of bug as the Sentinel-2 and MODIS scale factors fixed in 1.6.0.
+  Note this is TOA reflectance, not surface reflectance: no atmospheric
+  correction is applied, and over water the signal is dominated by Rayleigh
+  scattering.
+
+- `TimeSeriesAnalyzer.extract_time_series()` spent one `reduceRegion` per period
+  before discovering that the extraction geometry could not intersect the ROI,
+  then returned an empty frame that failed later as a `KeyError` on a missing
+  key. It now checks the intersection once, up front, and raises naming the ROI
+  centroid; when the geometry does intersect but every period is empty it raises
+  as its docstring always promised, naming the likely causes.
+
+- `get_stats()` returned a single row instead of one row per feature.
+
 ## [1.6.2] - 2026-09-20
 
 ### Fixed

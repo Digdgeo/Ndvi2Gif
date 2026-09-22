@@ -27,7 +27,33 @@ Built on top of [Google Earth Engine](https://github.com/google/earthengine-api)
 
 ---
 
-## ✨ What's New in v1.6.0
+## ✨ What's New in v1.6.3
+
+> **⚠️ Every Sentinel-3 index changes, and NDVI changed sign.** `COPERNICUS/S3/OLCI` is
+> top-of-atmosphere *radiance* and was being read as if it were reflectance. Solar irradiance
+> falls with wavelength at roughly the rate a vegetation spectrum rises, so the radiances came
+> out nearly flat across bands and **S3 NDVI sat near zero whatever the surface**: one Doñana
+> scene gave −0.022 on radiance against +0.208 on reflectance, reading vegetation as bare
+> ground. The collection is now converted to TOA reflectance with per-band, per-spacecraft
+> solar irradiance. **Anything computed from Sentinel-3 indices should be recomputed.** Note
+> this is TOA, not surface reflectance: over water the signal is dominated by Rayleigh scattering.
+
+**Water masking is now a parameter, not an improvisation** — `get_water_mask()` offers
+`'dynamic'`, `'permanent'`, `'maximum'`, the JRC Global Surface Water layer, or a zone you
+supply. Over Iznájar in 2022 the same reservoir measures 6.47 km² permanent against 10.95 at
+maximum extent: a factor of 1.7 in the surface a chlorophyll mean is taken over. The masked
+area per period is recorded alongside, because with a dynamic mask each period is averaged
+over a different population of pixels.
+
+**The peak month is a circular variable** — `get_peak_statistics()` returns the circular mean
+and the concentration R instead of an ordinary average, which would place December and January
+in June. R is what says whether the mean means anything.
+
+**One nighttime lights record, 1992 to today** — `calibrate_nighttime_lights()` fits the
+DMSP-to-VIIRS conversion on your own ROI. On the Andalusian coast it takes the artificial step
+at the sensor change from −64% down to −12%.
+
+Previously, in v1.6.0:
 
 > **⚠️ Values change for some indices — please read before upgrading.** A review of every index against its publication found that **Sentinel-2 and MODIS bands were used as integers × 10000** instead of reflectance: band ratios such as NDVI were unaffected, but SAVI, EVI, LAI, AVI, WI2015, CRI and a few others came out wrong on those sensors (EVI 2–3 times too high). **Sentinel-1 was processed and indexed in dB** instead of linear power, and its terrain correction had no effect because the DEM lost its projection. Several formulas were also wrong (`aweinsh`, `wi2015`, `nmi`, `rfdi`, `dpsvi`). All are fixed and tested; results computed with the affected indices should be recomputed. The [CHANGELOG](CHANGELOG.md) lists every index and how much it changes.
 

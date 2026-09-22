@@ -46,6 +46,8 @@ parts:
         title: "Land Cover Classification"
       - file: notebooks/07_multisensor_classification
         title: "Multi-sensor Classification (Tawau Hills)"
+      - file: notebooks/08_unsupervised_forest
+        title: "Unsupervised Clustering (Tawau Hills)"
 
   - caption: Water
     chapters:

@@ -37,6 +37,8 @@ parts:
         title: "Time Series Analysis"
       - file: notebooks/03_time_series_analysis
         title: "Point Phenology and Trends (Ebro Delta)"
+      - file: notebooks/04_phenology_rasters
+        title: "Phenology Rasters (Isla Mayor)"
       - file: notebooks/06_stable_pixels
         title: "Stable Pixels & PIF Selection (Doñana)"
 

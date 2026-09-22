@@ -2999,6 +2999,217 @@ class NdviSeasonality:
         return {year: [row['properties'].get(name) for name in self.period_names]
                 for year, row in zip(years, rows)}
 
+    # DMSP-OLS runs to 2013 and the stray-light corrected VIIRS product the
+    # library uses for `sat='VIIRS'` only starts in 2014, so the fit has to
+    # reach for the uncorrected one, which begins in April 2012
+    _VIIRS_OVERLAP_PRODUCT = 'NOAA/VIIRS/DNB/MONTHLY_V1/VCMCFG'
+    _DMSP_SATURATION = 63
+
+    def calibrate_nighttime_lights(self, n_pixels=5000, seed=7,
+                                   compare_products=True):
+        """
+        Fit the conversion from VIIRS radiance to DMSP-like digital numbers.
+
+        The two nighttime lights records do not join up. DMSP-OLS (1992-2013)
+        is a 6-bit sensor with no on-board calibration; VIIRS (2012-present)
+        reports radiance in nW/cm2/sr. Plotting one after the other produces a
+        step at the sensor change that is pure artefact — measured on the
+        Andalusian coast, "lit area" fell from 7888 km2 in 2013 to 2909 km2 in
+        2014 simply because ``DN >= 20`` and ``>= 5 nW/cm2/sr`` are two
+        different definitions of lit.
+
+        The records do overlap, so the conversion can be fitted on this ROI
+        rather than borrowed from a paper about somewhere else. **VIIRS is
+        converted into DMSP-like values, not the other way round**: DMSP
+        saturates at 63 over city centres, and a saturating 6-bit integer
+        cannot be inverted into an unbounded radiance.
+
+        Parameters
+        ----------
+        n_pixels : int, optional
+            Pixels sampled for the fit. Default 5000.
+        seed : int, optional
+            Sampling seed, so a fit can be repeated. Default 7.
+        compare_products : bool, optional
+            Also measure how far the VIIRS product used for the fit is from
+            the one ``sat='VIIRS'`` composites, over the years where both
+            exist. Default True. See the notes.
+
+        Returns
+        -------
+        dict
+            ``coefficients`` (``a``, ``b``, the ``ceiling`` and the ``model``
+            as a string), ``r2``, ``n`` (pixels that entered the fit),
+            ``years`` used, and, with ``compare_products``,
+            ``product_difference``: the median relative difference between the
+            two VIIRS products over this ROI.
+
+        Notes
+        -----
+        **The fit rests on two annual DMSP composites, 2012 and 2013**, not on
+        twenty-one independent dates. The regression runs across pixels, which
+        is how the literature does it, but the ``r2`` describes agreement
+        between two images over space, not a time series.
+
+        **The coefficients are fitted on a different VIIRS product from the one
+        they will be applied to.** DMSP ends in 2013 and the stray-light
+        corrected VCMSLCFG only starts in 2014, so the fit uses VCMCFG.
+        The two differ mainly at high latitudes in summer;
+        ``product_difference`` measures the gap over *your* ROI so the
+        assumption can be judged rather than assumed.
+
+        **The model is saturating, and deliberately so.** Measured over the
+        Andalusian coast, the mean digital number rises 10.6, 26.1, 33.0,
+        44.9, 51.8, 58.8, 61.2, 62.5 across radiance bins from under 1 to over
+        80 nW/cm2/sr: monotone, flattening against the 63 ceiling, with 85% of
+        the brightest bin saturated. A polynomial fitted to that turns over —
+        a quadratic predicted DN 0 for the centre of Seville — so
+        ``63 * (1 - exp(-a * x**b))`` is used instead, which cannot exceed the
+        ceiling or fall as radiance rises. It linearises, so the fit is still
+        a single linear regression.
+
+        **Saturated pixels are excluded.** A DMSP pixel at 63 records only
+        that the sensor ran out of range, and the linearisation has no
+        logarithm there.
+
+        Examples
+        --------
+        >>> lights = NdviSeasonality(roi=city, sat='VIIRS', index='avg_rad',
+        ...                          periods=12, start_year=2014, end_year=2024)
+        >>> fit = lights.calibrate_nighttime_lights()
+        >>> fit['r2'], fit['coefficients']
+        >>> dmsp_like = lights.to_dmsp_like(some_viirs_image, fit['coefficients'])
+        """
+        dmsp_col = ee.ImageCollection('NOAA/DMSP-OLS/NIGHTTIME_LIGHTS')
+        viirs_col = ee.ImageCollection(self._VIIRS_OVERLAP_PRODUCT)
+
+        years = [2012, 2013]
+        pairs = []
+        for year in years:
+            dmsp = dmsp_col.filterDate(f'{year}-01-01', f'{year + 1}-01-01') \
+                           .select('stable_lights').mean()
+            # A collection reduction has no projection of its own, so it would
+            # default to WGS84 at one degree and reduceResolution below would
+            # silently work on that grid instead of the DMSP one
+            grid = ee.Image(dmsp_col.first()).projection()
+            dmsp = dmsp.setDefaultProjection(grid)
+
+            viirs = viirs_col.filterDate(f'{year}-01-01', f'{year + 1}-01-01') \
+                             .select('avg_rad').mean()
+            viirs = viirs.setDefaultProjection(
+                ee.Image(viirs_col.first()).projection())
+            # VIIRS is finer than DMSP, so it is aggregated onto the DMSP grid
+            viirs = viirs.reduceResolution(ee.Reducer.mean(), maxPixels=1024) \
+                         .reproject(grid)
+
+            valid = (dmsp.lt(self._DMSP_SATURATION)
+                     .And(dmsp.gt(0))
+                     .And(viirs.gt(0)))
+            pairs.append(viirs.rename('x').addBands(dmsp.rename('y'))
+                              .updateMask(valid))
+
+        samples = ee.FeatureCollection([
+            pair.sample(region=self.roi, scale=1000, numPixels=n_pixels // 2,
+                        seed=seed + i, dropNulls=True)
+            for i, pair in enumerate(pairs)]).flatten()
+
+        # The relationship is monotone and saturates towards 63, which a
+        # polynomial cannot represent without turning over: a quadratic fitted
+        # here curved back down above ~50 nW and predicted DN 0 for the centre
+        # of Seville. A saturating model cannot do that,
+        #
+        #     DN = 63 * (1 - exp(-a * x**b))
+        #
+        # and it linearises, so the fit is still one linear regression:
+        #
+        #     log(-log(1 - DN/63)) = log(a) + b * log(x)
+        #
+        # Saturated pixels have to go, since 1 - 63/63 = 0 has no logarithm --
+        # and they carry no information anyway, only that the sensor ran out
+        # of range.
+        def design(feature):
+            x = ee.Number(feature.get('x'))
+            dn = ee.Number(feature.get('y'))
+            response = ee.Number(1).subtract(dn.divide(self._DMSP_SATURATION)) \
+                         .log().multiply(-1).log()
+            return feature.set('log_x', x.log(), 'one', 1, 'response', response)
+
+        prepared = samples.map(design)
+        fitted = prepared.reduceColumns(
+            ee.Reducer.linearRegression(numX=2, numY=1),
+            ['one', 'log_x', 'response']).getInfo()
+
+        intercept, b = (row[0] for row in fitted['coefficients'])
+        a = math.exp(intercept)
+        coefficients = {'a': a, 'b': b, 'ceiling': self._DMSP_SATURATION,
+                        'model': '63 * (1 - exp(-a * x**b))'}
+
+        # r2 against the digital numbers themselves, not the linearised form,
+        # because that is the scale the answer is read on
+        def predict(feature):
+            x = ee.Number(feature.get('x'))
+            value = ee.Number(1).subtract(
+                x.pow(b).multiply(-a).exp()).multiply(self._DMSP_SATURATION)
+            return feature.set('fit', value)
+
+        stats = prepared.map(predict).reduceColumns(
+            ee.Reducer.pearsonsCorrelation(), ['fit', 'y']).getInfo()
+        r2 = stats['correlation'] ** 2
+
+        result = {'coefficients': coefficients, 'r2': r2,
+                  'n': samples.size().getInfo(), 'years': years}
+
+        if compare_products:
+            result['product_difference'] = self._viirs_product_difference()
+        return result
+
+    def _viirs_product_difference(self, year=2015):
+        """Median relative gap between the two VIIRS monthly products."""
+        uncorrected = ee.ImageCollection(self._VIIRS_OVERLAP_PRODUCT) \
+            .filterDate(f'{year}-01-01', f'{year + 1}-01-01').select('avg_rad').mean()
+        corrected = ee.ImageCollection('NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG') \
+            .filterDate(f'{year}-01-01', f'{year + 1}-01-01').select('avg_rad').mean()
+
+        lit = corrected.gt(1)
+        relative = uncorrected.subtract(corrected).abs().divide(corrected) \
+                              .updateMask(lit)
+        value = relative.reduceRegion(
+            ee.Reducer.median(), self.roi, 500,
+            maxPixels=1e9, bestEffort=True).values().get(0)
+        return ee.Number(value).getInfo()
+
+    def to_dmsp_like(self, image, coefficients, band='avg_rad'):
+        """
+        Apply a fitted conversion, turning VIIRS radiance into DMSP-like DN.
+
+        See :meth:`calibrate_nighttime_lights`. The output is clamped to the
+        DMSP range, 0 to 63, because values outside it do not exist on that
+        scale — though a pixel pushed to 63 is at the ceiling for the same
+        reason the excluded pixels were, and means only "brighter than DMSP
+        could record".
+
+        Parameters
+        ----------
+        image : ee.Image
+            A VIIRS image or composite.
+        coefficients : dict
+            The ``coefficients`` entry of the fit.
+        band : str, optional
+            Radiance band to convert. Default ``'avg_rad'``.
+
+        Returns
+        -------
+        ee.Image
+            One band, ``dmsp_like``.
+        """
+        radiance = ee.Image(image).select(band).max(0)
+        a = coefficients['a']
+        b = coefficients['b']
+        ceiling = coefficients.get('ceiling', self._DMSP_SATURATION)
+        converted = ee.Image.constant(1).subtract(
+            radiance.pow(b).multiply(-a).exp()).multiply(ceiling)
+        return converted.clamp(0, self._DMSP_SATURATION).rename('dmsp_like')
+
     # Index calculation methods (same as original - keeping all of them)
     def get_raw_band(self, image, band):
         """

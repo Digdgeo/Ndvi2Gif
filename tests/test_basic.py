@@ -1326,5 +1326,42 @@ def test_integration_water_mask_modes_are_ordered():
         inst.get_water_mask(water_index="ndvi")
 
 
+@pytest.mark.ee
+def test_integration_dmsp_conversion_is_monotone_and_bounded():
+    """The VIIRS to DMSP conversion may never fall, nor leave 0..63.
+
+    This is the regression that nearly shipped. A quadratic fitted to the
+    overlap curved back down above about 50 nW/cm2/sr, so the centre of
+    Seville at 107 nW came out as digital number 0 — a saturated city read as
+    unlit. The saturating model cannot do that, and this pins it down.
+    """
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    roi = ee.Geometry.Rectangle([-6.1, 37.3, -5.9, 37.5])
+    inst = NdviSeasonality(roi=roi, sat="VIIRS", index="avg_rad", key="mean",
+                           periods=12, start_year=2015, end_year=2015)
+
+    # coefficients of the shape the fit returns, from the Andalusian coast
+    coefficients = {"a": 0.3489, "b": 0.6810, "ceiling": 63}
+
+    radiances = [0.0, 0.1, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 1000]
+    converted = [
+        inst.to_dmsp_like(
+            ee.Image.constant(value).rename("avg_rad"), coefficients
+        ).reduceRegion(ee.Reducer.first(), roi.centroid(1), 1000
+                       ).getInfo()["dmsp_like"]
+        for value in radiances
+    ]
+
+    assert all(0 <= v <= 63 for v in converted), converted
+    assert converted == sorted(converted), converted
+    assert converted[0] == pytest.approx(0.0, abs=1e-9)   # no light, no lights
+    assert converted[-1] == pytest.approx(63.0, abs=0.1)  # a city saturates
+
+    # the bright end must not collapse: this is what the quadratic got wrong
+    assert converted[radiances.index(100)] > converted[radiances.index(10)]
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

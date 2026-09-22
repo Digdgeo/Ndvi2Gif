@@ -13,6 +13,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`NdviSeasonality.calibrate_nighttime_lights()` and `to_dmsp_like()`** — fit
+  the conversion from VIIRS radiance to DMSP-like digital numbers on your own
+  ROI, so the 1992-present lights record can be read as one series. Plotting one
+  record after the other produces a step at the sensor change that is pure
+  artefact: on the Andalusian coast "lit area" fell from 7888 km² in 2013 to
+  2909 km² in 2014 only because `DN >= 20` and `>= 5 nW/cm²/sr` are two
+  different definitions of lit.
+
+  VIIRS is converted into DMSP, not the other way round, because a saturating
+  6-bit integer cannot be inverted into an unbounded radiance. The model is
+  `DN = 63 * (1 - exp(-a * x**b))`, which saturates and cannot fall as radiance
+  rises; it linearises, so the fit is still a single linear regression, and
+  saturated pixels are excluded. Returns the coefficients, R², the pixel count
+  and the years used.
+
+  Two caveats are measured rather than assumed. The fit rests on the **two**
+  annual DMSP composites that overlap VIIRS, 2012 and 2013, and runs across
+  pixels, so R² describes agreement between two images over space. And because
+  DMSP ends in 2013 while the stray-light corrected VIIRS product only starts in
+  2014, the fit must use the uncorrected one; `product_difference` reports how
+  far apart the two VIIRS products are over your ROI — 9.8% on the Andalusian
+  coast — so the transfer can be judged.
+
 - **`NdviSeasonality.get_water_mask()`** — which pixels count as water, as an
   explicit parameter instead of something each analysis improvises. Five modes:
   `'dynamic'` (the water present in each period of each year, the only one that

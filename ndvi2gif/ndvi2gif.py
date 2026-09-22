@@ -2800,6 +2800,205 @@ class NdviSeasonality:
         stats = circular_mean.addBands(concentration).addBands(n_years)
         return stats.updateMask(n_years.gte(min_years)).clip(self.roi)
 
+    def get_water_mask(self, mode='dynamic', water_index='mndwi', threshold=0.0,
+                       occurrence=90, return_area=False):
+        """
+        Water masks for the configured period grid, one band per period.
+
+        Which pixels count as water is a choice, not a fact, and it changes
+        the answer: over Iznajar in a single July, NDWI called 11.1 km2 water,
+        MNDWI 10.4 and AWEInsh 7.0. Leaving that choice to be improvised in
+        each analysis is how two studies of the same reservoir stop being
+        comparable, so it is a parameter here.
+
+        Parameters
+        ----------
+        mode : str, tuple or ee.Geometry, optional
+            How the water surface is defined.
+
+            * ``'dynamic'`` (default) — the water detected in *each period of
+              each year*. Follows a drawdown, and is the only mode that can.
+            * ``'permanent'`` — the pixels that are water in **every period
+              that has data**: the minimum extent, the pool that never dries.
+              Periods with no scene are skipped rather than counted as dry,
+              so one cloudy month does not empty the pool.
+            * ``'maximum'`` — the pixels that are water in **any** period: the
+              maximum extent.
+            * ``('jrc', occurrence)`` or ``'jrc'`` — JRC Global Surface Water
+              occurrence at or above ``occurrence`` percent.
+            * an ``ee.Geometry``, ``ee.FeatureCollection``, or a path to a
+              shapefile or GeoJSON — a zone you supply.
+        water_index : str, optional
+            Index used to detect water in the first three modes. One of
+            ``'ndwi'``, ``'mndwi'``, ``'awei'``, ``'aweinsh'``, ``'wi2015'``.
+            Default ``'mndwi'``, which handles built-up surroundings better
+            than NDWI.
+        threshold : float, optional
+            A pixel is water where the index exceeds this. Default 0.0.
+        occurrence : int, optional
+            Occurrence percentage for the ``'jrc'`` mode. Default 90.
+        return_area : bool, optional
+            If True, also return the masked area in km2 per year and period.
+
+        Returns
+        -------
+        ee.ImageCollection or tuple
+            One image per year, each with one band per period named after
+            :attr:`period_names`, holding 1 on water and masked elsewhere. The
+            static modes repeat the same mask in every band and every year, so
+            that consumers do not have to special-case them. With
+            ``return_area=True``, a ``(collection, areas)`` tuple where
+            ``areas`` is ``{year: [km2, ...]}``.
+
+        Notes
+        -----
+        **Report the area whenever the mask is dynamic.** Each period is then
+        averaged over a different population of pixels, so a change in the
+        series mixes a change in the quantity with a change in what was
+        measured. The area is what separates the two, which is why
+        ``return_area`` exists and why :attr:`water_mask_area` is filled in.
+
+        **``'maximum'`` is the one that misleads.** It includes pixels that
+        are dry most of the time, and the chlorophyll index of a dry pixel is
+        grassland. It defines a study domain; it does not compute a mean over
+        water.
+
+        **The JRC layer ends in December 2021** (GSW 1.4 covers 1984-03 to
+        2021-12). It is stable and comparable across sites, which is its
+        virtue, but it knows nothing about a drought that came later.
+
+        Examples
+        --------
+        Chlorophyll over the water actually present in each month::
+
+            >>> ndci = NdviSeasonality(roi=reservoir, sat='S2', index='ndci',
+            ...                        periods=12, start_year=2020, end_year=2024)
+            >>> masks, area = ndci.get_water_mask(return_area=True)
+            >>> composites = ndci.get_year_composite()
+
+        The pool that never dries, as a single image::
+
+            >>> permanent = ee.Image(ndci.get_water_mask('permanent').first())
+
+        A fixed domain from the global layer::
+
+            >>> domain = ndci.get_water_mask(('jrc', 95))
+        """
+        from .hydroperiod import HydroperiodAnalyzer
+
+        occurrence_pct = occurrence
+        if isinstance(mode, (tuple, list)):
+            if len(mode) != 2 or mode[0] != 'jrc':
+                raise ValueError(
+                    "a tuple mode must be ('jrc', occurrence), got "
+                    f"{mode!r}"
+                )
+            mode, occurrence_pct = 'jrc', mode[1]
+
+        years = list(range(self.start_year, self.end_year + 1))
+
+        # --- a zone the user supplies: no detection at all
+        if not isinstance(mode, str):
+            zone = mode
+            if isinstance(zone, str):
+                zone = (geemap.shp_to_ee(zone) if zone.endswith('.shp')
+                        else geemap.geojson_to_ee(zone))
+            if isinstance(zone, ee.FeatureCollection):
+                zone = zone.geometry()
+            static = ee.Image.constant(1).clip(zone).rename('water')
+            return self._broadcast_water_mask(static, years, return_area)
+
+        if mode == 'jrc':
+            gsw = ee.Image('JRC/GSW1_4/GlobalSurfaceWater').select('occurrence')
+            static = gsw.gte(occurrence_pct).selfMask().rename('water')
+            return self._broadcast_water_mask(static, years, return_area)
+
+        if mode not in ('dynamic', 'permanent', 'maximum'):
+            raise ValueError(
+                f"mode must be 'dynamic', 'permanent', 'maximum', 'jrc', a "
+                f"('jrc', occurrence) tuple or a geometry, got {mode!r}"
+            )
+
+        if water_index not in HydroperiodAnalyzer.WATER_INDICES:
+            raise ValueError(
+                f"water_index must be one of "
+                f"{sorted(HydroperiodAnalyzer.WATER_INDICES)}, got "
+                f"{water_index!r}"
+            )
+
+        # Composite the water index without disturbing the instance: the
+        # caller is configured for some other index, and get_year_composite
+        # resets imagelist and period_scene_counts as it goes
+        # these two only exist once get_year_composite has run at least once
+        saved = (self.index, getattr(self, 'imagelist', None),
+                 getattr(self, 'period_scene_counts', None))
+        try:
+            self.index = water_index
+            water = self.get_year_composite()
+        finally:
+            self.index = saved[0]
+            if saved[1] is None:
+                self.imagelist, self.period_scene_counts = [], {}
+            else:
+                self.imagelist, self.period_scene_counts = saved[1], saved[2]
+
+        detected = water.map(lambda image: image.gt(threshold))
+
+        def counts(image):
+            """Periods that are water, and periods that have data at all."""
+            return (image.reduce(ee.Reducer.sum()).rename('wet')
+                    .addBands(image.reduce(ee.Reducer.count()).rename('valid')))
+
+        if mode == 'permanent':
+            # Water in every period *that has data*, not in every period. A
+            # period with no scene comes back as a fully masked band, so
+            # comparing against self.periods would make the permanent pool
+            # empty for any year with a gap -- measured on a Guadalquivir
+            # reservoir with no March or April scene in 2022, it returned
+            # 0.00 km2 instead of the pool that is there all year
+            wet = detected.map(
+                lambda image: counts(image).expression(
+                    'valid > 0 && wet == valid',
+                    {'wet': counts(image).select('wet'),
+                     'valid': counts(image).select('valid')}))
+        elif mode == 'maximum':
+            wet = detected.map(
+                lambda image: counts(image).select('wet').gt(0))
+
+        if mode == 'dynamic':
+            masks = detected.map(lambda image: image.selfMask())
+        else:
+            # one band per period so every mode has the same shape downstream
+            masks = wet.map(lambda image: ee.Image.cat(
+                [image.selfMask()] * self.periods).rename(self.period_names))
+
+        masks = ee.ImageCollection(masks)
+        self.water_mask_area = self._water_mask_area(masks, years)
+        return (masks, self.water_mask_area) if return_area else masks
+
+    def _broadcast_water_mask(self, static, years, return_area):
+        """Repeat one static mask over every period and every year."""
+        image = ee.Image.cat([static] * self.periods).rename(self.period_names)
+        masks = ee.ImageCollection(
+            [image.set('year', year) for year in years])
+        self.water_mask_area = self._water_mask_area(masks, years)
+        return (masks, self.water_mask_area) if return_area else masks
+
+    def _water_mask_area(self, masks, years):
+        """Masked area in km2, per year and period, in a single request."""
+        pixel_area = ee.Image.pixelArea().divide(1e6)
+        scale = self._default_scale_for_sat()
+
+        def measure(image):
+            return ee.Feature(None, image.multiply(pixel_area)
+                              .rename(self.period_names)
+                              .reduceRegion(ee.Reducer.sum(), self.roi, scale,
+                                            maxPixels=1e9, bestEffort=True))
+
+        rows = ee.FeatureCollection(masks.map(measure)).getInfo()['features']
+        return {year: [row['properties'].get(name) for name in self.period_names]
+                for year, row in zip(years, rows)}
+
     # Index calculation methods (same as original - keeping all of them)
     def get_raw_band(self, image, band):
         """

@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`NdviSeasonality.get_water_mask()`** — which pixels count as water, as an
+  explicit parameter instead of something each analysis improvises. Five modes:
+  `'dynamic'` (the water present in each period of each year, the only one that
+  follows a drawdown), `'permanent'` (water in every period that has data),
+  `'maximum'` (water in any period), `('jrc', occurrence)` for the JRC Global
+  Surface Water layer, and a geometry or shapefile you supply. `water_index`
+  and `threshold` choose the detector; the default is MNDWI above 0.
+
+  It matters more than it sounds. Over Iznájar in 2022 the same reservoir came
+  out as 6.47 km² permanent, 8.89 in July and 9.81 in January dynamic, 9.39 from
+  the JRC layer at 90% occurrence and 10.95 at maximum extent — a factor of 1.7
+  in the surface a chlorophyll mean would be taken over.
+
+  The masked area in km² per year and period is recorded in `water_mask_area`,
+  following `period_scene_counts`, and can be returned directly with
+  `return_area=True`. Report it whenever the mask is dynamic: each period is
+  then averaged over a different population of pixels, so a change in the series
+  mixes a change in the quantity with a change in what was measured, and the
+  area is what separates the two.
+
 - **`NdviSeasonality.get_peak_statistics()`** — the circular mean and the
   concentration of the peak period across the years, because the period of the
   year is a circular variable and an ordinary average of it is wrong. December

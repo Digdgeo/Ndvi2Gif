@@ -1278,5 +1278,53 @@ def test_integration_peak_statistics_is_circular():
     assert masked["circular_mean"] is None
 
 
+@pytest.mark.ee
+def test_integration_water_mask_modes_are_ordered():
+    """permanent <= dynamic <= maximum, whatever the reservoir does.
+
+    The three detected modes are nested by construction: a pixel that is water
+    in every period is water in some period. If that ordering ever breaks, the
+    masks are not measuring what they claim. The regression guarded here is
+    'permanent', which used to come back empty for any year with a period that
+    had no scene, because it compared against the period count instead of the
+    periods that actually carried data.
+    """
+    ee = _require_ee()
+    from ndvi2gif.ndvi2gif import NdviSeasonality
+
+    # Doñana marshes: seasonal flooding, so the three modes differ a lot
+    roi = ee.Geometry.Rectangle([-6.30, 36.95, -6.25, 37.00])
+    inst = NdviSeasonality(roi=roi, sat="S2", index="ndci", key="median",
+                           periods=4, start_year=2020, end_year=2020)
+
+    areas = {}
+    for mode in ("permanent", "dynamic", "maximum"):
+        _, area = inst.get_water_mask(mode=mode, return_area=True)
+        areas[mode] = [v for v in area[2020] if v is not None]
+        assert areas[mode], f"{mode} returned no area at all"
+
+    assert max(areas["permanent"]) <= max(areas["dynamic"]) + 1e-6
+    assert max(areas["dynamic"]) <= max(areas["maximum"]) + 1e-6
+
+    # the static modes repeat one value, the dynamic one does not have to
+    assert len(set(round(v, 6) for v in areas["maximum"])) == 1
+
+    # the mask carries one band per period, named like the periods
+    masks = inst.get_water_mask(mode="dynamic")
+    assert ee.Image(masks.first()).bandNames().getInfo() == inst.period_names
+
+    # and the instance keeps the areas, as period_scene_counts does
+    assert set(inst.water_mask_area) == {2020}
+
+    # compositing the configured index still works afterwards: the temporary
+    # switch to the water index must leave the instance as it found it
+    assert inst.index == "ndci"
+
+    with pytest.raises(ValueError):
+        inst.get_water_mask(mode="whatever")
+    with pytest.raises(ValueError):
+        inst.get_water_mask(water_index="ndvi")
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

@@ -211,9 +211,33 @@ class TimeSeriesAnalyzer:
                 geometry_type = 'polygon'
                 print(f"Using EE geometry with {reducer} reducer")
         
+        # Every composite is built over the ROI, so a geometry outside it can only
+        # return empty periods -- but only after one reduceRegion per period. Check
+        # it once up front instead of paying for the whole loop to learn nothing.
+        try:
+            probe = (extraction_geometry.buffer(scale / 2)
+                     if geometry_type == 'point' else extraction_geometry)
+            outside_roi = not probe.intersects(self.roi, maxError=1).getInfo()
+        except Exception:
+            # Never let the check itself block an extraction that might work
+            outside_roi = False
+
+        if outside_roi:
+            try:
+                roi_centroid = self.roi.centroid(maxError=1).coordinates().getInfo()
+                where = f" The ROI is centred on {roi_centroid}."
+            except Exception:
+                where = ""
+            raise ValueError(
+                "The extraction geometry does not intersect the ROI, so every period "
+                f"would come back empty.{where} Check that `point` lies inside the area "
+                "passed to NdviSeasonality(roi=...) -- the usual causes are reusing a "
+                "point from another example and leaving the ROI undrawn on a map."
+            )
+
         # Initialize containers
         time_series_data = []
-        
+
         # Progress tracking
         total_periods = (self.end_year - self.start_year + 1) * self.periods
         current = 0
@@ -328,8 +352,17 @@ class TimeSeriesAnalyzer:
             if use_cache:
                 self.time_series_cache[cache_key] = df
         else:
-            print("Warning: No valid data points extracted")
-        
+            # Returning an empty frame here only moves the failure downstream, where
+            # it surfaces as a KeyError on a missing result key.
+            raise RuntimeError(
+                f"No valid data extracted for any of the {total_periods} periods "
+                f"({self.start_year}-{self.end_year}, {self.sat}, index '{self.index}'). "
+                "The geometry does intersect the ROI, so the likely causes are a cloud "
+                "filter that rejects every scene (try cloud_filter=True with "
+                "max_cloud_cover=100), a date range the collection does not cover, or "
+                "an index this sensor cannot compute."
+            )
+
         return df
     
     def analyze_trend(self, 

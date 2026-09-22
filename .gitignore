@@ -115,3 +115,6 @@ logos/
 
 # Local experiments, not part of the package
 .scratch/
+
+# Ideas de papers y material descargado, solo local
+posiblespapers/

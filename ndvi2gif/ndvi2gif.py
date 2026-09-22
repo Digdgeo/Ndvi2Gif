@@ -2858,6 +2858,19 @@ class NdviSeasonality:
         measured. The area is what separates the two, which is why
         ``return_area`` exists and why :attr:`water_mask_area` is filled in.
 
+        **A dense algal bloom can fall out of a dynamic mask, and that bias
+        runs downwards.** Bloom water is spectrally close to vegetation — the
+        near infrared rises — so a water index stops calling it water, and the
+        pixels dropped are exactly the ones carrying the most chlorophyll. A
+        mean taken over what is left is biased low, and nothing in the output
+        says so. MNDWI holds up better than NDWI here, because the water under
+        a bloom still absorbs the shortwave infrared almost completely, which
+        is why it is the default. Check the area series against the index
+        series before trusting either: a drop in masked area at the same time
+        as a peak in chlorophyll is the signature of this, not of a drawdown.
+        The opposite mistake is just as real — a fixed polygon keeps the dry
+        tail, whose index in summer is pasture, not algae.
+
         **``'maximum'`` is the one that misleads.** It includes pixels that
         are dry most of the time, and the chlorophyll index of a dry pixel is
         grassland. It defines a study domain; it does not compute a mean over

@@ -73,6 +73,8 @@ parts:
         title: "Climate Data (ERA5 & CHIRPS)"
       - file: notebooks/09_nighttime_lights
         title: "Nighttime Lights (Seville)"
+      - file: notebooks/11_donana_lights
+        title: "Joining DMSP and VIIRS (Doñana)"
 
   - caption: Reference
     chapters:

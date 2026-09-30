@@ -75,6 +75,8 @@ parts:
         title: "Nighttime Lights (Seville)"
       - file: notebooks/11_donana_lights
         title: "Joining DMSP and VIIRS (Doñana)"
+      - file: notebooks/12_seasonal_lights
+        title: "Seasonal Lights and Lighting Refits (Doñana)"
 
   - caption: Reference
     chapters:

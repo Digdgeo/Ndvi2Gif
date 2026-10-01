@@ -118,3 +118,11 @@ logos/
 
 # Ideas de papers y material descargado, solo local
 posiblespapers/
+
+# Talleres: las presentaciones nunca van al repositorio, y tampoco los fuentes
+# de las guías (el HTML no lo renderiza GitHub; se sube el PDF)
+*.pptx
+workshops/**/*.html
+workshops/**/img/
+workshops/**/imprimir-pdf.sh
+workshops/**/transfer-*.pdf

@@ -10,7 +10,7 @@ Colab sin instalar nada en tu ordenador.
 Hace falta una cuenta de Google Earth Engine con un proyecto de Google Cloud asociado. Si
 no la tienes, la guía de esta carpeta lo explica paso a paso:
 
-- [`cuenta-earth-engine.html`](cuenta-earth-engine.html) (o el PDF del mismo nombre)
+- [`cuenta-earth-engine.pdf`](cuenta-earth-engine.pdf)
 
 En cada notebook hay una línea que tienes que cambiar por tu proyecto:
 
@@ -25,9 +25,9 @@ En Colab, además, descomenta la primera celda (`!pip install -q ndvi2gif`) y la
 
 | | notebook | de qué va |
 |---|---|---|
-| 1 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Digdgeo/Ndvi2Gif/blob/master/Workshops/notebooks/01_rois_y_estadisticos.ipynb) [`01_rois_y_estadisticos.ipynb`](notebooks/01_rois_y_estadisticos.ipynb) | Las cinco formas de dar un ROI, el estadístico como decisión, y cuatro décadas de inundación de la marisma con MNDWI |
-| 2 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Digdgeo/Ndvi2Gif/blob/master/Workshops/notebooks/02_hidroperiodo.ipynb) [`02_hidroperiodo.ipynb`](notebooks/02_hidroperiodo.ipynb) | `HydroperiodAnalyzer`: días de inundación, anomalías entre ciclos y fiabilidad temporal (IRT) |
-| 3 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Digdgeo/Ndvi2Gif/blob/master/Workshops/notebooks/03_fenologia.ipynb) [`03_fenologia.ipynb`](notebooks/03_fenologia.ipynb) | `SpatialPhenologyAnalyzer`: SOS, POS, EOS y LOS del arrozal de Isla Mayor, y los años en que no hubo arroz |
+| 1 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Digdgeo/Ndvi2Gif/blob/master/workshops/ecoinformatica/notebooks/01_rois_y_estadisticos.ipynb) [`01_rois_y_estadisticos.ipynb`](notebooks/01_rois_y_estadisticos.ipynb) | Las cinco formas de dar un ROI, el estadístico como decisión, y cuatro décadas de inundación de la marisma con MNDWI |
+| 2 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Digdgeo/Ndvi2Gif/blob/master/workshops/ecoinformatica/notebooks/02_hidroperiodo.ipynb) [`02_hidroperiodo.ipynb`](notebooks/02_hidroperiodo.ipynb) | `HydroperiodAnalyzer`: días de inundación, anomalías entre ciclos y fiabilidad temporal (IRT) |
+| 3 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Digdgeo/Ndvi2Gif/blob/master/workshops/ecoinformatica/notebooks/03_fenologia.ipynb) [`03_fenologia.ipynb`](notebooks/03_fenologia.ipynb) | `SpatialPhenologyAnalyzer`: SOS, POS, EOS y LOS a caballo del Guadalquivir — el arrozal de Isla Mayor y el mosaico de cultivos de Lebrija, dos calendarios en la misma imagen |
 
 El primero está hecho a partir del notebook de ejemplos `ndvi2gif extended version` del
 repositorio; los otros dos son versiones cortas, en castellano, de tutoriales que están

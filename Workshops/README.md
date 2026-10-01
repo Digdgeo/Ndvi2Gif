@@ -29,8 +29,15 @@ En Colab, además, descomenta la primera celda (`!pip install -q ndvi2gif`) y la
 | 2 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Digdgeo/Ndvi2Gif/blob/master/Workshops/notebooks/02_hidroperiodo.ipynb) [`02_hidroperiodo.ipynb`](notebooks/02_hidroperiodo.ipynb) | `HydroperiodAnalyzer`: días de inundación, anomalías entre ciclos y fiabilidad temporal (IRT) |
 | 3 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Digdgeo/Ndvi2Gif/blob/master/Workshops/notebooks/03_fenologia.ipynb) [`03_fenologia.ipynb`](notebooks/03_fenologia.ipynb) | `SpatialPhenologyAnalyzer`: SOS, POS, EOS y LOS del arrozal de Isla Mayor, y los años en que no hubo arroz |
 
-Los tres son versiones cortas, en castellano, de tutoriales que están completos (y en
-inglés) en el libro de la librería.
+El primero está hecho a partir del notebook de ejemplos `ndvi2gif extended version` del
+repositorio; los otros dos son versiones cortas, en castellano, de tutoriales que están
+completos (y en inglés) en el libro.
+
+Lo que no da tiempo a ver en el taller, pero está en el libro con el mismo nivel de
+detalle: **luces nocturnas** (DMSP + VIIRS sobre Doñana, y los cambios de alumbrado que
+fingen una cosecha), **incendios** (cuarenta años de Landsat sobre la península, y por qué
+la serie entre décadas mide el archivo y no el monte), clasificación multisensor, SAR y
+calidad de aguas.
 
 ## Para seguir después del taller
 

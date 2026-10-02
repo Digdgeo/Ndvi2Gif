@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ndvi2Gif · Taller de Ecoinformática 2026</title>
+<meta name="description" content="Composites estacionales con Google Earth Engine. Taller de las II Jornadas de Ecoinformática de la AEET, Sevilla, 2 de octubre de 2026.">
+<link rel="stylesheet" href="reveal/reveal.min.css">
+<link rel="stylesheet" href="deck.css">
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- 1 · portada ------------------------------------------------------- -->
+<section class="cover">
+  <div class="stage">
+    <div class="title-block">
+      <h1>NDVI2GIF</h1>
+      <div class="sub">Composites estacionales con Google Earth Engine</div>
+    </div>
+    <div class="meta">II Jornadas de Ecoinformática de la AEET<br>Sevilla · 2 de octubre de 2026</div>
+    <img class="pz" src="img/s01-1.png" style="left:5.25%;top:82.67%;width:34.50%;height:8.67%">
+    <img class="pz" src="img/s01-2.png" style="left:45.50%;top:82.20%;width:7.03%;height:9.60%">
+    <div class="who">Diego García Díaz<br>Laboratorio de SIG y Teledetección<br>Estación Biológica de Doñana (CSIC)</div>
+  </div>
+  <aside class="notes">Una hora. Media de contexto y media de notebooks.</aside>
+</section>
+
+<!-- 2 · el LAST ------------------------------------------------------- -->
+<section class="pad last">
+  <img class="logo-last" src="img/s02-7.png" alt="LAST-EBD">
+  <div class="eyebrow">Quién hay detrás · el laboratorio</div>
+  <h2>Laboratorio de SIG y Teledetección</h2>
+  <p class="lead">El LAST es el servicio de SIG, teledetección y drones de la Estación Biológica de Doñana:
+    da soporte a la investigación del centro y al seguimiento a largo plazo de la marisma. De necesitar los
+    mismos compuestos una y otra vez sale esta librería.<br>
+    <a href="https://www.ebd.csic.es/web/last/inicio">ebd.csic.es/web/last/inicio</a> ·
+    <a href="https://last-ebd.blogspot.com">last-ebd.blogspot.com</a></p>
+  <div class="gente">
+    <figure><img src="img/s02-1.jpg" alt=""><b>Javier Bustamante Díaz</b><span>Dr. en Biología<br>Responsable científico</span></figure>
+    <figure><img src="img/s02-3.jpg" alt=""><b>Diego García Díaz</b><span>Geógrafo<br>Responsable técnico</span></figure>
+    <figure><img src="img/s02-2.jpg" alt=""><b>David Aragonés Borrego</b><span>Ingeniero forestal</span></figure>
+    <figure><img src="img/s02-4.jpg" alt=""><b>Pedro Gómez Giráldez</b><span>Dr. Ingeniería de Montes</span></figure>
+    <figure><img src="img/s02-5.jpg" alt=""><b>Gabriela Romero Olivos</b><span>Geógrafa</span></figure>
+    <figure><img src="img/s02-6.jpg" alt=""><b>Javier Esquivel</b><span>Ambientólogo</span></figure>
+  </div>
+  <div class="servicios">
+    <b>Qué hacemos</b>
+    <div class="chips">
+      <span>Geoportal y servicios web mapping</span>
+      <span>Asistencia científica en SIG y teledetección</span>
+      <span>Seguimiento de Doñana e ICTS</span>
+      <span>Vuelos de dron: multiespectral, hiperespectral, térmico y LiDAR</span>
+      <span>Equipamiento: GPS y radiometría</span>
+      <span>Formación</span>
+      <span>Impresión 3D</span>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · el principio -------------------------------------------------- -->
+<section class="slab">
+  <div class="stage">
+    <h2>El Principio. El concurso y la convergencia</h2>
+    <img class="pz" src="img/s03-1.jpg" style="left:57.15%;top:8.00%;width:42.38%;height:41.87%">
+    <img class="pz" src="img/s03-2.gif" style="left:21.53%;top:8.53%;width:35.03%;height:38.53%">
+    <img class="pz" src="img/s03-3.gif" style="left:27.00%;top:48.40%;width:24.60%;height:49.47%">
+    <img class="pz" src="img/s03-4.png" style="left:3.90%;top:66.53%;width:15.90%;height:30.93%">
+    <img class="pz" src="img/s03-5.jpg" style="left:59.78%;top:50.53%;width:37.13%;height:49.47%">
+    <img class="pz fragment" src="img/s03-6.jpg" style="left:2.33%;top:10.53%;width:18.83%;height:51.47%">
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slab">
+  <div class="stage">
+    <img class="pz" src="img/s04-1.gif" style="left:1.65%;top:2.80%;width:41.85%;height:42.93%">
+    <img class="pz" src="img/s04-2.gif" style="left:5.70%;top:47.47%;width:32.93%;height:51.33%">
+    <img class="pz" src="img/s04-3.jpg" style="left:45.75%;top:12.40%;width:50.25%;height:79.33%">
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slab">
+  <div class="stage">
+    <img class="pz" src="img/s05-1.jpg" style="left:13.28%;top:42.67%;width:73.28%;height:57.33%">
+    <img class="pz fragment" src="img/s05-2.jpg" style="left:13.35%;top:0.00%;width:73.28%;height:54.67%">
+    <img class="pz fragment" src="img/s05-3.jpg" style="left:-0.23%;top:12.67%;width:100.20%;height:78.13%">
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slab">
+  <div class="stage">
+    <img class="pz" src="img/s06-1.jpg" style="left:8.48%;top:0.00%;width:50.33%;height:100.00%">
+    <img class="pz" src="img/s06-2.jpg" style="left:66.98%;top:0.00%;width:29.93%;height:48.67%">
+    <img class="pz" src="img/s06-3.jpg" style="left:66.98%;top:50.27%;width:29.93%;height:49.07%">
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slab">
+  <div class="stage">
+    <!-- las tres de Colonia al abrir; luego el esquema y, al final, el logo encima -->
+    <img class="pz" src="img/s07-2.jpg" style="left:63.68%;top:0.00%;width:36.30%;height:43.07%">
+    <img class="pz" src="img/s07-3.jpg" style="left:46.80%;top:0.00%;width:17.33%;height:43.07%">
+    <img class="pz" src="img/s07-4.jpg" style="left:46.80%;top:38.80%;width:53.18%;height:61.20%">
+    <img class="pz fragment" src="img/s07-1.png" style="left:0.60%;top:0.00%;width:44.10%;height:100.00%">
+    <img class="pz fragment flota" src="img/s07-6.jpg" style="left:16.00%;top:19.08%;width:68.00%;height:61.83%">
+    <img class="pz fragment" src="img/s07-5.jpg" style="left:0.00%;top:22.13%;width:99.98%;height:46.40%">
+  </div>
+</section>
+
+<!-- 8 · el podio ------------------------------------------------------ -->
+<section class="slab">
+  <div class="stage">
+    <h2>El código, la modestia y la humildad</h2>
+    <img class="pz" src="img/s08-1.jpg" style="left:11.70%;top:9.33%;width:76.52%;height:90.67%">
+  </div>
+</section>
+
+<!-- 9 · NdviSeasonality ----------------------------------------------- -->
+<section class="pad">
+  <div class="eyebrow">El origen de la librería · clase 1 de 7</div>
+  <h2>NdviSeasonality</h2>
+  <p class="lead">Genera <strong>composites temporales</strong> server-side en Google Earth Engine: divide el año
+    en periodos y agrega cada uno con un reductor estadístico. La pieza de la que cuelga todo lo demás.</p>
+  <div class="split">
+    <div class="cards">
+      <div class="card fragment fade-up">
+        <img class="ico" src="img/s09-1.png" alt="">
+        <h3>7 sensores y 2 climáticos</h3>
+        <ul><li>Sentinel-1/2/3 · Landsat 4, 5, 7, 8 y 9 · MODIS</li>
+            <li>Luces: VIIRS y DMSP-OLS · Clima: ERA5-Land y CHIRPS</li></ul>
+      </div>
+      <div class="card fragment fade-up">
+        <img class="ico" src="img/s09-2.png" alt="">
+        <h3>Hasta 44 índices</h3>
+        <ul><li>44 en Sentinel-2 · 34 en Landsat · 33 en MODIS</li>
+            <li>23 en Sentinel-3 · 7 en Sentinel-1 · 47 variables ERA5</li>
+            <li class="kbd">ndvi · mndwi · evi · nbr · rvi · savi…</li></ul>
+      </div>
+      <div class="card fragment fade-up">
+        <img class="ico" src="img/s09-3.png" alt="">
+        <h3>Periodos flexibles</h3>
+        <ul><li>4 estaciones · 12 meses · 24 quincenas · o N divisiones a medida</li></ul>
+      </div>
+    </div>
+    <div>
+      <div class="panel">
+        <h3>Once reductores por periodo</h3>
+        <p><span class="k">max</span> pico de verdor &nbsp; <span class="k">median</span> robusto a outliers<br>
+           <span class="k">mean</span> perfil suave &nbsp; <span class="k">sum</span> lluvia &nbsp; <span class="k">min</span><br>
+           <span class="k">percentile</span> p10–p95 &nbsp; <span class="k">std</span> <span class="k">variance</span>
+           <span class="k">range</span> <span class="k">cv</span> &nbsp; <span class="k">count</span> escenas</p>
+      </div>
+      <img class="shot" src="img/s09-4.jpg" alt="Ejemplo de código de NdviSeasonality">
+    </div>
+  </div>
+  <div class="band">
+    ROI: <b>ee.Geometry</b> · shapefile · GeoJSON · tile WRS/MGRS · ID de DEIMS.org
+    <div class="api">
+      <code class="on">get_year_composite()</code><code>get_period_composite()</code>
+      <code>get_peak_period()</code><code>get_stats()</code><code>get_gif()</code>
+      <code>export_to_drive()</code><code>export_to_asset()</code>
+    </div>
+  </div>
+</section>
+
+<!-- 10 · S1ARDProcessor ----------------------------------------------- -->
+<section class="pad">
+  <div class="eyebrow">Preprocesado radar · clase 2 de 7</div>
+  <h2>S1ARDProcessor</h2>
+  <p class="lead">Convierte Sentinel-1 GRD crudo en <strong>Analysis Ready Data</strong>: corrección radiométrica
+    del terreno y filtrado de speckle, todo dentro de GEE. Porque el radar ve de noche y entre nubes… pero llega
+    lleno de “sal y pimienta”.</p>
+  <div class="cards">
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s10-1.png" alt="">
+      <h3>Corrección de terreno</h3>
+      <ul><li>Flattening radiométrico VOLUME/SURFACE</li>
+          <li>DEM: Copernicus 30 m · SRTM 30 y 90 m</li>
+          <li>Corrige la geometría del relieve</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s10-2.png" alt="">
+      <h3>5 filtros de speckle</h3>
+      <ul><li>Refined Lee (por defecto)</li>
+          <li>Lee · Lee-Sigma · Gamma-MAP</li>
+          <li>Boxcar · kernel configurable</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s10-3.png" alt="">
+      <h3>Salida lista para usar</h3>
+      <ul><li>Lineal o decibelios (dB)</li>
+          <li>Se integra como índice más</li>
+          <li class="kbd">vv · vh · vv_vh_ratio · rvi<br>dpsvi · rfdi · vsdi</li></ul>
+    </div>
+  </div>
+  <div class="band">
+    <b>Pipeline ARD</b>
+    <div class="flow">
+      <span>S1 GRD crudo</span><i>→</i><span>Terrain flattening</span><i>→</i><span>Speckle filter</span>
+      <i>→</i><span>Lineal / dB</span><i>→</i><span class="on">Índice radar</span>
+    </div>
+    <div class="api">
+      <code class="on">process_image()</code><code>apply_terrain_correction()</code>
+      <code>apply_speckle_filter()</code><code>from_db()</code><code>to_db()</code>
+    </div>
+  </div>
+</section>
+
+<!-- 11 · LandCoverClassifier ------------------------------------------ -->
+<section class="pad">
+  <div class="eyebrow">Clasificación · clase 3 de 7</div>
+  <h2>LandCoverClassifier — poniendo etiquetas</h2>
+  <p class="lead">Usa las métricas estacionales como <strong>features multitemporales</strong> y clasifica el
+    territorio en GEE. La fenología separa cultivos, marisma y monte mejor que una sola imagen.</p>
+  <div class="cards four">
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s11-1.png" alt="">
+      <h3>Feature stack</h3>
+      <ul><li>Apila índices de todos los periodos</li>
+          <li>+ estadísticos: mean, std, max, min</li>
+          <li>Varios sensores en una pila: <span class="kbd">resample=</span></li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s11-2.png" alt="">
+      <h3>5 supervisados</h3>
+      <ul><li>Random Forest (por defecto)</li>
+          <li>SVM · CART</li>
+          <li>Naive Bayes · Gradient Tree Boost</li>
+          <li>Entrena desde FeatureCollection</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s11-3.png" alt="">
+      <h3>3 no supervisados</h3>
+      <ul><li>K-means · Cascade K-means (elige su k)</li>
+          <li>LVQ, red neuronal competitiva</li>
+          <li>Sin datos de entrenamiento</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s12-1.png" alt="">
+      <h3>Validación</h3>
+      <ul><li>Matriz de confusión</li>
+          <li>Overall accuracy y Kappa</li>
+          <li>Producer / user por clase</li>
+          <li>Feature importance: qué índices mandan</li></ul>
+    </div>
+  </div>
+  <div class="band">
+    <b>Métodos</b>
+    <div class="api">
+      <code>create_feature_stack()</code><code>add_training_data()</code>
+      <code class="on">classify_supervised()</code><code class="on">classify_unsupervised()</code>
+      <code>get_accuracy_report()</code><code>plot_confusion_matrix()</code>
+      <code>get_feature_importance()</code><code>export_results()</code><code>export_model()</code>
+    </div>
+  </div>
+</section>
+
+<!-- 12 · TimeSeriesAnalyzer ------------------------------------------- -->
+<section class="pad">
+  <div class="eyebrow">Análisis temporal · clase 4 de 7</div>
+  <h2>TimeSeriesAnalyzer — leer el tiempo</h2>
+  <p class="lead">Extrae la serie temporal de un punto o ROI y la <strong>interroga estadísticamente</strong>:
+    ¿hay tendencia significativa? ¿cuándo verdece? Trabaja del lado del cliente, con la serie ya descargada.</p>
+  <div class="cards">
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s12-1.png" alt="">
+      <h3>Tendencias robustas</h3>
+      <ul><li>Test de Mann-Kendall (no paramétrico)</li>
+          <li>Pendiente de Sen · regresión lineal</li>
+          <li>Significancia sin asumir normalidad</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s12-2.png" alt="">
+      <h3>Fenología de un punto</h3>
+      <ul><li>Inicio / pico / fin de estación</li>
+          <li>Umbral · derivada · logístico</li>
+          <li>Amplitud, duración y tasas</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s12-3.png" alt="">
+      <h3>Dashboards de una llamada</h3>
+      <ul><li>Serie + tendencia, patrón estacional</li>
+          <li>Comparación interanual, autocorrelación</li>
+          <li>Distribución y calidad del dato</li></ul>
+    </div>
+  </div>
+  <div class="band">
+    <b>Métodos</b> &nbsp;·&nbsp; los siete, públicos
+    <div class="api">
+      <code class="on">extract_time_series()</code><code>analyze_trend()</code>
+      <code>extract_phenology_metrics()</code><code>plot_comprehensive_analysis()</code>
+      <code>plot_phenology_analysis()</code><code>compare_phenology_years()</code>
+      <code>compare_smoothing_impact()</code>
+    </div>
+  </div>
+</section>
+
+<!-- 13 · SpatialTrendAnalyzer ------------------------------------------ -->
+<section class="pad">
+  <div class="eyebrow">La tendencia como mapa · clase 5 de 7</div>
+  <h2>SpatialTrendAnalyzer — ¿dónde cambia?</h2>
+  <p class="lead">La tendencia que TimeSeriesAnalyzer calcula para un punto, pero para
+    <strong>todos los píxeles del ROI</strong> y entera dentro de GEE. Una sola llamada, un ráster de hacia
+    dónde va cada parcela.</p>
+  <div class="cards">
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s12-1.png" alt="">
+      <h3>Tres métodos</h3>
+      <ul><li class="kbd">linear</li>
+          <li class="kbd">sen</li>
+          <li class="kbd">mann_kendall</li>
+          <li>Mann-Kendall devuelve además la pendiente de Sen: el test dice si el cambio es real, Sen cuánto</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s11-1.png" alt="">
+      <h3>Bandas de salida</h3>
+      <ul><li class="kbd">slope · intercept · magnitude</li>
+          <li class="kbd">tau</li> 
+          <li><b>magnitude</b>: el cambio total del periodo</li>
+          <li><b>tau</b>: correlación de rangos con el tiempo, −1 a 1, sin unidades</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s10-2.png" alt="">
+      <h3>Píxeles con poco dato, fuera</h3>
+      <ul><li><span class="kbd">min_observations=5</span> por defecto</li>
+          <li>Enmascara donde no hay serie suficiente</li>
+          <li>Exporta con <span class="kbd">export=True</span></li></ul>
+    </div>
+  </div>
+  <div class="band">
+    <b>Métodos</b> &nbsp;·&nbsp; una sola puerta de entrada, como su hermana SpatialPhenologyAnalyzer
+    <div class="api">
+      <code class="on">calculate_pixel_trends(method, min_observations, export, scale)</code>
+    </div>
+  </div>
+</section>
+
+<!-- 14 · SpatialPhenologyAnalyzer --------------------------------------- -->
+<section class="pad">
+  <div class="eyebrow">Del punto al mapa · clase 6 de 7</div>
+  <h2>SpatialPhenologyAnalyzer — la fenología como ráster</h2>
+  <p class="lead">Las mismas métricas que TimeSeriesAnalyzer saca de un punto, pero para
+    <strong>todos los píxeles del ROI</strong> y enteras dentro de GEE. En lugar de una curva, un mapa de
+    cuándo despierta cada parcela.</p>
+  <div class="cards">
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s12-2.png" alt="">
+      <h3>Tres métodos</h3>
+      <ul><li>Umbral sobre la amplitud de la curva</li>
+          <li>Derivada: la máxima tasa de cambio</li>
+          <li>Armónico (Fourier), el doble logístico no cabe en GEE</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s11-1.png" alt="">
+      <h3>Nueve bandas</h3>
+      <ul><li class="kbd">sos · pos · eos · los</li>
+          <li>Día del año, no una fecha suelta</li>
+          <li class="kbd">amplitude · peak_value · baseline<br>growth_rate · senescence_rate</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s09-3.png" alt="">
+      <h3>Año a año, o el resumen</h3>
+      <ul><li><span class="kbd">extract_phenology_rasters()</span>: una imagen por año</li>
+          <li><span class="kbd">phenology_summary()</span>: la mediana de todos</li>
+          <li>Pide <span class="kbd">periods=12</span> o <span class="kbd">24</span>; con 4 avisa</li></ul>
+    </div>
+  </div>
+  <div class="band">
+    <b>Métodos</b> &nbsp;·&nbsp; es la clase del tercer notebook de hoy
+    <div class="api">
+      <code class="on">extract_phenology_rasters(method, export…)</code>
+      <code>phenology_summary(method, reducer)</code>
+    </div>
+  </div>
+</section>
+
+<!-- 15 · HydroperiodAnalyzer ------------------------------------------- -->
+<section class="pad">
+  <div class="eyebrow">La novedad · clase 7 de 7</div>
+  <h2>HydroperiodAnalyzer — cuántos días bajo el agua</h2>
+  <p class="lead">Calcula el <strong>hidroperiodo</strong> — días de inundación al año, píxel a píxel —
+    íntegramente en GEE. Pensado para humedales como <strong>Doñana</strong>. Novedad de la v1.2.</p>
+  <div class="cards">
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s13-1.png" alt="">
+      <h3>Ponderación midpoint</h3>
+      <ul><li>Cada escena “pesa” días según su fecha</li>
+          <li>5 máscaras de agua: mndwi · ndwi<br>awei · aweinsh · wi2015</li>
+          <li>Acumula días inundados / válidos</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s13-2.png" alt="">
+      <h3>Año hidrológico</h3>
+      <ul><li>Empieza 1 de septiembre (configurable)</li>
+          <li>Multi-ciclo: <span class="kbd">compute_all_cycles()</span></li>
+          <li>Mapa de anomalías frente a la media</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s13-3.png" alt="">
+      <h3>Métricas IRT</h3>
+      <ul><li>Representatividad temporal del dato</li>
+          <li>Global (Gini) y por píxel (Simpson)</li>
+          <li>Bandas: first/last_flood_doy</li></ul>
+    </div>
+  </div>
+  <div class="band">
+    <b>Métodos</b> &nbsp;·&nbsp; reutiliza una instancia de <b>NdviSeasonality</b>: hereda ROI, sensor, fechas y
+    máscara de nubes. Metodología basada en <b>phydroperiod</b>.
+    <div class="api">
+      <code class="on">compute_hydroperiod()</code><code>compute_all_cycles()</code>
+      <code>compute_anomalies()</code><code>get_water_masks()</code><code>get_water_masks_stack()</code>
+      <code>compute_irt_global()</code><code>compute_irt_image()</code>
+      <code>export_to_drive()</code><code>export_to_asset()</code>
+      <code>export_water_masks_to_drive()</code><code>export_water_masks_to_asset()</code>
+    </div>
+  </div>
+</section>
+
+<!-- 16 · phydroperiod -------------------------------------------------- -->
+<section class="slab">
+  <div class="stage">
+    <img class="pz" src="img/s14-1.jpg" style="left:0.00%;top:30.80%;width:51.75%;height:58.67%">
+    <img class="pz" src="img/s14-2.jpg" style="left:0.00%;top:0.00%;width:51.75%;height:20.80%">
+    <img class="pz" src="img/s14-3.jpg" style="left:51.83%;top:0.00%;width:48.23%;height:37.87%">
+    <img class="pz" src="img/s14-4.jpg" style="left:52.58%;top:39.07%;width:46.65%;height:57.87%">
+    <img class="pz" src="img/s14-5.jpg" style="left:27.98%;top:61.47%;width:23.85%;height:22.80%">
+  </div>
+</section>
+
+<!-- 17 · los notebooks de hoy ----------------------------------------- -->
+<section class="pad">
+  <div class="eyebrow">Manos a la obra · el guion de hoy</div>
+  <h2>Tres notebooks — y el libro donde viven</h2>
+  <p class="lead">Lo que viene no son diapositivas: son <strong>notebooks</strong> que se abren en Colab con un
+    botón, se ejecutan con vuestra propia cuenta de Earth Engine y se cambian de sitio cambiando el ROI.
+    Están en el repositorio, en <span class="kbd">workshops/ecoinformatica/notebooks</span>.</p>
+  <div class="cards">
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s12-3.png" alt="">
+      <h3>ROIs y estadísticos<span class="sede">Doñana</span></h3>
+      <ul><li>Cinco maneras de decir dónde mirar</li>
+          <li>El reductor manda: max, median, mean, p95</li>
+          <li>El GIF, y un ráster de doce bandas a QGIS</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s15-2.png" alt="">
+      <h3>Hidroperiodo<span class="sede">Doñana</span></h3>
+      <ul><li>Días de inundación por año</li>
+          <li>Ciclos 2021-2025 y anomalías</li>
+          <li>Todo dentro de Earth Engine</li></ul>
+    </div>
+    <div class="card fragment fade-up">
+      <img class="ico" src="img/s15-3.png" alt="">
+      <h3>Fenología<span class="sede">Bajo Guadalquivir</span></h3>
+      <ul><li>Inicio, pico y fin de estación</li>
+          <li>Ráster, no una curva por punto</li>
+          <li>El arroz y los años de sequía</li></ul>
+    </div>
+  </div>
+  <div class="band">Lo que no cabe en una hora está en el libro: <b>digdgeo.github.io/Ndvi2Gif</b> — luces
+    nocturnas, incendios, clasificación multisensor, calidad de aguas, series temporales, píxeles estables…
+    Cada página trae su botón de Colab, así que se ejecuta entera en casa, con vuestro ROI.</div>
+</section>
+
+<!-- 18 · el libro ------------------------------------------------------ -->
+<section class="slab libro">
+  <div class="stage">
+    <a class="url" href="https://digdgeo.github.io/Ndvi2Gif/intro.html">digdgeo.github.io/Ndvi2Gif</a>
+    <img class="pz" src="img/s16-1.jpg" style="left:13.50%;top:9.33%;width:76.05%;height:86.27%">
+  </div>
+</section>
+
+<!-- 19 · la cita ------------------------------------------------------- -->
+<section class="slab quote">
+  <div class="stage">
+    <h2>Acabando, la clase y la espera</h2>
+    <img class="pz" src="img/s17-1.jpg" style="left:0.00%;top:9.60%;width:50.70%;height:90.40%">
+    <div class="cita">
+      <blockquote>Si alguna vez la vida te maltrata,<br>
+        acuérdate de mí,<br>
+        que no puede cansarse de esperar<br>
+        aquel que no se cansa de mirarte.</blockquote>
+      <div class="firma">Luis García Montero</div>
+    </div>
+  </div>
+</section>
+
+<!-- 20 · contacto ------------------------------------------------------ -->
+<section class="slab contact">
+  <div class="stage">
+    <img class="pz" src="img/s18-1.jpg" style="left:-3.08%;top:-2.80%;width:107.55%;height:104.27%">
+    <div class="over">diegogarcia@ebd.csic.es<br>GitHub: @Digdgeo</div>
+  </div>
+</section>
+
+</div>
+</div>
+
+<script src="reveal/reveal.min.js"></script>
+<script src="reveal/plugin/notes/notes.js"></script>
+<script>
+Reveal.initialize({
+  width: 1280,
+  height: 720,
+  margin: 0,
+  center: false,
+  hash: true,
+  slideNumber: 'c/t',
+  transition: 'fade',
+  display: 'flex',          // reveal escribe este display en línea; 'flex' deja que .pad
+                            // use su columna y que la banda inferior baje de verdad
+  transitionSpeed: 'fast',
+  plugins: [ RevealNotes ]
+});
+</script>
+</body>
+</html>

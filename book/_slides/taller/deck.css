@@ -1,0 +1,160 @@
+/* Ndvi2Gif · taller de Ecoinformática 2026
+   Paleta tomada del propio .pptx: tinta, gris, verde azulado y azul. */
+
+:root {
+  --ink:   #1B2A33;
+  --muted: #5C6E78;
+  --teal:  #0E6E6E;
+  --blue:  #1C7293;
+  --card:  #F3F6F5;
+  --line:  #D5DEDC;
+}
+
+.reveal {
+  font-family: "Segoe UI", -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 22px;
+  color: var(--ink);
+}
+.reveal .slides            { text-align: left; }
+.reveal .slides section    { width: 1280px; height: 720px; box-sizing: border-box;
+                             flex-direction: column; }
+.reveal h1, .reveal h2,
+.reveal h3                 { color: var(--ink); text-transform: none; letter-spacing: 0; margin: 0; }
+.reveal a                  { color: var(--teal); text-decoration: none; border-bottom: 1px solid var(--line); }
+.reveal strong             { color: var(--teal); }
+.reveal .progress          { color: var(--teal); height: 4px; }
+.reveal code               { font-family: Consolas, "DejaVu Sans Mono", monospace; }
+
+/* --- rejilla interior de las diapositivas con texto --------------------- */
+/* reveal pone display:block en la sección presente con más especificidad que .pad,
+   así que la columna flexible hay que pedirla desde el mismo selector o no se aplica. */
+.reveal .slides section.pad { padding: 44px 56px 36px; display: flex; flex-direction: column;
+                              width: 1280px; height: 720px; box-sizing: border-box; }
+.eyebrow  { color: var(--teal); font-size: 15px; font-weight: 700;
+            letter-spacing: .14em; text-transform: uppercase; margin-bottom: 14px; }
+.reveal h2{ font-size: 44px; font-weight: 700; line-height: 1.1; }
+.lead     { font-size: 19px; color: var(--muted); line-height: 1.5;
+            margin: 16px 0 26px; max-width: 95%; }
+
+/* --- tarjetas ----------------------------------------------------------- */
+.cards        { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+                margin: auto 0; }   /* centradas en el hueco entre la entradilla y la banda */
+.cards.four   { grid-template-columns: repeat(4, 1fr); }
+.card         { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+                padding: 18px 20px 16px; }
+.card .ico    { width: 30px; height: 30px; object-fit: contain; display: block; margin-bottom: 10px; }
+.card h3      { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+.card ul      { list-style: none; margin: 0; padding: 0; }
+.card li      { font-size: 15.5px; color: var(--muted); line-height: 1.45;
+                padding-left: 14px; position: relative; margin-bottom: 3px; }
+.card li::before { content: "·"; position: absolute; left: 2px; color: var(--teal); font-weight: 700; }
+.card .kbd    { color: var(--ink); font-family: Consolas, "DejaVu Sans Mono", monospace; font-size: 14.5px; }
+
+/* --- banda inferior ------------------------------------------------------ */
+.band     { margin-top: auto; background: var(--card); border: 1px solid var(--line);
+            border-radius: 12px; padding: 14px 20px; font-size: 16px; color: var(--muted);
+            line-height: 1.5; }
+.band b   { color: var(--ink); }
+
+/* --- la diapositiva 1 de 5, a dos columnas ------------------------------- */
+.split        { display: grid; grid-template-columns: 1.02fr 1fr; gap: 24px; flex: 1; min-height: 0; }
+.split .cards { margin: 0; }
+.split .cards { grid-template-columns: 1fr; align-content: start; gap: 7px; }
+.split .card      { padding: 9px 16px 8px; }
+.split .card li   { font-size: 14.5px; line-height: 1.35; }
+.split .card h3   { font-size: 18px; margin-bottom: 5px; }
+.split .card .ico { width: 26px; height: 26px; margin-bottom: 4px; }
+.panel        { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+                padding: 18px 20px; }
+.panel h3     { font-size: 18px; margin-bottom: 10px; }
+.panel p      { font-size: 15.5px; color: var(--muted); line-height: 1.6; margin: 0; }
+.panel .k     { color: var(--teal); font-weight: 700; }
+.shot         { width: 100%; border-radius: 10px; border: 1px solid var(--line); margin-top: 14px; display: block; }
+
+/* --- collages: posiciones exactas tomadas del .pptx ---------------------- */
+.stage    { position: relative; width: 1280px; height: 720px; overflow: hidden; }
+.pz       { position: absolute; object-fit: cover; margin: 0; border: 0; box-shadow: none;
+            background: none; max-width: none; max-height: none; }
+/* arriba del todo y un punto más pequeño: los collages empiezan en y=58 y el
+   titular a 38px/top:26 se les metía encima */
+.slab h2  { position: absolute; left: 44px; top: 12px; z-index: 5; font-size: 34px;
+            text-shadow: 0 2px 14px rgba(255,255,255,.85); }
+
+/* --- portada ------------------------------------------------------------ */
+.cover .title-block { position: absolute; left: 0; right: 0; top: 20%; text-align: center; }
+.cover h1           { font-family: Cambria, Georgia, serif; font-size: 96px; font-weight: 700; margin: 0; }
+.cover .sub         { font-style: italic; font-size: 27px; color: var(--muted); margin-top: 12px; }
+.cover .meta        { position: absolute; left: 5.25%; top: 70%; font-size: 17px; color: var(--muted); line-height: 1.5; }
+.cover .who         { position: absolute; right: 5.25%; bottom: 10%; font-size: 17px; color: var(--muted);
+                      line-height: 1.55; text-align: right; }
+
+/* --- cita y contacto ----------------------------------------------------- */
+.quote blockquote { border: 0; background: none; box-shadow: none; font-size: 30px;
+                    line-height: 1.45; color: var(--ink); font-style: normal; margin: 0; }
+.quote .firma     { margin-top: 22px; font-size: 19px; color: var(--muted); }
+.contact .over    { position: absolute; right: 56px; top: 54px; z-index: 5; text-align: right;
+                    font-size: 34px; color: #fff; line-height: 1.5;
+                    text-shadow: 0 2px 18px rgba(0,0,0,.55); }
+
+/* --- fragmentos: lo que va saliendo por pasos ---------------------------- */
+.reveal .fragment.fade-up { transform: translateY(14px); }
+.reveal .fragment.fade-up.visible { transform: none; }
+
+/* --- la fila del laboratorio -------------------------------------------- */
+/* la foto manda y el recuadro se cierra sobre ella y el texto */
+.gente        { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 16px; }
+.gente figure { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+                padding: 7px 7px 9px; text-align: center; }
+.gente img    { width: 90%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 7px; display: block;
+                margin: 0 auto 8px; filter: grayscale(1); }
+.gente b      { display: block; font-size: 14px; line-height: 1.2; }
+.gente span   { display: block; font-size: 12.5px; line-height: 1.3; color: var(--teal); margin-top: 3px; }
+
+/* el logo del LAST, arriba a la derecha de su propia diapositiva */
+.last .logo-last { position: absolute; right: 56px; top: 38px; height: 66px; width: auto;
+                   margin: 0; border: 0; box-shadow: none; }
+
+/* los servicios: lo que se vende, así que se ven */
+.servicios        { margin-top: auto; background: #fff; border: 1px solid var(--teal);
+                    border-radius: 12px; padding: 16px 20px 18px; }
+.servicios > b    { display: block; color: var(--teal); font-size: 17px; font-weight: 700;
+                    text-transform: uppercase; letter-spacing: .08em; margin-bottom: 12px; }
+.chips            { display: flex; flex-wrap: wrap; gap: 9px; }
+.chips span       { background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+                    padding: 7px 17px; font-size: 16.5px; color: var(--ink); }
+
+/* --- el pipeline ARD ----------------------------------------------------- */
+.flow         { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: nowrap; }
+.flow span    { background: #fff; border: 1px solid var(--line); border-radius: 8px;
+                padding: 8px 14px; font-size: 15px; color: var(--ink); white-space: nowrap; }
+.flow span.on { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+.flow i       { color: var(--muted); font-style: normal; }
+
+/* --- la validación, en cuatro -------------------------------------------- */
+.quad         { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 10px; }
+.quad b       { display: block; color: var(--teal); font-size: 15.5px; }
+.quad span    { display: block; font-size: 14px; color: var(--muted); margin-top: 2px; }
+
+/* --- la sede de cada notebook -------------------------------------------- */
+.card h3 .sede { display: block; font-size: 14px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+
+/* --- el libro ------------------------------------------------------------ */
+.libro .url   { position: absolute; left: 0; right: 0; top: 2.6%; text-align: center; z-index: 5;
+                font-size: 26px; color: var(--teal); border: 0; }
+
+/* --- la cita -------------------------------------------------------------- */
+.quote .cita  { position: absolute; left: 54%; top: 50%; transform: translateY(-50%); right: 4%; }
+
+/* --- chips de métodos: la API real de cada clase ------------------------ */
+.api        { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.api code   { background: #fff; border: 1px solid var(--line); border-radius: 7px;
+              padding: 2px 8px; font-size: 13px; color: var(--ink); white-space: nowrap; }
+.api code.on{ background: var(--teal); border-color: var(--teal); color: #fff; }
+
+/* la columna derecha de .split: el panel manda y la captura ocupa lo que quede,
+   así crecer el panel encoge la imagen en vez de desbordar la diapositiva */
+.split > div:last-child { display: flex; flex-direction: column; min-height: 0; }
+.split .shot            { flex: 1 1 auto; min-height: 0; object-fit: contain; object-position: left top; }
+
+/* una captura que cae encima del collage: sombra para que se despegue del fondo */
+.pz.flota { box-shadow: 0 20px 60px rgba(0,0,0,.45); border: 1px solid rgba(0,0,0,.18); }

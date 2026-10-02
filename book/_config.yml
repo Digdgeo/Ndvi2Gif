@@ -28,6 +28,7 @@ exclude_patterns:
   - SUMMARY.md
   - QUICKSTART.md
   - BUILD_GUIDE.md
+  - _slides
 
 # Information about where the book exists on the web
 repository:
@@ -57,6 +58,11 @@ sphinx:
     - sphinx.ext.intersphinx
   config:
     html_theme: sphinx_book_theme
+    # Las presentaciones de los talleres son HTML ya hecho (reveal.js): Sphinx copia el
+    # contenido de _slides/ a la raíz del sitio, así que _slides/taller/ se sirve en
+    # /Ndvi2Gif/taller/. Una carpeta por edición.
+    html_extra_path:
+      - _slides
     html_theme_options:
       repository_url: https://github.com/Digdgeo/Ndvi2Gif
       repository_branch: master

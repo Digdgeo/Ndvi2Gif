@@ -121,7 +121,7 @@
                     text-transform: uppercase; letter-spacing: .08em; margin-bottom: 12px; }
 .chips            { display: flex; flex-wrap: wrap; gap: 9px; }
 .chips span       { background: var(--card); border: 1px solid var(--line); border-radius: 999px;
-                    padding: 7px 17px; font-size: 16.5px; color: var(--ink); }
+                    padding: 7px 17px; font-size: 16.5px; font-weight: 700; color: var(--ink); }
 
 /* --- el pipeline ARD ----------------------------------------------------- */
 .flow         { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: nowrap; }
